@@ -7,6 +7,7 @@ import type { CombinedComponentRef } from '../popup/combined-config';
 import type { ApiCandidate, RobotsTxtResult } from './messages';
 import type { showToast } from '../popup/toast';
 import type { CaptureEntryLike, PathTreeResult } from '../popup/json-path-picker';
+import type { SavedPreset } from '../popup/transform-presets';
 
 export type Screen =
   | 'CHECKING_COMPANION' | 'COMPANION_ERROR' | 'IDLE' | 'SELECTING' | 'API_CONFIG' | 'GENERATING' | 'DONE' | 'SETTINGS';
@@ -198,7 +199,7 @@ export interface State {
   selectedOutputBlueprintTree?: SFDraft.OutputBlueprintTreeNode[];
   outputBlueprintTreeMapping?: Record<string, string | null>;
   outputBlueprints: Array<{ id: number; name: string; [key: string]: unknown }> | null;
-  transformPresets: Array<{ id: number; name: string; [key: string]: unknown }> | null;
+  transformPresets: SavedPreset[] | null;
   transformPresetsAvailable: boolean;
   transformPresetSaveOpen: boolean;
   transformPresetRenameId: number | null;

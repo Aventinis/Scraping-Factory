@@ -50,7 +50,7 @@
         <label data-help-anchor><span data-i18n="transforms.sectionLabel"></span><span class="help-host" data-help="help.transforms.overview" data-doc="transforms"></span></label>
         <ul id="field-transform-list" class="field-transform-list"></ul>
         <button type="button" id="btn-field-transform-add" class="btn-secondary btn-tiny" data-i18n="transforms.addBtn"></button>
-        <!-- Issue #279: "Apply preset…" / "Save as preset", see transform-presets-ui.js -->
+        <!-- Issue #279: "Apply preset…" / "Save as preset", see transform-presets-ui.ts -->
         <div class="transform-preset-controls" data-preset-target="flat"></div>
         <!-- Issue #143: live preview of the chain's output against the picked element's raw value -->
         <p id="field-transform-preview" class="transform-preview hidden"></p>
@@ -191,7 +191,7 @@
         <label data-help-anchor><span data-i18n="transforms.sectionLabel"></span><span class="help-host" data-help="help.transforms.overview" data-doc="transforms"></span></label>
         <ul id="field-extended-transform-list" class="field-transform-list"></ul>
         <button type="button" id="btn-field-extended-transform-add" class="btn-secondary btn-tiny" data-i18n="transforms.addBtn"></button>
-        <!-- Issue #279: "Apply preset…" / "Save as preset", see transform-presets-ui.js -->
+        <!-- Issue #279: "Apply preset…" / "Save as preset", see transform-presets-ui.ts -->
         <div class="transform-preset-controls" data-preset-target="container"></div>
         <!-- Issue #143: live preview of the chain's output against the picked element's raw value -->
         <p id="field-extended-transform-preview" class="transform-preview hidden"></p>
@@ -251,7 +251,7 @@
         <label data-help-anchor><span data-i18n="transforms.sectionLabel"></span><span class="help-host" data-help="help.transforms.overview" data-doc="transforms"></span></label>
         <ul id="api-field-transform-list" class="field-transform-list"></ul>
         <button type="button" id="btn-api-field-transforms-add" class="btn-secondary btn-tiny" data-i18n="transforms.addBtn"></button>
-        <!-- Issue #279: "Apply preset…" / "Save as preset", see transform-presets-ui.js -->
+        <!-- Issue #279: "Apply preset…" / "Save as preset", see transform-presets-ui.ts -->
         <div class="transform-preset-controls" data-preset-target="api"></div>
         <!-- Issue #147: live preview against the field's captured sample value -->
         <p id="api-field-transform-preview" class="transform-preview hidden"></p>
@@ -266,7 +266,7 @@
   <!-- Modal: dedicated "Felder kombinieren" creation flow (Issue #206
        follow-up) — replaces the original combineFields transform-kind UI.
        No click-based selection: the checkbox list is populated from
-       whichever mode/scope opened it (combine-split-fields-ui.js), shared
+       whichever mode/scope opened it (combine-split-fields-ui.ts), shared
        across flat/container/API mode. -->
   <div id="modal-combine-field" class="modal hidden">
     <div class="modal-inner">
@@ -316,7 +316,7 @@
        field-name list — opened from modal-manage-blueprints' own "+ New"
        button or a row's "Edit" button (blueprintEditingId distinguishes the
        two, see output-blueprints-ui.js). Field-name rows reuse the same
-       add/remove/move-with-adjacent-sibling shape field-transforms-ui.js's
+       add/remove/move-with-adjacent-sibling shape field-transforms-ui.ts's
        transform rows already established. -->
   <div id="modal-blueprint-edit" class="modal hidden">
     <div class="modal-inner">

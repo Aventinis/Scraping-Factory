@@ -9,30 +9,33 @@
 // unchanged, called from idle-screen-ui.js exactly like flat/container mode
 // already do, since those functions already operate on _state.fields/
 // _state.groups directly with no mode of their own baked in.
-const { createLogger } = require('../shared/logger');
+import type * as SFDraft from '../types/drafts';
+import type { PopupBridge, StatePatch } from '../types/popup';
+import { createLogger } from '../shared/logger';
+import { t } from '../i18n/i18n';
+import { createDraftBlock, addOrUpdateBlock, removeBlock, moveBlock, draftIsAddable } from './blocks-config';
+import { byIdOrNull } from './dom';
+
 const log = createLogger('SF:Popup');
-const { t } = require('../i18n/i18n');
-const { escapeHtml } = require('./api-config');
-const { createDraftBlock, addOrUpdateBlock, removeBlock, moveBlock, draftIsAddable } = require('./blocks-config');
 
 // Switching the draft's own shape starts that shape fresh — the other
 // shape's content (whichever of fields/groups doesn't match) is cleared,
 // the same "switching clears what doesn't belong to the new shape"
 // convention idle-screen-ui.js's own switchMode/MODE_SWITCH_CLEARS already
 // uses for the top-level mode switch.
-function switchBlocksDraftShape(bridge, shape) {
+function switchBlocksDraftShape(bridge: PopupBridge, shape: SFDraft.Block['shape']): void {
   const state = bridge.getState();
   if (shape === state.blocksDraftShape) return;
   log('BLOCKS_DRAFT_SHAPE_SWITCH', shape);
   bridge.patchState({ blocksDraftShape: shape, fields: [], groups: [] });
 }
 
-function blockSummaryText(block) {
+function blockSummaryText(block: SFDraft.Block): string {
   const count = block.shape === 'flat' ? (block.fields || []).length : (block.groups || []).length;
   return t(block.shape === 'flat' ? 'idle.blocksSummaryFlat' : 'idle.blocksSummaryGroup', { count });
 }
 
-function buildBlockRowEl(block, index, total) {
+function buildBlockRowEl(block: SFDraft.Block, index: number, total: number): HTMLElement {
   const li = document.createElement('li');
   li.className = 'group-tree-row blocks-block-row';
   li.dataset.index = String(index);
@@ -76,41 +79,41 @@ function buildBlockRowEl(block, index, total) {
   return li;
 }
 
-function renderBlocksSection(bridge) {
+export function renderBlocksSection(bridge: PopupBridge): void {
   const state = bridge.getState();
   const blocks = state.blocks || [];
   const editingIndex = state.blocksEditingIndex;
 
-  document.getElementById('btn-blocks-draft-flat')?.classList.toggle('active', state.blocksDraftShape === 'flat');
-  document.getElementById('btn-blocks-draft-group')?.classList.toggle('active', state.blocksDraftShape === 'group');
+  byIdOrNull('btn-blocks-draft-flat')?.classList.toggle('active', state.blocksDraftShape === 'flat');
+  byIdOrNull('btn-blocks-draft-group')?.classList.toggle('active', state.blocksDraftShape === 'group');
   // The flat/container editors themselves are rendered/shown by
   // idle-screen-ui.js exactly as they are for flat/container mode — only
   // reachable once a shape has been picked, so the draft editor row stays
   // hidden until then (there's nothing to click "+ Datenfeld"/"+ Gruppe"
   // against before this decision is made).
-  document.getElementById('blocks-draft-editor')?.classList.remove('hidden');
+  byIdOrNull('blocks-draft-editor')?.classList.remove('hidden');
 
-  const nameInput = document.getElementById('input-blocks-draft-name');
+  const nameInput = byIdOrNull<HTMLInputElement>('input-blocks-draft-name');
   if (nameInput && document.activeElement !== nameInput) nameInput.value = state.blocksDraftName;
-  const outputNameInput = document.getElementById('input-blocks-draft-output-filename');
+  const outputNameInput = byIdOrNull<HTMLInputElement>('input-blocks-draft-output-filename');
   if (outputNameInput && document.activeElement !== outputNameInput) outputNameInput.value = state.blocksDraftOutputFileName;
 
-  const addBtn = document.getElementById('btn-blocks-add-update');
+  const addBtn = byIdOrNull<HTMLButtonElement>('btn-blocks-add-update');
   if (addBtn) {
     addBtn.textContent = t(editingIndex === null || editingIndex === undefined ? 'idle.blocksAddBtn' : 'idle.blocksUpdateBtn');
     addBtn.disabled = !draftIsAddable(
       { name: state.blocksDraftName, shape: state.blocksDraftShape }, state.fields, state.groups,
     );
   }
-  const cancelEditBtn = document.getElementById('btn-blocks-cancel-edit');
+  const cancelEditBtn = byIdOrNull('btn-blocks-cancel-edit');
   if (cancelEditBtn) cancelEditBtn.classList.toggle('hidden', editingIndex === null || editingIndex === undefined);
 
-  const listEl = document.getElementById('blocks-list');
+  const listEl = byIdOrNull('blocks-list');
   if (listEl) {
     listEl.innerHTML = '';
     blocks.forEach((block, i) => listEl.appendChild(buildBlockRowEl(block, i, blocks.length)));
   }
-  const hintEl = document.getElementById('blocks-min-count-hint');
+  const hintEl = byIdOrNull('blocks-min-count-hint');
   if (hintEl) hintEl.classList.toggle('hidden', blocks.length >= 2);
 }
 
@@ -118,22 +121,22 @@ function renderBlocksSection(bridge) {
 // outputFileName + its own fields/groups) for further editing — the
 // reverse of addOrUpdateBlock, entering "update" mode (blocksEditingIndex
 // set) instead of "add".
-function editBlock(bridge, index) {
+export function editBlock(bridge: PopupBridge, index: number): void {
   const state = bridge.getState();
   const block = (state.blocks || [])[index];
   if (!block) return;
   log('BLOCKS_EDIT', { index, name: block.name });
   bridge.patchState({
     blocksDraftShape: block.shape,
-    blocksDraftName: block.name,
-    blocksDraftOutputFileName: block.outputFileName,
+    blocksDraftName: block.name ?? '',
+    blocksDraftOutputFileName: block.outputFileName ?? '',
     blocksEditingIndex: index,
-    fields: block.shape === 'flat' ? block.fields : [],
-    groups: block.shape === 'group' ? block.groups : [],
+    fields: block.shape === 'flat' ? block.fields ?? [] : [],
+    groups: block.shape === 'group' ? block.groups ?? [] : [],
   });
 }
 
-function confirmDraftBlock(bridge) {
+export function confirmDraftBlock(bridge: PopupBridge): void {
   const state = bridge.getState();
   const draft = { name: state.blocksDraftName, shape: state.blocksDraftShape };
   if (!draftIsAddable(draft, state.fields, state.groups)) return;
@@ -149,7 +152,7 @@ function confirmDraftBlock(bridge) {
   });
 }
 
-function cancelDraftEdit(bridge) {
+export function cancelDraftEdit(bridge: PopupBridge): void {
   log('BLOCKS_EDIT_CANCEL');
   bridge.patchState({
     blocksDraftName: '', blocksDraftOutputFileName: '', blocksEditingIndex: null,
@@ -157,38 +160,39 @@ function cancelDraftEdit(bridge) {
   });
 }
 
-function wireBlocksConfigEvents(bridge) {
-  document.getElementById('btn-blocks-draft-flat')?.addEventListener('click', () => switchBlocksDraftShape(bridge, 'flat'));
-  document.getElementById('btn-blocks-draft-group')?.addEventListener('click', () => switchBlocksDraftShape(bridge, 'group'));
+export function wireBlocksConfigEvents(bridge: PopupBridge): void {
+  byIdOrNull('btn-blocks-draft-flat')?.addEventListener('click', () => switchBlocksDraftShape(bridge, 'flat'));
+  byIdOrNull('btn-blocks-draft-group')?.addEventListener('click', () => switchBlocksDraftShape(bridge, 'group'));
 
-  document.getElementById('input-blocks-draft-name')?.addEventListener('input', (e) => {
-    bridge.patchState({ blocksDraftName: e.target.value });
+  byIdOrNull('input-blocks-draft-name')?.addEventListener('input', (e) => {
+    bridge.patchState({ blocksDraftName: (e.target as HTMLInputElement).value });
   });
-  document.getElementById('input-blocks-draft-output-filename')?.addEventListener('input', (e) => {
-    bridge.patchState({ blocksDraftOutputFileName: e.target.value });
+  byIdOrNull('input-blocks-draft-output-filename')?.addEventListener('input', (e) => {
+    bridge.patchState({ blocksDraftOutputFileName: (e.target as HTMLInputElement).value });
   });
 
-  document.getElementById('btn-blocks-add-update')?.addEventListener('click', () => confirmDraftBlock(bridge));
-  document.getElementById('btn-blocks-cancel-edit')?.addEventListener('click', () => cancelDraftEdit(bridge));
+  byIdOrNull('btn-blocks-add-update')?.addEventListener('click', () => confirmDraftBlock(bridge));
+  byIdOrNull('btn-blocks-cancel-edit')?.addEventListener('click', () => cancelDraftEdit(bridge));
 
-  const listEl = document.getElementById('blocks-list');
+  const listEl = byIdOrNull('blocks-list');
   if (!listEl) return;
   listEl.addEventListener('click', (e) => {
-    const row = e.target.closest('.blocks-block-row');
+    const target = e.target as Element;
+    const row = target.closest<HTMLElement>('.blocks-block-row');
     if (!row) return;
-    const index = parseInt(row.dataset.index, 10);
+    const index = parseInt(row.dataset.index as string, 10);
     const state = bridge.getState();
     const blocks = state.blocks || [];
 
-    if (e.target.closest('.btn-blocks-edit')) {
+    if (target.closest('.btn-blocks-edit')) {
       editBlock(bridge, index);
-    } else if (e.target.closest('.btn-blocks-move-up')) {
+    } else if (target.closest('.btn-blocks-move-up')) {
       bridge.patchState({ blocks: moveBlock(blocks, index, -1) });
-    } else if (e.target.closest('.btn-blocks-move-down')) {
+    } else if (target.closest('.btn-blocks-move-down')) {
       bridge.patchState({ blocks: moveBlock(blocks, index, 1) });
-    } else if (e.target.closest('.btn-blocks-remove')) {
+    } else if (target.closest('.btn-blocks-remove')) {
       log('BLOCKS_REMOVE', { index, name: blocks[index]?.name });
-      const patch = { blocks: removeBlock(blocks, index) };
+      const patch: StatePatch = { blocks: removeBlock(blocks, index) };
       // Removing the block currently being edited also clears the draft —
       // otherwise "+ Update block" would resurrect it at a now-stale index.
       if (state.blocksEditingIndex === index) {
@@ -199,5 +203,4 @@ function wireBlocksConfigEvents(bridge) {
   });
 }
 
-module.exports = { createDraftBlock, renderBlocksSection, wireBlocksConfigEvents, editBlock, confirmDraftBlock, cancelDraftEdit };
-
+export { createDraftBlock };

@@ -1,4 +1,4 @@
-// Reusable named transform-chain presets: pure (transform-presets-ui.js renders them; the companion's /transform-presets endpoints
+// Reusable named transform-chain presets: pure (transform-presets-ui.ts renders them; the companion's /transform-presets endpoints
 // store them). A preset is a saved FieldTransform[] in the wire shape a field's chain already uses, so applying one is an array copy
 // into _state.pendingTransforms, the slot all three transform editors share.
 import type * as SFWire from '../types/wire';
@@ -17,7 +17,7 @@ export interface TransformPresetOption {
 }
 
 /** A preset saved in the companion. */
-interface SavedPreset { id: number; name: string; transforms: Transforms }
+export interface SavedPreset { id: number; name: string; transforms: Transforms }
 
 // Built-ins ship with the extension: read-only, available without a companion, nothing to migrate. Names come from i18n (nameKey).
 export const BUILTIN_TRANSFORM_PRESETS: BuiltinPreset[] = [

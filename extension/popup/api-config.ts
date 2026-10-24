@@ -525,7 +525,7 @@ export function buildApiGroupDraft(name: string, path: string): ApiGroupDraft {
 // "no sample" apart from a real JSON `null` (which the runtime turns into
 // an empty string, see scraper_api.py.j2's own "value is None" check).
 // Issue #206 follow-up: path may be null — the dedicated combine/split
-// creation flow (combine-split-fields-ui.js) always calls this with
+// creation flow (combine-split-fields-ui.ts) always calls this with
 // path=null, since a derived field has no JSON path of its own (its
 // value comes entirely from other already-resolved sibling fields).
 // hiddenFromOutput defaults false, set only via that same flow's own

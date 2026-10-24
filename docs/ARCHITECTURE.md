@@ -714,7 +714,7 @@ guessed from the picked value. The recipe panel keeps its state in its own DOM; 
 transform objects are unchanged. See docs/design-notes/extension.md for the details.
 
 - Extension: `popup/transform-helpers.js` (pure: `buildRecipe`, `previewRecipe`,
-  `inferDateFormat`), `popup/transform-helpers-ui.js`, `popup/field-transforms-ui.js`
+  `inferDateFormat`), `popup/transform-helpers-ui.ts`, `popup/field-transforms-ui.ts`
   (`getRawValue` getter through `renderTransformList`/`wireTransformList`),
   `flat-mode-ui.js`/`container-tree-ui.js`/`api-config-ui.ts` (raw-value resolvers),
   `transforms.helper.*`/`help.transforms.*` in `i18n/*.json`
@@ -1059,7 +1059,7 @@ hand-editing the generated script. Added independently to all three field
 shapes (flat/container/API) since none of them share a common leaf type.
 
 - Extension: `popup/field-transforms.js` (pure data helpers — create/add/
-  remove/update/changeKind/move/validate), `popup/field-transforms-ui.js`
+  remove/update/changeKind/move/validate), `popup/field-transforms-ui.ts`
   (DOM rendering + delegated event wiring, shared between `modal-field-name`
   and `modal-field-extended`), `popup/popup.js` (`_state.pendingTransforms`,
   `lastFieldModalSelector` — tells a genuine modal reopen apart from a
@@ -1097,7 +1097,7 @@ shapes (flat/container/API) since none of them share a common leaf type.
   `buildApiTreeNodeEl` (never for a group node — only a leaf actually
   extracts a value, matching `ApiGroup` having no `Transforms` property on
   the companion side). Opens `modal-api-field-transforms`, reusing the exact
-  same `field-transforms.ts`/`field-transforms-ui.js` editor and
+  same `field-transforms.ts`/`field-transforms-ui.ts` editor and
   `_state.pendingTransforms` slot the flat/container modals already use
   (mutually exclusive screens, no conflict); confirming writes the chain
   onto the `ApiField` draft node via `updateApiTreeNode`, and
@@ -1157,7 +1157,7 @@ for a hardening check that runs once at the very end, not per-transform).
   `RangeFormat.CompilePattern` does in C#, and rejects a structurally-
   matching but non-existent calendar date (e.g. `"2026-02-30"`) via
   `datetime.date`'s own `ValueError`.
-- Extension: the shared `field-transforms.ts`/`field-transforms-ui.js`
+- Extension: the shared `field-transforms.ts`/`field-transforms-ui.ts`
   editor (§2.18) gains the three kinds directly — no new module, since every
   mode's transform modal already routes through this one editor.
   `toIntegerPreview`/`toBooleanPreview`/`toDatePreview` are hand-kept JS
@@ -1189,7 +1189,7 @@ float rounding); a mismatch goes through the shared `onError` contract.
 - Every template carrying `_apply_transforms` (all eight): `_CURRENCY_FORMATS`
   table + `_to_currency`
 - Extension: `field-transforms.ts` (`toCurrencyPreview` — hand-kept JS mirror
-  of `_to_currency` — plus `CURRENCY_FORMAT_IDS`), `field-transforms-ui.js`
+  of `_to_currency` — plus `CURRENCY_FORMAT_IDS`), `field-transforms-ui.ts`
   (format `<select>`), i18n `transforms.toCurrencyOption`/`transforms.currencyFormat.*`
 - Tests: `CurrencyTransformTests.cs` (wire format, validation, real
   generated-script runs for every preset across flat/container/API),
@@ -1208,7 +1208,7 @@ a copy of the steps (an existing chain is never replaced).
 
 - Extension: `popup/transform-presets.js` (`BUILTIN_TRANSFORM_PRESETS`,
   `allTransformPresets`, `applyTransformPreset`, `transformChainIsSaveable`),
-  `popup/transform-presets-ui.js` (fetch wrappers, the "Apply preset … / Save
+  `popup/transform-presets-ui.ts` (fetch wrappers, the "Apply preset … / Save
   as preset" controls under all three transform editors, the Settings
   section), `.transform-preset-controls` in `screens/modals.html`,
   `#settings-transform-presets-section` in `screens/settings.html`,

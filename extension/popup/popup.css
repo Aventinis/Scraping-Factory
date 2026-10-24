@@ -1043,7 +1043,7 @@ input.env-var-invalid, input.env-var-invalid:focus { border-color: var(--color-d
 .output-settings-row:has(> input[data-env-var]) label { width: 150px; }
 @media (max-width: 340px) { .output-settings-row:has(> input[data-env-var]) label { width: 110px; } }
 
-/* Issue #400: regex "Pattern helper" panel and the date-format hint (transform-helpers-ui.js) */
+/* Issue #400: regex "Pattern helper" panel and the date-format hint (transform-helpers-ui.ts) */
 .transform-helper-panel {
   list-style: none; margin: 0 0 8px; padding: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
   background: var(--color-primary-soft); border: 1px solid var(--color-border); border-radius: var(--radius-md);

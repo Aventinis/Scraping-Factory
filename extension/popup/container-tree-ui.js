@@ -105,7 +105,7 @@ function buildGroupTreeNodeEl(node, path, depth, siblingCount) {
     row.appendChild(badge);
   }
 
-  // Issue #177: reorder among direct siblings — mirrors field-transforms-ui.js's
+  // Issue #177: reorder among direct siblings — mirrors field-transforms-ui.ts's
   // own move-up/move-down buttons (bare arrow glyphs, disabled at the
   // boundary) rather than introducing a new UI convention for "move within
   // a list".

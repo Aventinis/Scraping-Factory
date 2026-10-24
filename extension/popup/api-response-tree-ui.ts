@@ -306,7 +306,6 @@ export function wireApiResponseTreeEvents(bridge: PopupBridge): void {
     'api-field-transform-list',
     () => bridge.getState().pendingTransforms,
     (transforms: SFWire.FieldTransform[]) => bridge.patchState({ pendingTransforms: transforms }),
-    // @ts-expect-error field-transforms-ui.js (not converted yet) infers the getter as `() => null` from its default; this line errs once it is typed.
     () => bridge.getState().pendingRawText,
   );
   byIdOrNull('btn-api-field-transforms-confirm')?.addEventListener('click', () => confirmApiFieldTransformsModal(bridge));

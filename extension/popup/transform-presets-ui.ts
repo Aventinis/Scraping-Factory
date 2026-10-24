@@ -19,15 +19,22 @@
 //   transformPresetRenameId / transformPresetDeletePendingId
 //                                   — the Settings list's inline rename/
 //                                     "Delete? Yes/No" row
-const { createLogger } = require('../shared/logger');
+import type * as SFWire from '../types/wire';
+import type { PopupBridge, State } from '../types/popup';
+import { createLogger } from '../shared/logger';
+import { t } from '../i18n/i18n';
+import { getResolvedCompanionUrl, companionFetch } from './companion-client';
+import { allTransformPresets, applyTransformPreset, transformChainIsSaveable } from './transform-presets';
+import type { SavedPreset, TransformPresetOption } from './transform-presets';
+import { byIdOrNull, qsa } from './dom';
+
 const log = createLogger('SF:TransformPresets');
-const { t } = require('../i18n/i18n');
-const { getResolvedCompanionUrl, companionFetch } = require('./companion-client');
-const { allTransformPresets, applyTransformPreset, transformChainIsSaveable } = require('./transform-presets');
+
+type Transforms = SFWire.FieldTransform[];
 
 // i18n label per transform kind, for a preset's one-line step summary —
 // the same option labels the transform editor's own kind dropdown shows.
-const KIND_LABEL_KEYS = {
+const KIND_LABEL_KEYS: Record<string, string> = {
   trim: 'transforms.trimOption',
   regexExtract: 'transforms.regexExtractOption',
   replace: 'transforms.replaceOption',
@@ -38,36 +45,37 @@ const KIND_LABEL_KEYS = {
   toCurrency: 'transforms.toCurrencyOption',
 };
 
-function summarizeTransformChain(transforms) {
+export function summarizeTransformChain(transforms: Transforms): string {
   return transforms.map(step => (KIND_LABEL_KEYS[step.kind] ? t(KIND_LABEL_KEYS[step.kind]) : step.kind)).join(' → ');
 }
 
 // ── Companion round trips ───────────────────────────────────────────────
 
-async function fetchTransformPresets(bridge) {
+export async function fetchTransformPresets(bridge: PopupBridge): Promise<void> {
   try {
     const res = await companionFetch(`${getResolvedCompanionUrl()}/transform-presets`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const transformPresets = await res.json();
+    const transformPresets: SavedPreset[] = await res.json(); // GET /transform-presets
     log('TRANSFORM_PRESETS_LIST', transformPresets.length);
     bridge.patchState({ transformPresets, transformPresetsAvailable: true });
   } catch (err) {
     // Non-fatal, like fetchOutputBlueprints: an older companion without
     // /transform-presets, or a network hiccup — built-ins still work.
-    log('TRANSFORM_PRESETS_LIST FAIL', err.message);
+    log('TRANSFORM_PRESETS_LIST FAIL', (err as Error).message);
     bridge.patchState({ transformPresets: [], transformPresetsAvailable: false });
   }
 }
 
-async function errorMessageFrom(res) {
+async function errorMessageFrom(res: Response): Promise<string> {
   try {
-    return (await res.json()).error || `HTTP ${res.status}`;
+    const body: { error?: string } = await res.json();
+    return body.error || `HTTP ${res.status}`;
   } catch {
     return `HTTP ${res.status}`;
   }
 }
 
-async function saveTransformPreset(bridge, name, transforms) {
+export async function saveTransformPreset(bridge: PopupBridge, name: string, transforms: Transforms): Promise<boolean> {
   log('TRANSFORM_PRESET_SAVE', { name, steps: transforms.length });
   try {
     const res = await companionFetch(`${getResolvedCompanionUrl()}/transform-presets`, {
@@ -84,12 +92,12 @@ async function saveTransformPreset(bridge, name, transforms) {
     await fetchTransformPresets(bridge);
     return true;
   } catch (err) {
-    bridge.showToast(t('transformPresets.saveFailed', { error: err.message }), 'Transform preset save');
+    bridge.showToast(t('transformPresets.saveFailed', { error: (err as Error).message }), 'Transform preset save');
     return false;
   }
 }
 
-async function renameTransformPreset(bridge, id, name) {
+export async function renameTransformPreset(bridge: PopupBridge, id: number, name: string): Promise<void> {
   log('TRANSFORM_PRESET_RENAME', { id, name });
   try {
     const res = await companionFetch(`${getResolvedCompanionUrl()}/transform-presets/${id}`, {
@@ -104,11 +112,11 @@ async function renameTransformPreset(bridge, id, name) {
     bridge.patchState({ transformPresetRenameId: null });
     await fetchTransformPresets(bridge);
   } catch (err) {
-    bridge.showToast(t('transformPresets.saveFailed', { error: err.message }), 'Transform preset rename');
+    bridge.showToast(t('transformPresets.saveFailed', { error: (err as Error).message }), 'Transform preset rename');
   }
 }
 
-async function deleteTransformPreset(bridge, id) {
+export async function deleteTransformPreset(bridge: PopupBridge, id: number): Promise<void> {
   log('TRANSFORM_PRESET_DELETE', id);
   try {
     const res = await companionFetch(`${getResolvedCompanionUrl()}/transform-presets/${id}`, { method: 'DELETE' });
@@ -116,7 +124,7 @@ async function deleteTransformPreset(bridge, id) {
     bridge.patchState({ transformPresetDeletePendingId: null });
     await fetchTransformPresets(bridge);
   } catch (err) {
-    bridge.showToast(t('transformPresets.deleteFailed', { error: err.message }), 'Transform preset delete');
+    bridge.showToast(t('transformPresets.deleteFailed', { error: (err as Error).message }), 'Transform preset delete');
   }
 }
 
@@ -126,11 +134,11 @@ async function deleteTransformPreset(bridge, id) {
 // name being typed into the inline save form isn't wiped by an unrelated
 // re-render, e.g. the live transform preview updating.
 
-function controlsSignature(state, presets, saveable) {
+function controlsSignature(state: State, presets: TransformPresetOption[], saveable: boolean): string {
   return JSON.stringify([presets.map(p => [p.id, p.name]), !!state.transformPresetSaveOpen, saveable, !!state.transformPresetsAvailable]);
 }
 
-function buildControls(container, state, presets, saveable) {
+function buildControls(container: HTMLElement, state: State, presets: TransformPresetOption[], saveable: boolean): void {
   container.innerHTML = '';
 
   const applySelect = document.createElement('select');
@@ -180,9 +188,9 @@ function buildControls(container, state, presets, saveable) {
   }
 }
 
-function renderTransformPresetControls(bridge) {
+export function renderTransformPresetControls(bridge: PopupBridge): void {
   const state = bridge.getState();
-  const containers = document.querySelectorAll('.transform-preset-controls');
+  const containers = qsa('.transform-preset-controls');
   if (containers.length === 0) return;
   const presets = allTransformPresets(state.transformPresets, t);
   const saveable = transformChainIsSaveable(state.pendingTransforms || []);
@@ -194,8 +202,8 @@ function renderTransformPresetControls(bridge) {
   });
 }
 
-function confirmSaveFromControls(bridge, container) {
-  const name = container.querySelector('.transform-preset-name-input')?.value.trim();
+function confirmSaveFromControls(bridge: PopupBridge, container: HTMLElement): void {
+  const name = container.querySelector<HTMLInputElement>('.transform-preset-name-input')?.value.trim();
   if (!name) return;
   saveTransformPreset(bridge, name, bridge.getState().pendingTransforms || []);
 }
@@ -203,10 +211,10 @@ function confirmSaveFromControls(bridge, container) {
 // Delegated on each of the three containers (all already in the DOM — the
 // modal partials are loaded before wireEvents runs), so re-rendering a
 // container's contents never loses its listeners.
-function wireTransformPresetControls(bridge) {
-  document.querySelectorAll('.transform-preset-controls').forEach((container) => {
+export function wireTransformPresetControls(bridge: PopupBridge): void {
+  qsa('.transform-preset-controls').forEach((container) => {
     container.addEventListener('change', (e) => {
-      const select = /** @type {HTMLSelectElement} */ (e.target);
+      const select = e.target as HTMLSelectElement;
       if (!select.classList.contains('transform-preset-apply-select') || !select.value) return;
       const state = bridge.getState();
       const preset = allTransformPresets(state.transformPresets, t).find(p => p.id === select.value);
@@ -217,14 +225,14 @@ function wireTransformPresetControls(bridge) {
     });
 
     container.addEventListener('click', (e) => {
-      const target = /** @type {HTMLElement} */ (e.target);
+      const target = e.target as HTMLElement;
       if (target.closest('.btn-transform-preset-save')) bridge.patchState({ transformPresetSaveOpen: true });
       else if (target.closest('.btn-transform-preset-save-cancel')) bridge.patchState({ transformPresetSaveOpen: false });
       else if (target.closest('.btn-transform-preset-save-confirm')) confirmSaveFromControls(bridge, container);
     });
 
     container.addEventListener('keydown', (e) => {
-      const target = /** @type {HTMLElement} */ (e.target);
+      const target = e.target as HTMLElement;
       if (!target.classList.contains('transform-preset-name-input')) return;
       if (e.key === 'Enter') { e.preventDefault(); confirmSaveFromControls(bridge, container); }
       if (e.key === 'Escape') { e.stopPropagation(); bridge.patchState({ transformPresetSaveOpen: false }); }
@@ -237,7 +245,7 @@ function wireTransformPresetControls(bridge) {
     'btn-field-confirm', 'btn-field-cancel', 'btn-field-extended-confirm', 'btn-field-extended-cancel',
     'btn-api-field-transforms-confirm', 'btn-api-field-transforms-cancel',
   ].forEach((id) => {
-    document.getElementById(id)?.addEventListener('click', () => {
+    byIdOrNull(id)?.addEventListener('click', () => {
       if (bridge.getState().transformPresetSaveOpen) bridge.patchState({ transformPresetSaveOpen: false });
     });
   });
@@ -245,11 +253,11 @@ function wireTransformPresetControls(bridge) {
 
 // ── Settings screen: manage presets ─────────────────────────────────────
 
-function listSignature(state, presets) {
+function listSignature(state: State, presets: TransformPresetOption[]): string {
   return JSON.stringify([presets.map(p => [p.id, p.name, summarizeTransformChain(p.transforms)]), state.transformPresetRenameId, state.transformPresetDeletePendingId]);
 }
 
-function buildPresetRow(preset, state) {
+function buildPresetRow(preset: TransformPresetOption, state: State): HTMLElement {
   const row = document.createElement('div');
   row.className = 'transform-preset-row';
   row.dataset.presetId = preset.builtin ? '' : String(preset.savedId);
@@ -279,7 +287,7 @@ function buildPresetRow(preset, state) {
 
   const actions = document.createElement('div');
   actions.className = 'transform-preset-actions';
-  const button = (className, labelKey, danger = false) => {
+  const button = (className: string, labelKey: string, danger = false): void => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = `${danger ? 'btn-danger' : 'btn-secondary'} btn-tiny ${className}`;
@@ -304,31 +312,31 @@ function buildPresetRow(preset, state) {
   return row;
 }
 
-function renderTransformPresetsSettings(bridge) {
-  const listEl = document.getElementById('transform-presets-list');
+export function renderTransformPresetsSettings(bridge: PopupBridge): void {
+  const listEl = byIdOrNull('transform-presets-list');
   if (!listEl) return;
   const state = bridge.getState();
   const presets = allTransformPresets(state.transformPresets, t);
   const signature = listSignature(state, presets);
-  document.getElementById('transform-presets-unavailable')?.classList.toggle('hidden', state.transformPresetsAvailable !== false);
+  byIdOrNull('transform-presets-unavailable')?.classList.toggle('hidden', state.transformPresetsAvailable !== false);
   if (listEl.dataset.signature === signature) return;
   listEl.dataset.signature = signature;
   listEl.innerHTML = '';
   presets.forEach(preset => listEl.appendChild(buildPresetRow(preset, state)));
 }
 
-function wireTransformPresetsSettings(bridge) {
-  const listEl = document.getElementById('transform-presets-list');
+export function wireTransformPresetsSettings(bridge: PopupBridge): void {
+  const listEl = byIdOrNull('transform-presets-list');
   if (!listEl) return;
-  const idOf = el => parseInt(el.closest('.transform-preset-row').dataset.presetId, 10);
-  const confirmRename = (row) => {
-    const name = row.querySelector('.transform-preset-rename-input')?.value.trim();
+  const idOf = (el: Element): number => parseInt((el.closest('.transform-preset-row') as HTMLElement).dataset.presetId as string, 10);
+  const confirmRename = (row: HTMLElement): void => {
+    const name = row.querySelector<HTMLInputElement>('.transform-preset-rename-input')?.value.trim();
     if (name) renameTransformPreset(bridge, idOf(row), name);
   };
 
   listEl.addEventListener('click', (e) => {
-    const target = /** @type {HTMLElement} */ (e.target);
-    const row = target.closest('.transform-preset-row');
+    const target = e.target as HTMLElement;
+    const row = target.closest<HTMLElement>('.transform-preset-row');
     if (!row || !row.dataset.presetId) return;
     if (target.closest('.btn-transform-preset-rename')) bridge.patchState({ transformPresetRenameId: idOf(row), transformPresetDeletePendingId: null });
     else if (target.closest('.btn-transform-preset-rename-cancel')) bridge.patchState({ transformPresetRenameId: null });
@@ -339,15 +347,9 @@ function wireTransformPresetsSettings(bridge) {
   });
 
   listEl.addEventListener('keydown', (e) => {
-    const target = /** @type {HTMLElement} */ (e.target);
+    const target = e.target as HTMLElement;
     if (!target.classList.contains('transform-preset-rename-input')) return;
-    if (e.key === 'Enter') confirmRename(target.closest('.transform-preset-row'));
+    if (e.key === 'Enter') confirmRename(target.closest('.transform-preset-row') as HTMLElement);
     if (e.key === 'Escape') bridge.patchState({ transformPresetRenameId: null });
   });
 }
-
-module.exports = {
-  summarizeTransformChain, fetchTransformPresets, saveTransformPreset, renameTransformPreset, deleteTransformPreset,
-  renderTransformPresetControls, wireTransformPresetControls, renderTransformPresetsSettings, wireTransformPresetsSettings,
-};
-

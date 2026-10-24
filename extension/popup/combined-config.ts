@@ -26,7 +26,7 @@ export function updateComponentName(components: CombinedComponentRef[], index: n
 
 // direction: -1 (up) or +1 (down). Out-of-range moves are a no-op rather
 // than clamped/wrapped — the UI already disables the button at either end
-// (see combined-config-ui.js), this is just the data-layer safety net.
+// (see combined-config-ui.ts), this is just the data-layer safety net.
 export function moveComponent(components: CombinedComponentRef[], index: number, direction: number): CombinedComponentRef[] {
   const target = index + direction;
   if (target < 0 || target >= components.length) return components;

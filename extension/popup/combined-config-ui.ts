@@ -5,13 +5,17 @@
 // (sourced from every saved configuration regardless of host — see
 // saved-configs-ui.js's fetchAllSavedConfigs — since a component doesn't
 // have to match the page currently open), and the merge-key name inputs.
-const { createLogger } = require('../shared/logger');
-const log = createLogger('SF:Popup');
-const { t } = require('../i18n/i18n');
-const { escapeHtml } = require('./api-config');
-const { addComponent, removeComponent, updateComponentName, moveComponent } = require('./combined-config');
+import type { PopupBridge, SavedConfigSummary } from '../types/popup';
+import { createLogger } from '../shared/logger';
+import { t } from '../i18n/i18n';
+import { escapeHtml } from './api-config';
+import { addComponent, removeComponent, updateComponentName, moveComponent } from './combined-config';
+import type { CombinedComponentRef } from './combined-config';
+import { byIdOrNull } from './dom';
 
-function hostnameOf(url) {
+const log = createLogger('SF:Popup');
+
+function hostnameOf(url: string): string {
   try {
     return new URL(url).hostname;
   } catch {
@@ -23,8 +27,8 @@ function hostnameOf(url) {
 // input, a read-only hint of which saved configuration it's linked to
 // (looked up live in _state.allSavedConfigs, since the same saved config
 // could since have been renamed/deleted elsewhere), and ↑/↓/Remove
-// controls mirroring field-transforms-ui.js's buildTransformRowEl exactly.
-function buildComponentRowEl(component, index, total, allSavedConfigs) {
+// controls mirroring field-transforms-ui.ts's buildTransformRowEl exactly.
+function buildComponentRowEl(component: CombinedComponentRef, index: number, total: number, allSavedConfigs: SavedConfigSummary[] | null): HTMLElement {
   const li = document.createElement('li');
   li.className = 'group-tree-row combined-component-row';
   li.dataset.index = String(index);
@@ -71,12 +75,12 @@ function buildComponentRowEl(component, index, total, allSavedConfigs) {
   return li;
 }
 
-function renderCombinedSection(bridge) {
+export function renderCombinedSection(bridge: PopupBridge): void {
   const state = bridge.getState();
   const components = state.combinedComponents || [];
   const allSavedConfigs = state.allSavedConfigs || [];
 
-  const listEl = document.getElementById('combined-components-list');
+  const listEl = byIdOrNull('combined-components-list');
   if (listEl) {
     listEl.innerHTML = '';
     components.forEach((component, i) =>
@@ -88,9 +92,9 @@ function renderCombinedSection(bridge) {
   // picker always lists every saved configuration, not just the unpicked
   // ones.
   const hasSavedConfigs = allSavedConfigs.length > 0;
-  document.getElementById('combined-no-saved-configs-hint')?.classList.toggle('hidden', hasSavedConfigs);
-  const selectEl = document.getElementById('select-combined-add-component');
-  const addBtn = document.getElementById('btn-combined-add-component');
+  byIdOrNull('combined-no-saved-configs-hint')?.classList.toggle('hidden', hasSavedConfigs);
+  const selectEl = byIdOrNull<HTMLSelectElement>('select-combined-add-component');
+  const addBtn = byIdOrNull<HTMLButtonElement>('btn-combined-add-component');
   if (addBtn) addBtn.disabled = !hasSavedConfigs;
   if (selectEl) {
     selectEl.classList.toggle('hidden', !hasSavedConfigs);
@@ -100,10 +104,10 @@ function renderCombinedSection(bridge) {
   }
 }
 
-function wireCombinedConfigEvents(bridge) {
-  document.getElementById('btn-combined-add-component')?.addEventListener('click', () => {
-    const selectEl = document.getElementById('select-combined-add-component');
-    const id = parseInt(selectEl?.value, 10);
+export function wireCombinedConfigEvents(bridge: PopupBridge): void {
+  byIdOrNull('btn-combined-add-component')?.addEventListener('click', () => {
+    const selectEl = byIdOrNull<HTMLSelectElement>('select-combined-add-component');
+    const id = parseInt(selectEl?.value as string, 10);
     const state = bridge.getState();
     const savedConfig = (state.allSavedConfigs || []).find((c) => c.id === id);
     if (!savedConfig) return;
@@ -111,35 +115,34 @@ function wireCombinedConfigEvents(bridge) {
     bridge.patchState({ combinedComponents: addComponent(state.combinedComponents || [], savedConfig) });
   });
 
-  const listEl = document.getElementById('combined-components-list');
+  const listEl = byIdOrNull('combined-components-list');
   if (!listEl) return;
 
   listEl.addEventListener('change', (e) => {
-    if (!e.target.classList.contains('combined-component-name-input')) return;
-    const row = e.target.closest('.combined-component-row');
-    const index = parseInt(row.dataset.index, 10);
-    const name = e.target.value.trim();
+    const target = e.target as HTMLInputElement;
+    if (!target.classList.contains('combined-component-name-input')) return;
+    const row = target.closest('.combined-component-row') as HTMLElement;
+    const index = parseInt(row.dataset.index as string, 10);
+    const name = target.value.trim();
     if (!name) return; // blank reverts on the next render rather than saving an empty merge key
     const state = bridge.getState();
     bridge.patchState({ combinedComponents: updateComponentName(state.combinedComponents || [], index, name) });
   });
 
   listEl.addEventListener('click', (e) => {
-    const row = e.target.closest('.combined-component-row');
+    const target = e.target as Element;
+    const row = target.closest<HTMLElement>('.combined-component-row');
     if (!row) return;
-    const index = parseInt(row.dataset.index, 10);
+    const index = parseInt(row.dataset.index as string, 10);
     const state = bridge.getState();
     const components = state.combinedComponents || [];
 
-    if (e.target.closest('.btn-combined-move-up')) {
+    if (target.closest('.btn-combined-move-up')) {
       bridge.patchState({ combinedComponents: moveComponent(components, index, -1) });
-    } else if (e.target.closest('.btn-combined-move-down')) {
+    } else if (target.closest('.btn-combined-move-down')) {
       bridge.patchState({ combinedComponents: moveComponent(components, index, 1) });
-    } else if (e.target.closest('.btn-combined-remove')) {
+    } else if (target.closest('.btn-combined-remove')) {
       bridge.patchState({ combinedComponents: removeComponent(components, index) });
     }
   });
 }
-
-module.exports = { renderCombinedSection, wireCombinedConfigEvents };
-
