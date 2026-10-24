@@ -1,5 +1,5 @@
 // The "Recommended checks" preset of the Monitoring section: one click for people who do not want to understand all five
-// hardening checks. Pure state logic; the button and its message are wired in settings-panel-ui.js.
+// hardening checks. Pure state logic; the button and its message are wired in settings-panel-ui.ts.
 //
 // It switches on, deliberately small and low-risk:
 //   - "empty result" as a warning: the script finished but found nothing, the classic "the site changed its layout" case;

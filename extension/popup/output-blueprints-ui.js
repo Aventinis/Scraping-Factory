@@ -1,9 +1,9 @@
 // Issue #191: Output Blueprints — CRUD against the companion's /blueprints
 // endpoints, the management modal's own row-list rendering (mirrors
-// saved-configs-ui.js's own combined fetch+render style), the create/edit
+// saved-configs-ui.ts's own combined fetch+render style), the create/edit
 // modal, and the per-scrape source-field mapping picker rendered inside the
 // Settings section on the idle screen. Functions take a `bridge` object
-// (same convention as saved-configs-ui.js/api-config-ui.js) instead of
+// (same convention as saved-configs-ui.ts/api-config-ui.js) instead of
 // closing over popup.js's own module-level state.
 //
 // Issue #244: a second, tree-shaped target schema alongside the original
@@ -49,7 +49,7 @@ const EMPTY_OUTPUT_BLUEPRINT_STATE = {
   selectedOutputBlueprintSchemaKind: 'Flat', selectedOutputBlueprintTree: [], outputBlueprintTreeMapping: {},
 };
 
-// ── Fetch wrappers, mirroring saved-configs-ui.js's own style ──────────
+// ── Fetch wrappers, mirroring saved-configs-ui.ts's own style ──────────
 
 async function fetchOutputBlueprints(bridge) {
   bridge.patchState({ outputBlueprintsLoading: true });

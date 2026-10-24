@@ -1,5 +1,5 @@
 // Issue #399: the "Recommended checks" button, the plain-language wording and the
-// sentence-style thresholds of the Monitoring section (settings-panel-ui.js +
+// sentence-style thresholds of the Monitoring section (settings-panel-ui.ts +
 // the real idle.html markup).
 Object.defineProperty(window.navigator, 'language', { value: 'en-US', configurable: true });
 
