@@ -57,9 +57,9 @@ export interface OutputBlueprintOptions {
   id?: number | string | null;
   schemaKind?: SFWire.OutputBlueprintSchemaKind;
   fieldNames?: string[];
-  mapping?: Record<string, string>;
+  mapping?: Record<string, string | null>;
   tree?: SFDraft.OutputBlueprintTreeNode[];
-  treeMapping?: Record<string, string>;
+  treeMapping?: Record<string, string | null>;
 }
 
 /** buildConfigExport takes the same options plus the manifest (for the version). */
@@ -95,11 +95,11 @@ export interface ConfigState {
   appendOutput: boolean;
   blocks: SFDraft.Block[];
   selectedOutputBlueprintId: string;
-  selectedOutputBlueprintSchemaKind: SFWire.OutputBlueprintSchemaKind;
+  selectedOutputBlueprintSchemaKind?: SFWire.OutputBlueprintSchemaKind;
   selectedOutputBlueprintFieldNames: string[];
-  outputBlueprintMapping: Record<string, string>;
-  selectedOutputBlueprintTree: SFDraft.OutputBlueprintTreeNode[];
-  outputBlueprintTreeMapping: Record<string, string>;
+  outputBlueprintMapping: Record<string, string | null>;
+  selectedOutputBlueprintTree?: SFDraft.OutputBlueprintTreeNode[];
+  outputBlueprintTreeMapping?: Record<string, string | null>;
 }
 
 /** The cross-session global settings that end up in the request. */
