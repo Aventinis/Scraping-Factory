@@ -17,22 +17,31 @@
 // one place that already imports every mode's own insert/update helpers) —
 // this file only ever decides *whether* the input is complete enough to
 // call that callback at all, never *where* the result goes.
-const { t } = require('../i18n/i18n');
-const { combineFieldsIsValid, splitFieldIsValid, partNumberToIndex, indexToPartNumber } = require('./combine-split-fields');
+import type { DerivedFieldScope, PopupBridge } from '../types/popup';
+import { t } from '../i18n/i18n';
+import { combineFieldsIsValid, splitFieldIsValid, partNumberToIndex, indexToPartNumber } from './combine-split-fields';
+import { byIdOrNull, qsa } from './dom';
 
-function openCombineFieldModal(bridge, scope) {
+// What popup.js injects: each callback inserts the new field into the right mode's tree and returns true on success (the modal then
+// closes) or a falsy value to leave it open — the same silent-no-op-on-incomplete-input convention every field-creation modal follows.
+export interface CombineSplitHandlers {
+  onConfirmCombine(scope: DerivedFieldScope, name: string, sourceFieldNames: string[], separator: string, removeOriginals: boolean): boolean;
+  onConfirmSplit(scope: DerivedFieldScope, name: string, sourceFieldName: string, separator: string, index: number, removeOriginal: boolean): boolean;
+}
+
+export function openCombineFieldModal(bridge: PopupBridge, scope: DerivedFieldScope): void {
   bridge.patchState({ combineFieldModalOpen: true, pendingDerivedFieldScope: scope });
 }
 
-function openSplitFieldModal(bridge, scope) {
+export function openSplitFieldModal(bridge: PopupBridge, scope: DerivedFieldScope): void {
   bridge.patchState({ splitFieldModalOpen: true, pendingDerivedFieldScope: scope });
 }
 
-function cancelCombineFieldModal(bridge) {
+export function cancelCombineFieldModal(bridge: PopupBridge): void {
   bridge.patchState({ combineFieldModalOpen: false, pendingDerivedFieldScope: null });
 }
 
-function cancelSplitFieldModal(bridge) {
+export function cancelSplitFieldModal(bridge: PopupBridge): void {
   bridge.patchState({ splitFieldModalOpen: false, pendingDerivedFieldScope: null });
 }
 
@@ -42,20 +51,20 @@ function cancelSplitFieldModal(bridge) {
 // only, read back at confirm time), the same "no re-render can happen
 // mid-edit" reasoning modal-api-group-new's own render block already
 // relies on (see api-config-ui.ts's renderApiConfigModals).
-function renderCombineFieldModal(bridge, availableFieldNames) {
+export function renderCombineFieldModal(bridge: PopupBridge, availableFieldNames: string[] | null | undefined): void {
   const state = bridge.getState();
-  const modal = document.getElementById('modal-combine-field');
+  const modal = byIdOrNull('modal-combine-field');
   if (modal) modal.classList.toggle('hidden', !state.combineFieldModalOpen);
   if (!state.combineFieldModalOpen) return;
 
-  const nameInput = document.getElementById('input-combine-field-name');
+  const nameInput = byIdOrNull<HTMLInputElement>('input-combine-field-name');
   if (nameInput) { nameInput.value = ''; nameInput.focus(); }
-  const separatorInput = document.getElementById('input-combine-field-separator');
+  const separatorInput = byIdOrNull<HTMLInputElement>('input-combine-field-separator');
   if (separatorInput) separatorInput.value = ' ';
-  const removeToggle = document.getElementById('toggle-combine-field-remove-originals');
+  const removeToggle = byIdOrNull<HTMLInputElement>('toggle-combine-field-remove-originals');
   if (removeToggle) removeToggle.checked = false;
 
-  const list = document.getElementById('combine-field-source-list');
+  const list = byIdOrNull('combine-field-source-list');
   if (list) {
     list.innerHTML = '';
     (availableFieldNames || []).forEach((name) => {
@@ -74,22 +83,22 @@ function renderCombineFieldModal(bridge, availableFieldNames) {
   }
 }
 
-function renderSplitFieldModal(bridge, availableFieldNames) {
+export function renderSplitFieldModal(bridge: PopupBridge, availableFieldNames: string[] | null | undefined): void {
   const state = bridge.getState();
-  const modal = document.getElementById('modal-split-field');
+  const modal = byIdOrNull('modal-split-field');
   if (modal) modal.classList.toggle('hidden', !state.splitFieldModalOpen);
   if (!state.splitFieldModalOpen) return;
 
-  const nameInput = document.getElementById('input-split-field-name');
+  const nameInput = byIdOrNull<HTMLInputElement>('input-split-field-name');
   if (nameInput) { nameInput.value = ''; nameInput.focus(); }
-  const separatorInput = document.getElementById('input-split-field-separator');
+  const separatorInput = byIdOrNull<HTMLInputElement>('input-split-field-separator');
   if (separatorInput) separatorInput.value = ' ';
-  const indexInput = document.getElementById('input-split-field-index');
+  const indexInput = byIdOrNull<HTMLInputElement>('input-split-field-index');
   if (indexInput) indexInput.value = String(indexToPartNumber(0));
-  const removeToggle = document.getElementById('toggle-split-field-remove-original');
+  const removeToggle = byIdOrNull<HTMLInputElement>('toggle-split-field-remove-original');
   if (removeToggle) removeToggle.checked = false;
 
-  const select = document.getElementById('select-split-field-source');
+  const select = byIdOrNull<HTMLSelectElement>('select-split-field-source');
   if (select) {
     select.innerHTML = '';
     const placeholder = document.createElement('option');
@@ -105,50 +114,38 @@ function renderSplitFieldModal(bridge, availableFieldNames) {
   }
 }
 
-// handlers: { onConfirmCombine(scope, name, sourceFieldNames, separator,
-// removeOriginals), onConfirmSplit(scope, name, sourceFieldName,
-// separator, index, removeOriginals) } — each returns true on success
-// (closes the modal) or a falsy value to leave it open, the same silent-
-// no-op-on-incomplete-input convention every other field-creation modal
-// in this codebase already follows (confirmField/confirmExtendedField).
-function wireCombineSplitFieldsEvents(bridge, handlers) {
-  document.getElementById('btn-combine-field-cancel')?.addEventListener('click', () => cancelCombineFieldModal(bridge));
-  document.getElementById('btn-split-field-cancel')?.addEventListener('click', () => cancelSplitFieldModal(bridge));
+export function wireCombineSplitFieldsEvents(bridge: PopupBridge, handlers: CombineSplitHandlers): void {
+  byIdOrNull('btn-combine-field-cancel')?.addEventListener('click', () => cancelCombineFieldModal(bridge));
+  byIdOrNull('btn-split-field-cancel')?.addEventListener('click', () => cancelSplitFieldModal(bridge));
 
-  document.getElementById('btn-combine-field-confirm')?.addEventListener('click', () => {
+  byIdOrNull('btn-combine-field-confirm')?.addEventListener('click', () => {
     const state = bridge.getState();
     const scope = state.pendingDerivedFieldScope;
     if (!scope) return;
-    const name = document.getElementById('input-combine-field-name')?.value.trim();
+    const name = byIdOrNull<HTMLInputElement>('input-combine-field-name')?.value.trim();
     if (!name) return;
-    const sourceFieldNames = Array.from(document.querySelectorAll('.combine-field-source-checkbox:checked')).map(cb => cb.dataset.fieldName);
+    const sourceFieldNames = qsa('.combine-field-source-checkbox:checked').map(cb => cb.dataset.fieldName as string);
     if (!combineFieldsIsValid(sourceFieldNames)) return;
-    const separator = document.getElementById('input-combine-field-separator')?.value ?? ' ';
-    const removeOriginals = document.getElementById('toggle-combine-field-remove-originals')?.checked ?? false;
+    const separator = byIdOrNull<HTMLInputElement>('input-combine-field-separator')?.value ?? ' ';
+    const removeOriginals = byIdOrNull<HTMLInputElement>('toggle-combine-field-remove-originals')?.checked ?? false;
     if (handlers.onConfirmCombine(scope, name, sourceFieldNames, separator, removeOriginals)) {
       bridge.patchState({ combineFieldModalOpen: false, pendingDerivedFieldScope: null });
     }
   });
 
-  document.getElementById('btn-split-field-confirm')?.addEventListener('click', () => {
+  byIdOrNull('btn-split-field-confirm')?.addEventListener('click', () => {
     const state = bridge.getState();
     const scope = state.pendingDerivedFieldScope;
     if (!scope) return;
-    const name = document.getElementById('input-split-field-name')?.value.trim();
+    const name = byIdOrNull<HTMLInputElement>('input-split-field-name')?.value.trim();
     if (!name) return;
-    const sourceFieldName = document.getElementById('select-split-field-source')?.value ?? '';
+    const sourceFieldName = byIdOrNull<HTMLSelectElement>('select-split-field-source')?.value ?? '';
     if (!splitFieldIsValid(sourceFieldName)) return;
-    const separator = document.getElementById('input-split-field-separator')?.value ?? ' ';
-    const index = partNumberToIndex(parseInt(document.getElementById('input-split-field-index')?.value, 10));
-    const removeOriginal = document.getElementById('toggle-split-field-remove-original')?.checked ?? false;
+    const separator = byIdOrNull<HTMLInputElement>('input-split-field-separator')?.value ?? ' ';
+    const index = partNumberToIndex(parseInt(byIdOrNull<HTMLInputElement>('input-split-field-index')?.value as string, 10));
+    const removeOriginal = byIdOrNull<HTMLInputElement>('toggle-split-field-remove-original')?.checked ?? false;
     if (handlers.onConfirmSplit(scope, name, sourceFieldName, separator, index, removeOriginal)) {
       bridge.patchState({ splitFieldModalOpen: false, pendingDerivedFieldScope: null });
     }
   });
 }
-
-module.exports = {
-  openCombineFieldModal, openSplitFieldModal, cancelCombineFieldModal, cancelSplitFieldModal,
-  renderCombineFieldModal, renderSplitFieldModal, wireCombineSplitFieldsEvents,
-};
-
