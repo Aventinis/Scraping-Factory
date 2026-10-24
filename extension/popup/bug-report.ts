@@ -4,22 +4,32 @@
 // tab's content script's, so a user hitting an error can attach real
 // diagnostic context to a GitHub issue in one click instead of having to
 // copy devtools console output by hand.
-const { createLogger, getLogBuffer } = require('../shared/logger');
-const log = createLogger('SF:Popup');
+import { createLogger, getLogBuffer } from '../shared/logger';
+import type { LogEntry } from '../shared/logger';
+import { getLastError } from './toast';
 
-const { getLastError } = require('./toast');
+const log = createLogger('SF:Popup');
 
 const GITHUB_REPO_URL = 'https://github.com/Aventinis/Scraping-Factory';
 const BUG_REPORT_LOG_EXCERPT_LIMIT = 5000; // chars embedded directly in the GitHub issue body
 
-async function collectLogs() {
+export interface CollectedLogs {
+  popup: LogEntry[];
+  background: LogEntry[];
+  content: LogEntry[] | null;
+  contentError: string | null;
+}
+
+export async function collectLogs(): Promise<CollectedLogs> {
   const popup = getLogBuffer();
   try {
-    const response = await chrome.runtime.sendMessage({ type: 'GET_LOGS' });
+    // The service worker's reply to GET_LOGS (service-worker.js), an untyped message boundary.
+    const response: { background?: LogEntry[]; content?: LogEntry[] | null; contentError?: string | null } | undefined =
+      await chrome.runtime.sendMessage({ type: 'GET_LOGS' });
     return { popup, background: response?.background ?? [], content: response?.content ?? null, contentError: response?.contentError ?? null };
   } catch (err) {
-    log('GET_LOGS failed', err.message);
-    return { popup, background: [], content: null, contentError: err.message };
+    log('GET_LOGS failed', (err as Error).message);
+    return { popup, background: [], content: null, contentError: (err as Error).message };
   }
 }
 
@@ -27,7 +37,7 @@ async function collectLogs() {
 // selected UI language — it's a diagnostic artifact for maintainers on the
 // public, English-language GitHub repo, not conversational UI a
 // multilingual end user reads day-to-day (CLAUDE.md, Language).
-function formatLogSection(title, entries) {
+export function formatLogSection(title: string, entries: LogEntry[] | null | undefined): string {
   if (!entries || entries.length === 0) return `## ${title}\n(no entries)\n`;
   const lines = entries.map(e => `${e.ts} ${e.event}${e.data !== null ? ' ' + JSON.stringify(e.data) : ''}`);
   return `## ${title}\n${lines.join('\n')}\n`;
@@ -36,9 +46,9 @@ function formatLogSection(title, entries) {
 // `pageUrl` is the popup's own _state.url at call time — passed in rather
 // than read from shared state directly, so this module has no dependency on
 // popup.js's state shape.
-async function buildBugReport(pageUrl) {
+export async function buildBugReport(pageUrl?: string | null): Promise<string> {
   const { popup, background, content, contentError } = await collectLogs();
-  const manifest = typeof chrome !== 'undefined' && chrome.runtime?.getManifest ? chrome.runtime.getManifest() : {};
+  const manifest: { version?: string } = typeof chrome !== 'undefined' && chrome.runtime?.getManifest ? chrome.runtime.getManifest() : {};
   const lastReportedError = getLastError();
 
   const header = [
@@ -58,7 +68,7 @@ async function buildBugReport(pageUrl) {
   return `${header}\n\n${sections}`;
 }
 
-function downloadBugReport(text) {
+export function downloadBugReport(text: string): void {
   log('DOWNLOAD bug-report.log');
   const blob = new Blob([text], { type: 'text/plain' });
   const objectUrl = URL.createObjectURL(blob);
@@ -79,12 +89,12 @@ function downloadBugReport(text) {
 // inflate length well past what the raw excerpt accounts for.
 const GITHUB_ISSUE_URL_LIMIT = 8000;
 
-function buildIssueTitle() {
+export function buildIssueTitle(): string {
   const lastReportedError = getLastError();
   return lastReportedError ? `Error: ${lastReportedError.message}` : 'Bug report';
 }
 
-function buildIssueUrl(title, body) {
+export function buildIssueUrl(title: string, body: string): string {
   return `${GITHUB_REPO_URL}/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
 }
 
@@ -96,7 +106,7 @@ function buildIssueUrl(title, body) {
 // broken link — down to an entirely unfilled issue as the last resort. An
 // issue is always opened either way; the full log is already on disk via
 // downloadBugReport() for the user to attach manually.
-function buildGithubIssueUrl(reportText) {
+export function buildGithubIssueUrl(reportText: string): string {
   const title = buildIssueTitle();
   const truncated = reportText.length > BUG_REPORT_LOG_EXCERPT_LIMIT;
   const excerpt = truncated ? reportText.slice(-BUG_REPORT_LOG_EXCERPT_LIMIT) : reportText;
@@ -129,13 +139,9 @@ function buildGithubIssueUrl(reportText) {
   return `${GITHUB_REPO_URL}/issues/new`;
 }
 
-async function reportBug(pageUrl) {
+export async function reportBug(pageUrl?: string | null): Promise<void> {
   log('BTN report-bug');
   const reportText = await buildBugReport(pageUrl);
   downloadBugReport(reportText);
   chrome.tabs.create({ url: buildGithubIssueUrl(reportText) });
 }
-
-module.exports = {collectLogs, formatLogSection, buildBugReport, downloadBugReport,
-  buildIssueTitle, buildIssueUrl, buildGithubIssueUrl, reportBug,};
-

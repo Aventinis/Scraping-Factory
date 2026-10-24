@@ -1,5 +1,5 @@
 // Issue #401: plain-language failure messages — the table-driven mapping
-// (error-messages.ts), its translations, and the error toast (toast.js) that
+// (error-messages.ts), its translations, and the error toast (toast.ts) that
 // shows them with the original text behind "Details".
 Object.defineProperty(window.navigator, 'language', { value: 'en-US', configurable: true });
 
