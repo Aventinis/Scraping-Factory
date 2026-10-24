@@ -1,29 +1,23 @@
 // API mode: Link-header pagination (Issue #321) — DOM rendering and event
 // wiring for the "Follow the Link header" section on the API_CONFIG screen
 // (see api-link-pagination.ts for the pure draft/wire logic, the same
-// <feature>.js/<feature>-ui.js split api-cursor-pagination-ui.js uses). Every
+// <feature>.js/<feature>-ui.js split api-cursor-pagination-ui.ts uses). Every
 // function that touches state takes popup.js's `bridge` as its first
 // parameter, per Architecture Decision #12.
 //
 // State this module owns:
 //   apiConfigDraft.linkHeaderPagination — the draft (null = disabled)
-// Reads (set by api-config-ui.js when the candidate is confirmed):
+// Reads (set by api-config-ui.ts when the candidate is confirmed):
 //   apiConfigDraft.sourceHasNextLink — the recorded response carried a
 //   rel="next" Link header, so the option is highlighted as a suggestion.
 import type { PopupBridge } from '../types/popup';
-import type { ApiConfigDraft } from './api-config';
+import { patchApiConfigDraft } from './api-config-shared-ui';
 import { createLogger } from '../shared/logger';
 import { autoOpenAdvanced } from './advanced-disclosure-ui';
 import { createDefaultLinkDraft, DEFAULT_MAX_PAGES } from './api-link-pagination';
 import { byIdOrNull } from './dom';
 
 const log = createLogger('SF:ApiLinkPaginationUI');
-
-function patchDraft(bridge: PopupBridge, patch: Partial<ApiConfigDraft>): void {
-  const state = bridge.getState();
-  // These handlers only run on the API_CONFIG screen, where the draft exists.
-  bridge.setState(state.current, { apiConfigDraft: { ...state.apiConfigDraft, ...patch } as ApiConfigDraft });
-}
 
 // Called from popup.js's render() while the API_CONFIG screen is showing.
 // Hidden for an embedded-JSON source (a page load has no Link header to
@@ -60,14 +54,14 @@ export function renderApiLinkPaginationSection(bridge: PopupBridge): void {
 // Mutually exclusive with cursor pagination: enabling one drops the other.
 function setLinkEnabled(bridge: PopupBridge, enabled: boolean): void {
   log('API_LINK toggle', enabled);
-  patchDraft(bridge, enabled
+  patchApiConfigDraft(bridge, enabled
     ? { linkHeaderPagination: createDefaultLinkDraft(), cursorPagination: null }
     : { linkHeaderPagination: null });
 }
 
 function setMaxPages(bridge: PopupBridge, value: string): void {
   const parsed = parseInt(value, 10);
-  patchDraft(bridge, { linkHeaderPagination: { maxPages: Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_PAGES } });
+  patchApiConfigDraft(bridge, { linkHeaderPagination: { maxPages: Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_PAGES } });
 }
 
 // ── Event wiring ────────────────────────────────────────────────────────────

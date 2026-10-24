@@ -39,7 +39,18 @@ export interface UrlParts {
   queryParams: QueryParamPart[];
 }
 
-export type ApiParameterSourceDraft = SFWire.ApiParameterSource;
+// What parameterSources holds while the API_CONFIG screen is open; confirmApiConfig turns each into its SFWire.ApiParameterSource. A part
+// whose source kind is not chosen yet has no entry at all.
+export type ApiParameterSourceDraft =
+  | { kind: 'staticList'; valuesText: string }
+  | { kind: 'range'; type: SFWire.RangeType; from: string; to: string; format?: string }
+  // Incomplete until confirmDiscoveryCandidate fills in the three paths.
+  | { kind: 'discovery'; method?: 'GET'; urlTemplate?: string; itemsPath?: string; valuePath?: string }
+  | { kind: 'browserDiscovery'; discoveryUrl: string; actions: SFDraft.BrowserAction[] }
+  // The part carries the bootstrap value; never a declared parameter (see api-bootstrap.ts).
+  | { kind: 'bootstrap' };
+
+export type SourceOf<K extends ApiParameterSourceDraft['kind']> = Extract<ApiParameterSourceDraft, { kind: K }>;
 
 export interface ApiGroupDraft {
   kind: 'group';
@@ -107,7 +118,7 @@ export interface ApiConfigDraft {
   capturedHeaders: Array<{ name: string; value: string }>;
   headerDecisions: Record<string, HeaderDecision>;
   method?: 'GET' | 'POST';
-  bodyTree?: ApiBodyNodeDraft;
+  bodyTree?: ApiBodyNodeDraft | null;
   bodyParameterNames?: string[];
   parameterIdToName?: Record<string, string>;
   embeddedJsonSource?: SFWire.EmbeddedJsonSource | null;
@@ -116,8 +127,13 @@ export interface ApiConfigDraft {
   cursorPagination?: SFDraft.ApiCursorPagination | null;
   linkHeaderPagination?: SFDraft.ApiLinkHeaderPagination | null;
   sourceHasNextLink?: boolean;
-  sourceEntryId?: string;
+  sourceEntryId?: number;
+  sourceUrl?: string;
+  nextBodyParameterSeq?: number;
 }
+
+// What buildApiConfig assembles: the draft with every parameter source already in its wire form.
+export type ApiConfigBuildInput = Omit<ApiConfigDraft, 'parameterSources'> & { parameterSources: Record<string, SFWire.ApiParameterSource> };
 
 /**
  * The message content-script.js sends back after a click-based search. It is a
@@ -131,7 +147,7 @@ export interface ApiSubtreeCandidate {
 }
 
 // Popup screen names. Lives here (rather than in popup.js, which loads
-// after this module) purely so api-config-ui.js/container-tree-ui.js's
+// after this module) purely so api-config-ui.ts/container-tree-ui.js's
 // event handlers can reference it too; it has no other tie to API mode
 // specifically.
 export const STATES: { readonly [K in Screen]: K } = {
@@ -310,7 +326,7 @@ export function buildRangeSource(type: SFWire.RangeType, from: string, to: strin
 // and the reverse would be a circular require) — so `actions` here is
 // already serialized to wire shape (via that module's
 // serializeBrowserActions) by the caller (confirmApiConfig in
-// api-config-ui.js), exactly mirroring how staticList/range's own drafts
+// api-config-ui.ts), exactly mirroring how staticList/range's own drafts
 // are converted to wire shape at that same call site.
 export function buildBrowserDiscoverySource(discoveryUrl: string, actions?: SFWire.BrowserAction[]): SFWire.BrowserDiscoverySource {
   return { kind: 'browserDiscovery', discoveryUrl, ...(actions && actions.length ? { actions } : {}) };
@@ -445,7 +461,7 @@ export function buildApiConfig({
   urlParts, itemsPath, fields, groups, parameterSources, capturedHeaders, headerDecisions,
   method, bodyTree, bodyParameterNames = [], parameterIdToName = {}, embeddedJsonSource = null, bootstrap = null,
   cursorPagination = null, linkHeaderPagination = null,
-}: ApiConfigDraft): SFWire.ApiConfig {
+}: ApiConfigBuildInput): SFWire.ApiConfig {
   const urlTemplate = buildUrlTemplate(urlParts);
   // Issue #220: a variable URL part carrying the bootstrap value (already
   // renamed to the bootstrap's own name by resolveBootstrapUrlParts) is a
@@ -496,7 +512,7 @@ export function buildApiGroupDraft(name: string, path: string): ApiGroupDraft {
 
 // transforms mirrors Container-Mode's own buildFieldNode default (Issue
 // #84) — null means "no chain configured", the same value the field-
-// transforms modal (see api-config-ui.js's openApiFieldTransformsModal)
+// transforms modal (see api-config-ui.ts's openApiFieldTransformsModal)
 // resets it to when the chain is emptied back out.
 //
 // sampleValue (Issue #147): the raw JSON value this field resolved to at

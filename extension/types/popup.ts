@@ -124,9 +124,12 @@ export interface State {
 
   apiSearchTarget: ApiSearchTarget | null;
   apiCandidates: ApiCandidatesResult | null;
-  apiBootstrapRecordingEntries: SFDraft.ApiCaptureEntry[] | null;
+  /** The "Take from recording" picker's rows (null = closed); `likely` = the response holds a value the main request sends. */
+  apiBootstrapRecordingEntries: Array<{ entry: SFDraft.ApiCaptureEntry; likely: boolean }> | null;
   apiBootstrapTestValues: Record<string, string>;
   apiDiscoveryCandidates: (ApiCandidatesResult & { parameter: string }) | null;
+  /** Which discovery source's URL template is open for editing; absent from the initial state. */
+  discoveryTemplateEditingPartId?: string | null;
   apiTreeSearchResult: (ApiCandidatesResult & { treeParentPath: number[] | null }) | null;
   apiPathPicker: unknown;
   apiGroupModalOpen: boolean;

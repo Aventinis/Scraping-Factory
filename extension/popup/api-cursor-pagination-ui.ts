@@ -2,39 +2,36 @@
 // event wiring for the "Follow a next-page cursor" section on the API_CONFIG
 // screen (see api-cursor-pagination.ts for the pure draft/wire logic, the
 // same <feature>.js/<feature>-ui.js split api-bootstrap.ts/
-// api-bootstrap-ui.js use). Every function that touches state takes
+// api-bootstrap-ui.ts use). Every function that touches state takes
 // popup.js's `bridge` as its first parameter, per Architecture Decision #12.
 //
 // State this module owns:
 //   apiConfigDraft.cursorPagination — the cursor draft (null = disabled)
-const { createLogger } = require('../shared/logger');
+import type * as SFDraft from '../types/drafts';
+import type { PopupBridge, State } from '../types/popup';
+import { createLogger } from '../shared/logger';
+import { t } from '../i18n/i18n';
+import { createDefaultCursorDraft, detectCursorSuggestion, DEFAULT_MAX_PAGES } from './api-cursor-pagination';
+import { autoOpenAdvanced } from './advanced-disclosure-ui';
+import { pathPickerButtonHtml, pathPickerPanelHtml, wirePathPickerEvents } from './json-path-picker-ui';
+import type { ApiConfigDraft } from './api-config';
+import { patchApiConfigDraft } from './api-config-shared-ui';
+import { fetchApiCaptureEntries } from './api-capture-ui';
+import { byIdOrNull, escapeHtml } from './dom';
+
 const log = createLogger('SF:ApiCursorPaginationUI');
-const { t } = require('../i18n/i18n');
-const { createDefaultCursorDraft, detectCursorSuggestion, DEFAULT_MAX_PAGES } = require('./api-cursor-pagination');
-const { autoOpenAdvanced } = require('./advanced-disclosure-ui');
-const { pathPickerButtonHtml, pathPickerPanelHtml, wirePathPickerEvents } = require('./json-path-picker-ui');
 
-// Duplicated from api-bootstrap-ui.js's own copy rather than imported — the
-// codebase's "no cross-module includes for small DOM helpers" convention.
-function escapeHtml(str) {
-  return String(str ?? '')
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+// These handlers only run on the API_CONFIG screen, where the draft exists.
+const currentDraft = (bridge: PopupBridge): ApiConfigDraft => bridge.getState().apiConfigDraft as ApiConfigDraft;
 
-function patchDraft(bridge, patch) {
-  const state = bridge.getState();
-  bridge.setState(state.current, { apiConfigDraft: { ...state.apiConfigDraft, ...patch } });
-}
-
-function patchCursor(bridge, patch) {
-  const draft = bridge.getState().apiConfigDraft;
-  patchDraft(bridge, { cursorPagination: { ...draft.cursorPagination, ...patch } });
+function patchCursor(bridge: PopupBridge, patch: Partial<SFDraft.ApiCursorPagination>): void {
+  const draft = currentDraft(bridge);
+  patchApiConfigDraft(bridge, { cursorPagination: { ...draft.cursorPagination, ...patch } as SFDraft.ApiCursorPagination });
 }
 
 // ── Rendering ───────────────────────────────────────────────────────────────
 
-function cursorConfigHtml(cursor, draft, state) {
+function cursorConfigHtml(cursor: SFDraft.ApiCursorPagination, draft: ApiConfigDraft, state: State): string {
   const bodyUnavailable = draft.method !== 'POST' || !draft.bodyTree;
   return `
       <div class="actions">
@@ -67,54 +64,42 @@ function cursorConfigHtml(cursor, draft, state) {
 // Called from popup.js's render() while the API_CONFIG screen is showing.
 // An embedded-JSON source hides the whole section: a page load has no
 // cursor to follow (ScrapingPlanValidator rejects the combination).
-function renderApiCursorPaginationSection(bridge) {
+export function renderApiCursorPaginationSection(bridge: PopupBridge): void {
   const state = bridge.getState();
   const draft = state.apiConfigDraft;
-  const section = document.getElementById('api-cursor-section');
+  const section = byIdOrNull('api-cursor-section');
   if (!section) return;
   // The section sits inside its "Advanced" disclosure — hide that whole block for an embedded source.
   (section.closest('details') || section).classList.toggle('hidden', !!draft?.embeddedJsonSource);
   const cursor = draft?.cursorPagination || null;
   autoOpenAdvanced(section, !!cursor);
-  const toggle = /** @type {HTMLInputElement | null} */ (document.getElementById('toggle-api-cursor'));
+  const toggle = byIdOrNull<HTMLInputElement>('toggle-api-cursor');
   if (toggle) toggle.checked = !!cursor;
-  const configEl = document.getElementById('api-cursor-config');
+  const configEl = byIdOrNull('api-cursor-config');
   if (!configEl) return;
   configEl.classList.toggle('hidden', !cursor);
   // Fields commit on `change` (never per keystroke), so re-rendering the
   // whole block every time can't clobber an input mid-edit.
-  configEl.innerHTML = cursor ? cursorConfigHtml(cursor, draft, state) : '';
+  configEl.innerHTML = cursor && draft ? cursorConfigHtml(cursor, draft, state) : ''; // a cursor only exists on a draft
 }
 
 // ── Actions ─────────────────────────────────────────────────────────────────
 
-function setCursorEnabled(bridge, enabled) {
+function setCursorEnabled(bridge: PopupBridge, enabled: boolean): void {
   log('API_CURSOR toggle', enabled);
   // Issue #321: exclusive with Link-header pagination — enabling this one drops the other.
-  patchDraft(bridge, enabled
+  patchApiConfigDraft(bridge, enabled
     ? { cursorPagination: createDefaultCursorDraft(), linkHeaderPagination: null }
     : { cursorPagination: null });
 }
 
-function setCursorField(bridge, field, value) {
+function setCursorField(bridge: PopupBridge, field: string, value: string): void {
   if (field === 'maxPages') {
     const parsed = parseInt(value, 10);
     patchCursor(bridge, { maxPages: Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_PAGES });
     return;
   }
-  patchCursor(bridge, { [field]: field === 'target' ? value : value.trim() });
-}
-
-// GET_API_CAPTURE_ENTRIES round trip — same message api-config-ui.js's own
-// fetchApiCaptureEntries sends, duplicated (a few lines) rather than
-// reaching into that module.
-async function fetchCaptureEntries() {
-  try {
-    return await chrome.runtime.sendMessage({ type: 'GET_API_CAPTURE_ENTRIES' }) || [];
-  } catch (err) {
-    log('GET_API_CAPTURE_ENTRIES failed', err.message);
-    return [];
-  }
+  patchCursor(bridge, { [field]: field === 'target' ? value : value.trim() } as Partial<SFDraft.ApiCursorPagination>); // field is one of the data-field names
 }
 
 // "Detect from recording": looks the confirmed request's own recorded
@@ -123,9 +108,9 @@ async function fetchCaptureEntries() {
 // parameter recorded on the URL itself is dropped from the URL parts: the
 // recorded request may already have been a later page, and page 1 must be
 // sent without a cursor.
-async function detectFromRecording(bridge) {
-  const draft = bridge.getState().apiConfigDraft;
-  const entries = await fetchCaptureEntries();
+export async function detectFromRecording(bridge: PopupBridge): Promise<void> {
+  const draft = currentDraft(bridge);
+  const entries = await fetchApiCaptureEntries();
   const entry = entries.find(e => draft.sourceEntryId !== undefined && e.id === draft.sourceEntryId)
     || [...entries].reverse().find(e => e.url === draft.sourceUrl && (e.method || 'GET') === (draft.method || 'GET'));
   const found = entry ? detectCursorSuggestion(entry, entries.filter(e => e !== entry)) : null;
@@ -136,12 +121,12 @@ async function detectFromRecording(bridge) {
   }
   log('API_CURSOR detect', found);
 
-  const current = bridge.getState().apiConfigDraft;
+  const current = currentDraft(bridge);
   const cursor = current.cursorPagination || createDefaultCursorDraft();
   // Only overwrite what was actually found; keep whatever the user typed.
   const bodyUsable = found.target === 'Body' && current.method === 'POST' && !!current.bodyTree;
   const target = bodyUsable ? 'Body' : 'Query';
-  const patch = {
+  const patch: Partial<ApiConfigDraft> = {
     cursorPagination: {
       ...cursor,
       nextCursorPath: found.nextCursorPath || cursor.nextCursorPath,
@@ -157,27 +142,24 @@ async function detectFromRecording(bridge) {
       queryParams: current.urlParts.queryParams.filter(param => param.key !== found.queryParameterName),
     };
   }
-  patchDraft(bridge, patch);
+  patchApiConfigDraft(bridge, patch);
   bridge.showToast(t('apiCursor.detectApplied'), null, 'info');
 }
 
 // ── Event wiring ────────────────────────────────────────────────────────────
 
-function wireApiCursorPaginationEvents(bridge) {
-  const section = document.getElementById('api-cursor-section');
+export function wireApiCursorPaginationEvents(bridge: PopupBridge): void {
+  const section = byIdOrNull('api-cursor-section');
   if (!section) return;
   wirePathPickerEvents(bridge, section); // Issue #404
 
   section.addEventListener('change', (e) => {
-    const target = /** @type {HTMLInputElement} */ (e.target);
+    const target = e.target as HTMLInputElement;
     if (target.id === 'toggle-api-cursor') { setCursorEnabled(bridge, target.checked); return; }
-    if (target.classList.contains('api-cursor-field')) setCursorField(bridge, target.dataset.field, target.value);
+    if (target.classList.contains('api-cursor-field')) setCursorField(bridge, target.dataset.field as string, target.value);
   });
 
   section.addEventListener('click', (e) => {
-    if (/** @type {HTMLElement} */ (e.target).closest('#btn-api-cursor-detect')) detectFromRecording(bridge);
+    if ((e.target as HTMLElement).closest('#btn-api-cursor-detect')) detectFromRecording(bridge);
   });
 }
-
-module.exports = { renderApiCursorPaginationSection, wireApiCursorPaginationEvents, detectFromRecording };
-

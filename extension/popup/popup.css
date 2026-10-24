@@ -567,7 +567,7 @@ body {
    (group/api/dom) — one static down-pointing SVG per row instead of each
    swapping between two different Unicode glyphs on click; collapsed state
    is just a rotation via the .collapsed class (see container-tree-ui.js/
-   api-config-ui.js/popup.js's buildTreeNodeEl for the class toggling). */
+   api-config-ui.ts/popup.js's buildTreeNodeEl for the class toggling). */
 .group-tree-toggle svg, .api-tree-toggle svg, .dom-tree-toggle svg {
   width: 12px; height: 12px; display: block; transition: transform var(--transition-fast);
 }

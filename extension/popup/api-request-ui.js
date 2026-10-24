@@ -1,7 +1,7 @@
 // API mode: the request side of the API_CONFIG screen — the captured-header table
 // (Issue #53/#220) and the POST body tree with its "new parameter" modal
-// (Issue #55). Split out of api-config-ui.js (Issue #390); behavior unchanged.
-// See api-config-ui.js for the `bridge` convention.
+// (Issue #55). Split out of api-config-ui.ts (Issue #390); behavior unchanged.
+// See api-config-ui.ts for the `bridge` convention.
 const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:ApiConfigUI');
 const { t } = require('../i18n/i18n');

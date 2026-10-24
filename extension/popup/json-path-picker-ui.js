@@ -28,7 +28,7 @@ let tokenSeq = 0;
 
 // ── Loading ─────────────────────────────────────────────────────────────────
 
-// GET_API_CAPTURE_ENTRIES round trip — the same message api-capture-ui.js's
+// GET_API_CAPTURE_ENTRIES round trip — the same message api-capture-ui.ts's
 // own fetchApiCaptureEntries sends, repeated (a few lines) rather than
 // reaching into that module.
 async function fetchCaptureEntries() {

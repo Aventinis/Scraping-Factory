@@ -1,5 +1,5 @@
 // API mode: the URL parts and parameter-source cards of the API_CONFIG screen: fixed / variable parts, value lists, discovery endpoints,
-// ranges, and the browser-discovery source (api-browser-discovery-ui.js). See api-config-ui.js for the `bridge` convention.
+// ranges, and the browser-discovery source (api-browser-discovery-ui.ts). See api-config-ui.ts for the `bridge` convention.
 const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:ApiConfigUI');
 const { t } = require('../i18n/i18n');

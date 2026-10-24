@@ -6,6 +6,18 @@ import type { ApiSubtreeCandidate } from '../popup/api-config';
 
 // A recorded request or embedded-JSON value the user's click matched; the content script adds more fields than the popup reads.
 export interface ApiCandidate extends ApiSubtreeCandidate {
+  path: string;
+  siblings: Array<{ name: string; value?: unknown }>;
+  itemsPath?: string | null;
+  valuePath?: string | null;
+  /** Network candidates: the recorded request. */
+  url?: string;
+  method?: string;
+  entryId?: number;
+  requestHeaders?: Array<{ name: string; value: string }>;
+  hasNextLink?: boolean;
+  /** Embedded-JSON candidates: the <script> tag the value was found in. */
+  scriptSelector?: string;
   [key: string]: unknown;
 }
 

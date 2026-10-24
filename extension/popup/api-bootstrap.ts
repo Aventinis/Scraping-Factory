@@ -1,4 +1,4 @@
-// API mode: the token/auth bootstrap — pure data/logic (api-bootstrap-ui.js renders it). A bootstrap is one request the
+// API mode: the token/auth bootstrap — pure data/logic (api-bootstrap-ui.ts renders it). A bootstrap is one request the
 // script sends at the start of every run, extracting a short-lived value from the JSON response that is spliced into the
 // main request's headers ("Bearer {token}") and/or URL.
 //
@@ -14,7 +14,7 @@ import type * as SFDraft from '../types/drafts';
 import type { ApiConfigDraft, UrlParts } from './api-config';
 
 // Typed `string`, not the literal: it is a pseudo kind outside SFWire's source union, compared against real source kinds.
-export const BOOTSTRAP_SOURCE_KIND: string = 'bootstrap';
+export const BOOTSTRAP_SOURCE_KIND = 'bootstrap' as const;
 export const DEFAULT_BOOTSTRAP_NAME = 'token';
 
 type HttpPair = { name: string; value: string };
@@ -154,7 +154,7 @@ export function wireTokenIntoMainRequest(draft: ApiConfigDraft, tokenValue: stri
   const queryParams = draft.urlParts.queryParams.map((param) => {
     if (param.value !== tokenValue) return param;
     // The bootstrap pseudo source never reaches the wire (buildApiConfig turns it into a placeholder), so it is not in SFWire.
-    parameterSources[`query:${param.key}`] = { kind: BOOTSTRAP_SOURCE_KIND } as unknown as SFWire.ApiParameterSource;
+    parameterSources[`query:${param.key}`] = { kind: BOOTSTRAP_SOURCE_KIND };
     return { ...param, variable: true };
   });
   return { headerDecisions, parameterSources, urlParts: { ...draft.urlParts, queryParams } };
@@ -219,7 +219,7 @@ export function stripBootstrapReferences(draft: ApiConfigDraft): Pick<ApiConfigD
   });
   const parameterSources: ApiConfigDraft['parameterSources'] = {};
   Object.entries(draft.parameterSources || {}).forEach(([id, source]) => {
-    if ((source as { kind?: string } | undefined)?.kind !== BOOTSTRAP_SOURCE_KIND) parameterSources[id] = source;
+    if (source?.kind !== BOOTSTRAP_SOURCE_KIND) parameterSources[id] = source;
   });
   return { headerDecisions, parameterSources };
 }

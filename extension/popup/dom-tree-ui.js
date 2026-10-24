@@ -2,7 +2,7 @@
 // Extracted from popup.js (docs/design-notes/extension.md, "Popup module boundaries") — the optional inspector tree showing the live
 // page's own DOM structure inside the side panel, used to click-pick a
 // selector without needing devtools open. Takes a `bridge` object (same
-// convention as api-config-ui.js/container-tree-ui.js) instead of closing
+// convention as api-config-ui.ts/container-tree-ui.js) instead of closing
 // over popup.js's own module-level state.
 const { createLogger } = require('../shared/logger');
 const log = createLogger('SF:Popup');
