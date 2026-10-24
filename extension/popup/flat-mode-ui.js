@@ -172,7 +172,7 @@ function wireFlatModeEvents(bridge) {
     }
   });
   // Issue #206 follow-up: no click-based selection at all — opens the
-  // shared combine/split creation modal directly (combine-split-fields-ui.js).
+  // shared combine/split creation modal directly (combine-split-fields-ui.ts).
   document.getElementById('btn-add-combine-field')?.addEventListener('click', () => {
     openCombineFieldModal(bridge, { mode: 'flat' });
   });

@@ -1,5 +1,5 @@
 // Pure logic of the two transform-editor helpers that get a non-programmer to a working value: the regex "recipes" behind "Regex
-// extract" and the date-format inference behind "Convert to date" (transform-helpers-ui.js renders them).
+// extract" and the date-format inference behind "Convert to date" (transform-helpers-ui.ts renders them).
 //
 // Recipes turn "the text after Price:" into a pattern + group. The user's text is escaped, and only constructs that .NET's Regex (the
 // companion's validation) and Python's re (the script) read identically are used: groups, \d, \s, [^...], lazy +?; no lookbehind,

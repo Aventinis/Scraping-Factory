@@ -1,4 +1,4 @@
-// Reusable named transform-chain presets: pure (transform-presets-ui.js renders them; the companion's /transform-presets endpoints
+// Reusable named transform-chain presets: pure (transform-presets-ui.ts renders them; the companion's /transform-presets endpoints
 // store them). A preset is a saved FieldTransform[] in the wire shape a field's chain already uses, so applying one is an array copy
 // into _state.pendingTransforms, the slot all three transform editors share.
 import type * as SFWire from '../types/wire';

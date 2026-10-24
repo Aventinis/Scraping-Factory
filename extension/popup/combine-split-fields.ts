@@ -6,7 +6,7 @@
 // field (a click-based selector pick the resulting value never actually
 // uses). A combine/split-derived field has no selector/path of its own —
 // its whole value comes from other already-configured sibling fields — so
-// it gets its own creation modal instead (combine-split-fields-ui.js),
+// it gets its own creation modal instead (combine-split-fields-ui.ts),
 // never a click-based pick.
 import type * as SFWire from '../types/wire';
 

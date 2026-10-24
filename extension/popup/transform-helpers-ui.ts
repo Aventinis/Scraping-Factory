@@ -1,7 +1,7 @@
 // Issue #400: DOM side of the two transform-editor helpers (logic in
 // transform-helpers.ts) — the regex "Pattern helper" panel under a "Regex extract"
 // row, and the date-format hint under a "Convert to date" row. Used by
-// field-transforms-ui.js for all three modes' transform modals.
+// field-transforms-ui.ts for all three modes' transform modals.
 //
 // The recipe panel is deliberately stateless as far as the transform is
 // concerned: it holds the picked recipe and its text(s) in its own DOM, shows the

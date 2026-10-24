@@ -481,7 +481,7 @@ let _state = {
   pendingApiFieldTransformPath: null,
   // Issue #206 follow-up: modal-combine-field/modal-split-field visibility
   // — the dedicated "Felder kombinieren"/"Feld aufteilen" creation flow,
-  // shared across flat/container/API mode (combine-split-fields-ui.js).
+  // shared across flat/container/API mode (combine-split-fields-ui.ts).
   // pendingDerivedFieldScope carries which mode/parent the confirmed field
   // gets inserted into: { mode: 'flat' } | { mode: 'container', parentPath }
   // | { mode: 'api', groupPath } — same "not persisted, no content-script
@@ -539,13 +539,13 @@ let _state = {
   // blocks — each {name, outputFileName, shape: 'flat'|'group', fields,
   // groups}, cleared by MODE_SWITCH_CLEARS like combinedComponents. The
   // block currently being *built* reuses fields/groups above directly
-  // (see blocks-config-ui.js) rather than its own separate draft-content
+  // (see blocks-config-ui.ts) rather than its own separate draft-content
   // slot — only the draft's own metadata needs dedicated state here.
   blocks:                     [],
   blocksDraftShape:            'flat', // 'flat' | 'group' — which of fields/groups the draft editor currently shows
   blocksDraftName:             '',
   blocksDraftOutputFileName:   '',
-  blocksEditingIndex:          null, // set while editing an already-added block (see blocks-config-ui.js's editBlock)
+  blocksEditingIndex:          null, // set while editing an already-added block (see blocks-config-ui.ts's editBlock)
   // Issue #182: Blocks mode's /generate response ({ script, blocks: [{name,
   // preview, outputFile}] }) differs in shape from every other mode's own
   // singular { script, preview, outputFile } — dataPreview/outputFile above
@@ -613,7 +613,7 @@ let _state = {
   // after any create/edit/delete in modal-manage-blueprints. Not persisted,
   // same pull-based tradeoff savedConfigs/allSavedConfigs already accept.
   outputBlueprints:            null,
-  // Issue #279: reusable transform-chain presets — see transform-presets-ui.js
+  // Issue #279: reusable transform-chain presets — see transform-presets-ui.ts
   // for what each of these means. Not persisted (re-fetched from the
   // companion on every health check, like outputBlueprints).
   transformPresets:             null,
@@ -749,7 +749,7 @@ function applyStaticTranslations() {
 }
 
 // Issue #206 follow-up: the mode-dispatch glue for the shared combine/split
-// field creation modals (combine-split-fields-ui.js, deliberately
+// field creation modals (combine-split-fields-ui.ts, deliberately
 // mode-agnostic — see its own doc comment for why this glue lives here
 // instead of in any one mode's own -ui.js file: popup.js is the one place
 // that already imports every mode's own field-name/insert/update helper,
