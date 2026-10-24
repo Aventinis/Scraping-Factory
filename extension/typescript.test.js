@@ -30,7 +30,7 @@ describe('TypeScript setup', () => {
 
   test('the popup bundle contains converted modules, and still-JavaScript code can require them', async () => {
     const result = await esbuild.build({
-      entryPoints: [path.join(ROOT, 'popup/popup.js')], bundle: true, format: 'iife', platform: 'browser', write: false,
+      entryPoints: [path.join(ROOT, 'popup/popup.ts')], bundle: true, format: 'iife', platform: 'browser', write: false,
       define: { 'process.env.NODE_ENV': '"production"', 'process.env.SF_CHANNEL': '"development"' }, logLevel: 'silent',
     });
     const code = result.outputFiles[0].text;

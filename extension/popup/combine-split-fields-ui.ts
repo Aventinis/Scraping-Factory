@@ -10,10 +10,10 @@
 // flat-mode-ui.ts/container-tree-ui.js/api-config-ui.js each need to call
 // this file's own openCombineFieldModal/openSplitFieldModal from their own
 // top-level scope). `availableFieldNames` is passed in by the caller
-// (popup.js, which loads last and already has every mode's own field-name
+// (popup.ts, which loads last and already has every mode's own field-name
 // helper on hand) rather than computed here; confirming reads the modal's
 // own form fields and hands the parsed result to an injected
-// onConfirmCombine/onConfirmSplit callback (also supplied by popup.js, the
+// onConfirmCombine/onConfirmSplit callback (also supplied by popup.ts, the
 // one place that already imports every mode's own insert/update helpers) —
 // this file only ever decides *whether* the input is complete enough to
 // call that callback at all, never *where* the result goes.
@@ -22,7 +22,7 @@ import { t } from '../i18n/i18n';
 import { combineFieldsIsValid, splitFieldIsValid, partNumberToIndex, indexToPartNumber } from './combine-split-fields';
 import { byIdOrNull, qsa } from './dom';
 
-// What popup.js injects: each callback inserts the new field into the right mode's tree and returns true on success (the modal then
+// What popup.ts injects: each callback inserts the new field into the right mode's tree and returns true on success (the modal then
 // closes) or a falsy value to leave it open — the same silent-no-op-on-incomplete-input convention every field-creation modal follows.
 export interface CombineSplitHandlers {
   onConfirmCombine(scope: DerivedFieldScope, name: string, sourceFieldNames: string[], separator: string, removeOriginals: boolean): boolean;

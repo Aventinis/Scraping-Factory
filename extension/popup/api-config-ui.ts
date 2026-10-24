@@ -1,6 +1,6 @@
 // API mode's DOM rendering and event handling. This file is the orchestrator: the API_CONFIG screen's render / confirm / cancel, the
 // modals' render, and wireApiConfigEvents, which calls the focused modules in turn. It re-exports every name it used to export, so
-// popup.js and idle-screen-ui.ts import unchanged:
+// popup.ts and idle-screen-ui.ts import unchanged:
 //   api-capture-ui.ts            recording, searches, candidate / recorded-request lists
 //   api-response-tree-ui.ts      response tree, group + transforms modals, tree search
 //   api-parameters-ui.ts         URL parts and parameter sources
@@ -9,8 +9,8 @@
 //   api-config-shared-ui.ts      draft helpers the modules above share
 //
 // Handlers that read or mutate popup state take a `bridge` as first parameter — { getState, setState, patchState,
-// stopPreviewIfActive, requestDomTree, showToast } — built once by popup.js. It is not just style: popup.js loads after this file and,
-// under Jest, each file is an isolated module with no shared scope, so a closure over popup.js's state would not resolve. Purely
+// stopPreviewIfActive, requestDomTree, showToast } — built once by popup.ts. It is not just style: popup.ts loads after this file and,
+// under Jest, each file is an isolated module with no shared scope, so a closure over popup.ts's state would not resolve. Purely
 // presentational render / build*El functions need none of this.
 import type * as SFWire from '../types/wire';
 import type { PopupBridge, State } from '../types/popup';
@@ -183,7 +183,7 @@ export function confirmApiConfig(bridge: PopupBridge): void {
   bridge.setState(STATES.IDLE, { apiConfig, apiConfigDraft: null, apiDiscoveryCandidates: null, apiTreeSearchResult: null, apiPathPicker: null });
 }
 
-// Called from popup.js's render() only while _state.current === STATES.API_CONFIG
+// Called from popup.ts's render() only while _state.current === STATES.API_CONFIG
 // and an apiConfigDraft is in progress — the screen's own tree-search panel
 // and its three small modals (add group, add body parameter, edit a leaf
 // field's transform chain).
@@ -202,7 +202,7 @@ export function renderApiConfigModals(bridge: PopupBridge): void {
     }
   }
 
-  // popup.js hides every modal at the start of each render, so "just opened"
+  // popup.ts hides every modal at the start of each render, so "just opened"
   // can't be read off the DOM: remember whether the previous render had it open.
   // The inputs are reset only on the opening render — a later one (e.g. the
   // JSON-path picker finishing loading) must not wipe what was typed meanwhile.
@@ -261,7 +261,7 @@ export function wireApiConfigEvents(bridge: PopupBridge): void {
   });
 }
 
-// Everything this module used to export stays reachable from here: popup.js and idle-screen-ui.ts import it unchanged
+// Everything this module used to export stays reachable from here: popup.ts and idle-screen-ui.ts import it unchanged
 // (pinned by api-config-ui-exports.test.js).
 export {
   buildApiTreeNodeEl,

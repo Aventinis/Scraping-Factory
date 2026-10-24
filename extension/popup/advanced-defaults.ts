@@ -3,7 +3,7 @@
 // Pure: no DOM, no state access.
 import { createDefaultDeduplication } from './dedup-config';
 
-/** The codes a fresh "Retry on transient errors" starts with (popup.js). */
+/** The codes a fresh "Retry on transient errors" starts with (popup.ts). */
 export const DEFAULT_RETRY_STATUS_CODES = [429, 502, 503, 504];
 
 /** True when the status codes as typed (any separator, order ignored) are not the default list. */

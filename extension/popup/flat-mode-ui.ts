@@ -1,6 +1,6 @@
 // ── Flat mode render / wiring ──
 // The original mode's module: the flat fields list, the "+ Field" pick flow, modal-field-name and its transform-chain editor.
-// Functions take a `bridge` instead of closing over popup.js state.
+// Functions take a `bridge` instead of closing over popup.ts state.
 import type * as SFDraft from '../types/drafts';
 import type * as SFWire from '../types/wire';
 import type { PopupBridge, State } from '../types/popup';

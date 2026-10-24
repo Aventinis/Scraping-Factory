@@ -1,5 +1,5 @@
 // ── Engine + browser actions: render / wiring ──
-// Extracted from popup.js (docs/design-notes/extension.md, "Popup module boundaries"): the engine toggle and the ordered browser-actions list
+// Extracted from popup.ts (docs/design-notes/extension.md, "Popup module boundaries"): the engine toggle and the ordered browser-actions list
 // (WaitFor / Fill / Click / Scroll). Mode-independent, so no interaction with switchMode. Functions take a `bridge`.
 import type * as SFDraft from '../types/drafts';
 import type { BrowserActionField, PopupBridge } from '../types/popup';

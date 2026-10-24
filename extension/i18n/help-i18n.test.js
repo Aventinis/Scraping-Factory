@@ -63,7 +63,7 @@ test('over-long help texts are reported (soft limit)', () => {
 
 test('every help host in the HTML lives in a file the loader actually fetches', () => {
   // idle.html / api-config.html / settings.html / modals.html are fetched at
-  // runtime (popup.js's loadScreenPartials) — a host in any other file would
+  // runtime (popup.ts's loadScreenPartials) — a host in any other file would
   // never be rendered.
   const loadable = ['popup.html', 'screens/idle.html', 'screens/api-config.html', 'screens/settings.html', 'screens/modals.html'];
   for (const file of HTML_FILES) {

@@ -1,15 +1,15 @@
 // Issue #84: DOM rendering + event wiring for the transform-chain editor —
 // shared between modal-field-name (flat mode) and modal-field-extended
 // (container mode), each with its own list/add-button element ids but
-// backed by the same _state.pendingTransforms in popup.js. Split out the
+// backed by the same _state.pendingTransforms in popup.ts. Split out the
 // same way container-tree-ui.ts/api-config-ui.js are (see their own doc
 // comments for why).
 //
 // Unlike container-tree-ui.ts's handler functions (which take a `bridge`
-// object because they need popup.js's stopPreviewIfActive/requestDomTree
+// object because they need popup.ts's stopPreviewIfActive/requestDomTree
 // too), this module only ever needs to read/write one piece of state — so
 // wireTransformList takes plain getter/setter closures instead, supplied by
-// whichever call site in popup.js's wireEvents() actually owns _state.
+// whichever call site in popup.ts's wireEvents() actually owns _state.
 import type * as SFWire from '../types/wire';
 import { t } from '../i18n/i18n';
 import {
@@ -216,7 +216,7 @@ export function renderTransformPreview(elId: string, rawValue: string | null | u
   }
 }
 
-// Wired once (in popup.js's wireEvents()) per list root — event delegation
+// Wired once (in popup.ts's wireEvents()) per list root — event delegation
 // survives renderTransformList's innerHTML rebuild, same as the group
 // tree's own delegated click handler.
 export function wireTransformList(

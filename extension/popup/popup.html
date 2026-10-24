@@ -9,12 +9,12 @@
 
   <!-- Language selector: rendered outside every .screen section so switching
        language is always possible, regardless of app state (checking,
-       error, idle, …). See popup.js's applyStaticTranslations/setLanguage. -->
+       error, idle, …). See popup.ts's applyStaticTranslations/setLanguage. -->
   <div id="lang-switcher">
     <!-- Theme toggle (Issue #140): cycles system -> light -> dark -> system
          on click (SFTheme.cycleTheme); the icon shown always reflects the
          *current* state, same as the language <select>'s own value does —
-         see popup.js's renderThemeToggle. -->
+         see popup.ts's renderThemeToggle. -->
     <button id="theme-toggle" type="button" data-i18n-title="theme.toggleTitle"></button>
     <!-- Global Settings tab: cross-session preferences (Output as JSON,
          trial-run data preview, full output-file download, editable XML

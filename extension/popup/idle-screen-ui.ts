@@ -1,6 +1,6 @@
 // ── Idle screen: mode switch + top-level chrome render / wiring ──
 // The STATES.IDLE render block and its widgets (mode toggle, robots.txt check, preview / API-capture toggles, output-settings
-// filename inputs). Functions take a `bridge` instead of closing over popup.js state.
+// filename inputs). Functions take a `bridge` instead of closing over popup.ts state.
 import type { Mode, PopupBridge, StatePatch } from '../types/popup';
 import { createLogger } from '../shared/logger';
 import { t } from '../i18n/i18n';
@@ -63,7 +63,7 @@ export function switchMode(bridge: PopupBridge, mode: Mode): void {
   if (mode === 'combined') fetchAllSavedConfigs(bridge);
 }
 
-// Called from popup.js's render() only while _state.current === STATES.IDLE.
+// Called from popup.ts's render() only while _state.current === STATES.IDLE.
 export function renderIdleScreen(bridge: PopupBridge): void {
   const state = bridge.getState();
 

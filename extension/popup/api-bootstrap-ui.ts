@@ -2,7 +2,7 @@
 // event wiring for the "Auth bootstrap (token)" section on the API_CONFIG
 // screen (see api-bootstrap.ts for the pure draft/wire logic, the same
 // <feature>.js/<feature>-ui.js split the rest of the popup uses). Every
-// function that touches state takes popup.js's `bridge` as its first
+// function that touches state takes popup.ts's `bridge` as its first
 // parameter, per Architecture Decision #12.
 //
 // State this module owns:
@@ -117,7 +117,7 @@ function bootstrapConfigHtml(bootstrap: SFDraft.ApiBootstrap, recordingEntries: 
       <input type="text" class="api-bootstrap-field" data-field="name" placeholder="token" value="${escapeHtml(bootstrap.name)}" />`;
 }
 
-// Called from popup.js's render() while the API_CONFIG screen is showing.
+// Called from popup.ts's render() while the API_CONFIG screen is showing.
 export function renderApiBootstrapSection(bridge: PopupBridge): void {
   const state = bridge.getState();
   const bootstrap = state.apiConfigDraft?.bootstrap || null;

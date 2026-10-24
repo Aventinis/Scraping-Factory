@@ -1,5 +1,5 @@
 // ── Toast notifications + last-error tracking ──────────────────────────────
-// Extracted from popup.js (docs/design-notes/extension.md, "Popup module boundaries"). setLastError lives here, not in
+// Extracted from popup.ts (docs/design-notes/extension.md, "Popup module boundaries"). setLastError lives here, not in
 // bug-report.ts, because showToast calls it whenever a toast carries a `context`; bug-report.ts only reads it via
 // getLastError().
 import { t } from '../i18n/i18n';
@@ -109,7 +109,7 @@ export function hideToast(): void {
   scheduleHide(toast, null);
 }
 
-// Wired once from popup.js's wireEvents(): the close and copy buttons of the
+// Wired once from popup.ts's wireEvents(): the close and copy buttons of the
 // plain-language error toast.
 export function wireErrorToastEvents(): void {
   document.getElementById('btn-toast-close')?.addEventListener('click', hideToast);
@@ -129,7 +129,7 @@ export function wireErrorToastEvents(): void {
 
 // Issue #85: existence/quantity feedback for a container-group's own
 // selector, right after it was inserted straight into the tree (see the
-// ELEMENT_SELECTED handler in popup.js) — the direct-insert flow has no
+// ELEMENT_SELECTED handler in popup.ts) — the direct-insert flow has no
 // confirmation modal to show a match-count hint in the way
 // renderMatchCountHint does for a flat/container field pick, so a toast is
 // the next best surfacing. Amber for a 0-match pick (the exact case this

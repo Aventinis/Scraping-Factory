@@ -2,7 +2,7 @@
 // wiring for the "Deduplication" subsection of the Settings section (see
 // dedup-config.ts for the pure draft/wire logic, the same
 // <feature>.js/<feature>-ui.js split every other popup feature uses). Every
-// function that touches state takes popup.js's `bridge` as its first
+// function that touches state takes popup.ts's `bridge` as its first
 // parameter, per Architecture Decision #13.
 //
 // State this module owns:

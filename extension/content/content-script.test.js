@@ -96,7 +96,7 @@ describe('buildSelector with a scopeRoot', () => {
 // ── avoidId (repeating containers/fields) ────────────────────────────────────
 // A page-unique id can only ever match one element — self-defeating for a
 // "Wiederholend" container's own selector, or anything nested inside one
-// (see popup.js's hasRepeatingAncestor). avoidId tells buildSelector to keep
+// (see popup.ts's hasRepeatingAncestor). avoidId tells buildSelector to keep
 // walking past an id-bearing element instead of shortcutting to `#id`.
 
 describe('buildSelector with avoidId', () => {
@@ -465,7 +465,7 @@ describe('scoped selection (START_SELECTION with scopeSelector)', () => {
 
       jest.advanceTimersByTime(2000); // past SCOPE_SELECTOR_RETRY_TIMEOUT_MS
 
-      // Issue #137 follow-up: tagged with unavailableKind so popup.js can
+      // Issue #137 follow-up: tagged with unavailableKind so popup.ts can
       // tell this "retried and still nothing" case apart from the other
       // SELECTION_UNAVAILABLE sender (service-worker.js, no content script
       // at all) and present it as a softer warning instead of a hard error.
@@ -1030,7 +1030,7 @@ describe('findApiCandidates', () => {
     expect(candidate.valuePath).toBe('name');
   });
 
-  // Issue #54, Phase A5: popup.js runs in a different execution context and
+  // Issue #54, Phase A5: popup.ts runs in a different execution context and
   // has no access to content-script.js's own functions (deriveApiTreeSkeleton
   // included) — so, like itemsPath/valuePath above, the full tree skeleton is
   // pre-derived here and attached to the candidate message.

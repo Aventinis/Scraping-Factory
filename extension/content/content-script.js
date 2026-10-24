@@ -22,7 +22,7 @@ if (typeof window !== 'undefined') {
 // container, but self-defeating for anything that has to match N times: a
 // "Wiederholend" container's own selector, or any container/field nested
 // inside one (its selector gets re-evaluated once per repeating instance —
-// see popup.js's hasRepeatingAncestor).
+// see popup.ts's hasRepeatingAncestor).
 function buildSelector(element, scopeRoot, avoidId) {
   const boundary = scopeRoot || document.body;
   const segments = [];
@@ -118,7 +118,7 @@ function countSelectorMatches(selector, scopeRoot) {
 }
 
 // Issue #143: a plain name->value map of the clicked element's own
-// attributes, sent alongside rawText on ELEMENT_SELECTED so popup.js can
+// attributes, sent alongside rawText on ELEMENT_SELECTED so popup.ts can
 // live-preview a transform chain against whichever attribute the user types
 // into the container-mode field modal — without a second content-script
 // round trip for every keystroke there.
@@ -1390,7 +1390,7 @@ function retryScopeSelector(scopeSelector, generation, deadline) {
         // control — e.g. a class that's only present while the element is
         // actually hovered, removed the instant the user's cursor leaves
         // the page for the side panel to click "+ Datenfeld". That's not a
-        // plugin malfunction, so popup.js presents it as a softer warning
+        // plugin malfunction, so popup.ts presents it as a softer warning
         // (no "Report bug" button) instead of a hard error, unlike the
         // "no content script at all" case, which stays a hard error.
         unavailableKind: 'scopeSelectorNotFound',

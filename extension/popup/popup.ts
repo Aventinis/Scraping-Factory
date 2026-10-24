@@ -1,15 +1,21 @@
 // ── Logging ───────────────────────────────────────────────────────────────────
 
-const { createLogger } = require('../shared/logger');
+import type * as SFDraft from '../types/drafts';
+import type * as SFWire from '../types/wire';
+import type { DerivedFieldScope, DataPreview, BlockOutput, PopupBridge, Screen, State, StatePatch } from '../types/popup';
+import type { StoredSession } from './session-restore';
+import type { ApiConfigDraft, ApiFieldDraft, ApiGroupDraft, ApiNodeDraft } from './api-config';
+import { byIdOrNull, qsa } from './dom';
+import { createLogger } from '../shared/logger';
 const log = createLogger('SF:Popup');
 
-const { initI18n, setLanguage, getLanguage, t } = require('../i18n/i18n');
+import { initI18n, setLanguage, getLanguage, t } from '../i18n/i18n';
 
-const { initTheme, getTheme, cycleTheme } = require('../shared/theme');
+import { initTheme, getTheme, cycleTheme } from '../shared/theme';
 
-const { loadGlobalSettings, getGlobalSettings, updateGlobalSettings } = require('../shared/global-settings');
+import { loadGlobalSettings, getGlobalSettings, updateGlobalSettings } from '../shared/global-settings';
 
-const {
+import {
   STATES, escapeHtml,
   parseUrlTemplateParts, buildUrlTemplate, parseValueListInput, findUrlTemplateMatches, mergeValueListValues,
   buildStaticListSource, buildDiscoverySource, buildRangeSource, buildBrowserDiscoverySource, RANGE_FORMAT_PRESETS,
@@ -22,21 +28,21 @@ const {
   bodyTreeLeavesAreBound, serializeBodyTree, lastPathSegmentName, buildApiSubtreeFromCandidate,
   resolveApiGroupScopePath, variableUrlParts, allParameterParts, apiConfigDraftHasAllSourcesChosen,
   collectApiGroupFieldNames,
-} = require('./api-config');
+} from './api-config';
 
-const {
+import {
   buildGroupNode, buildFieldNode, resolveGroupNode, hasRepeatingAncestor,
   insertContainerNode, removeGroupTreeNode, updateGroupTreeNode, moveGroupTreeNode,
   formatGroupNodeLabel, serializeGroupTree, collectSiblingFieldNames,
-} = require('./container-tree');
+} from './container-tree';
 
-const { buildCombineFieldsTransform, buildSplitFieldTransform } = require('./combine-split-fields');
+import { buildCombineFieldsTransform, buildSplitFieldTransform } from './combine-split-fields';
 
-const {
+import {
   renderCombineFieldModal, renderSplitFieldModal, wireCombineSplitFieldsEvents,
-} = require('./combine-split-fields-ui');
+} from './combine-split-fields-ui';
 
-const {
+import {
   renderApiTree, renderApiCandidates, renderApiEntriesList,
   renderApiConfigScreen, renderBodyTree,
   startApiFieldSearch, confirmApiFieldCandidate, loadInitialBodyTreeForCandidate,
@@ -45,73 +51,73 @@ const {
   toggleBodyLeafToVariable, toggleBodyLeafToFixed, setBodyLeafParameter, setBodyLeafCoerceTo,
   openBodyParameterModal, confirmBodyParameterModal, confirmApiConfig,
   renderApiConfigModals, wireApiConfigEvents,
-} = require('./api-config-ui');
+} from './api-config-ui';
 
-const {
+import {
   fetchTransformPresets, renderTransformPresetControls, wireTransformPresetControls,
   renderTransformPresetsSettings, wireTransformPresetsSettings,
-} = require('./transform-presets-ui');
+} from './transform-presets-ui';
 
-const { renderCompanionGuidance } = require('./companion-guidance-ui');
-const { initHelpPopovers, wireHelpPopoverEvents } = require('./help-popover-ui');
-const { initDocsLinks, wireDocsLinkEvents } = require('./docs-links-ui');
-const { refreshEnvVarValidation, wireEnvVarValidation } = require('./env-var-ui');
-const { initAdvancedDisclosures, wireAdvancedDisclosureEvents } = require('./advanced-disclosure-ui');
+import { renderCompanionGuidance } from './companion-guidance-ui';
+import { initHelpPopovers, wireHelpPopoverEvents } from './help-popover-ui';
+import { initDocsLinks, wireDocsLinkEvents } from './docs-links-ui';
+import { refreshEnvVarValidation, wireEnvVarValidation } from './env-var-ui';
+import { initAdvancedDisclosures, wireAdvancedDisclosureEvents } from './advanced-disclosure-ui';
 
-const {
+import {
   renderApiBootstrapSection, wireApiBootstrapEvents,
-} = require('./api-bootstrap-ui');
+} from './api-bootstrap-ui';
 
-const {
+import {
   renderApiCursorPaginationSection, wireApiCursorPaginationEvents,
-} = require('./api-cursor-pagination-ui');
+} from './api-cursor-pagination-ui';
 
-const {
+import {
   renderApiLinkPaginationSection, wireApiLinkPaginationEvents,
-} = require('./api-link-pagination-ui');
+} from './api-link-pagination-ui';
 
-const {
+import {
   renderGroupTree,
   renderContainerFieldModal, wireContainerModeEvents,
-} = require('./container-tree-ui');
+} from './container-tree-ui';
 
-const {
+import {
   renderFields, renderFlatFieldModal, wireFlatModeEvents,
-} = require('./flat-mode-ui');
+} from './flat-mode-ui';
 
-const {
+import {
   renderBrowserActions, wireBrowserActionsEvents,
-} = require('./browser-actions-ui');
+} from './browser-actions-ui';
 
-const { wireMessageListener } = require('./message-router');
+import { wireMessageListener } from './message-router';
 
-const { applyStoredSessionState, restorePendingSelection } = require('./session-restore');
+import { applyStoredSessionState, restorePendingSelection } from './session-restore';
 
-const {
+import {
   renderIdleScreen, wireIdleScreenEvents,
-} = require('./idle-screen-ui');
+} from './idle-screen-ui';
 
-const { wireCombinedConfigEvents } = require('./combined-config-ui');
+import { wireCombinedConfigEvents } from './combined-config-ui';
 
-const { wireBlocksConfigEvents } = require('./blocks-config-ui');
+import { wireBlocksConfigEvents } from './blocks-config-ui';
 
-const {
+import {
   createDefaultTransform, addTransform, removeTransform, updateTransform, changeTransformKind,
   moveTransform, transformsAreValid, applyTransformsPreview, toNumberPreview,
   toIntegerPreview, toBooleanPreview, toDatePreview,
-} = require('./field-transforms');
+} from './field-transforms';
 
-const { renderTransformList, renderTransformPreview } = require('./field-transforms-ui');
+import { renderTransformList, renderTransformPreview } from './field-transforms-ui';
 
-const { applyConfigToState } = require('./config-import');
+import { applyConfigToState } from './config-import';
 
-const { showToast, setLastError, wireErrorToastEvents } = require('./toast');
+import { showToast, setLastError, wireErrorToastEvents } from './toast';
 
-const {
+import {
   formatLogSection, buildGithubIssueUrl, reportBug,
-} = require('./bug-report');
+} from './bug-report';
 
-const {
+import {
   sanitizeFileNameBase, parseAdditionalUrls,
   buildChangeDetectionConfig, buildProxyConfig, buildPaginationConfig, buildHardeningConfig,
   computeInitialMonitoringSectionOpen, collectFieldNames,
@@ -122,26 +128,25 @@ const {
   addNullRateCheck, removeNullRateCheck, updateNullRateCheck,
   addRequiredField, removeRequiredField,
   frameBadgeHtml,
-} = require('./scraping-config-builder');
+} from './scraping-config-builder';
 
-const {
+import {
   requestDomTree, cancelPendingDomTreeRequest,
   formatTreeLabel, renderDomTree,
   highlightHover, highlightSelected,
   renderDomTreeViewState, wireDomTreeViewEvents,
-} = require('./dom-tree-ui');
+} from './dom-tree-ui';
 
-const { stopPreviewIfActive } = require('./preview');
+import { stopPreviewIfActive } from './preview';
 
-const {
+import {
   checkCompanion, buildVerificationErrorMessage, generate,
   renderCompanionErrorScreen, wireCompanionErrorEvents,
-} = require('./companion-client');
+} from './companion-client';
 
-const { triggerDownload, downloadFile, triggerOutputFileDownload, downloadConfigExport } =
-  require('./download-helpers');
+import { triggerDownload, downloadFile, triggerOutputFileDownload, downloadConfigExport } from './download-helpers';
 
-const {
+import {
   renderSavedConfigsList,
   fetchSavedConfigs, fetchAllSavedConfigs, createSavedConfig, saveCurrentConfig, loadSavedConfig,
   requestDeleteSavedConfig, cancelDeleteSavedConfig, deleteSavedConfig,
@@ -149,26 +154,26 @@ const {
   saveCurrentOutput, createConfigAndSaveOutput, fetchSavedOutputs, toggleSavedConfigOutputs, downloadSavedOutput,
   requestDeleteSavedOutput, cancelDeleteSavedOutput, deleteSavedOutput,
   renderSaveOutputModal, wireSavedConfigsEvents,
-} = require('./saved-configs-ui');
+} from './saved-configs-ui';
 
-const { wireSettingsPanelEvents } = require('./settings-panel-ui');
-const { wirePaginationHelperEvents } = require('./pagination-ui');
-const { createDefaultDeduplication } = require('./dedup-config');
-const { createDefaultRequestHeaders } = require('./request-headers');
-const { wireRequestHeadersEvents } = require('./request-headers-ui');
-const { wireDedupEvents } = require('./dedup-config-ui');
+import { wireSettingsPanelEvents } from './settings-panel-ui';
+import { wirePaginationHelperEvents } from './pagination-ui';
+import { createDefaultDeduplication } from './dedup-config';
+import { createDefaultRequestHeaders } from './request-headers';
+import { wireRequestHeadersEvents } from './request-headers-ui';
+import { wireDedupEvents } from './dedup-config-ui';
 
-const {
+import {
   fetchOutputBlueprints, selectOutputBlueprint,
   renderOutputBlueprintMappingSection,
   requestDeleteBlueprint, cancelDeleteBlueprint, deleteBlueprint,
   openBlueprintCreateModal, openBlueprintEditModal, closeBlueprintEditModal, saveBlueprintEdit,
   renderBlueprintEditModal, wireOutputBlueprintsEvents,
-} = require('./output-blueprints-ui');
+} from './output-blueprints-ui';
 
-const {
+import {
   renderSettingsScreen, wireSettingsScreenEvents,
-} = require('./global-settings-ui');
+} from './global-settings-ui';
 
 if (typeof window !== 'undefined') {
   window.addEventListener('error', (e) => log('UNCAUGHT_ERROR', e.message));
@@ -192,7 +197,7 @@ if (typeof window !== 'undefined') {
   });
 }
 
-let _state = {
+let _state: State = {
   current:             STATES.CHECKING_COMPANION,
   url:                 '',
   mode:                'flat', // 'flat' (Fields → Csv) | 'container' (Groups → Xml) — mutually exclusive
@@ -624,29 +629,29 @@ let _state = {
   outputBlueprintsLoading:     false,
   blueprintEditModalOpen:      false,
   blueprintEditingId:          null, // null = creating a new blueprint, else editing this id
-  blueprintEditDraft:          { name: '', fieldNames: [] },
+  blueprintEditDraft:          { name: '', schemaKind: 'Flat', fieldNames: [], tree: [] },
   blueprintDeletePendingId:    null,
 };
 
 // ── State ────────────────────────────────────────────────────────────────────
 
-function setState(newState, patch = {}) {
+function setState(newState: Screen, patch: StatePatch = {}): void {
   const prev = _state.current;
   _state = { ..._state, current: newState, ...patch };
-  log('STATE', `${prev} → ${newState}`, Object.keys(patch).length ? patch : undefined);
+  log('STATE', `${prev} → ${newState}`);
   persistState();
   if (typeof document !== 'undefined') render();
 }
 
 // Updates state without a screen transition (e.g. DOM-tree-view bookkeeping)
 // — skips persistState() since none of this needs to survive popup reopen.
-function patchState(patch) {
+function patchState(patch: StatePatch): void {
   _state = { ..._state, ...patch };
   if (typeof document !== 'undefined') render();
 }
 
 // Persists the parts of state that must survive popup close/reopen.
-function persistState() {
+function persistState(): void {
   if (typeof chrome === 'undefined' || !chrome.storage?.session) return;
   chrome.storage.session
     .set({
@@ -694,13 +699,13 @@ function persistState() {
       selectedOutputBlueprintFieldNames: _state.selectedOutputBlueprintFieldNames,
       outputBlueprintMapping: _state.outputBlueprintMapping,
     })
-    .catch(err => log('STORAGE_ERR', err.message));
+    .catch((err: unknown) => log('STORAGE_ERR', (err as Error).message));
 }
 
 // ── DOM helpers ───────────────────────────────────────────────────────────────
 
-function show(id) { document.getElementById(id)?.classList.remove('hidden'); }
-function hide(id) { document.getElementById(id)?.classList.add('hidden'); }
+function show(id: string): void { byIdOrNull(id)?.classList.remove('hidden'); }
+function hide(id: string): void { byIdOrNull(id)?.classList.add('hidden'); }
 
 // Fills every static, always-present element (popup.html's data-i18n*
 // attributes) with the current language's text. Only needs to run once at
@@ -712,7 +717,7 @@ function hide(id) { document.getElementById(id)?.classList.add('hidden'); }
 // from the sun/moon icons already established for status glyphs/tree
 // toggles (#139). Keyed by string 'system' rather than null since object
 // keys can't be null anyway, and this is purely a private rendering lookup.
-const THEME_TOGGLE_ICONS = {
+const THEME_TOGGLE_ICONS: Record<'light' | 'dark' | 'system', string> = {
   light:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
     '<circle cx="12" cy="12" r="4.5"></circle>' +
@@ -729,18 +734,18 @@ const THEME_TOGGLE_ICONS = {
     '<path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor" stroke="none"></path></svg>',
 };
 
-function renderThemeToggle() {
-  const btn = document.getElementById('theme-toggle');
+function renderThemeToggle(): void {
+  const btn = byIdOrNull('theme-toggle');
   if (!btn) return;
   const theme = getTheme();
   btn.innerHTML = THEME_TOGGLE_ICONS[theme === null ? 'system' : theme];
 }
 
-function applyStaticTranslations() {
-  document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
-  document.querySelectorAll('[data-i18n-title]').forEach((el) => { el.title = t(el.dataset.i18nTitle); });
-  document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => { el.placeholder = t(el.dataset.i18nPlaceholder); });
-  const langSelect = document.getElementById('lang-select');
+function applyStaticTranslations(): void {
+  qsa('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n as string); });
+  qsa('[data-i18n-title]').forEach((el) => { el.title = t(el.dataset.i18nTitle as string); });
+  qsa<HTMLInputElement>('[data-i18n-placeholder]').forEach((el) => { el.placeholder = t(el.dataset.i18nPlaceholder as string); });
+  const langSelect = byIdOrNull<HTMLSelectElement>('lang-select');
   if (langSelect) langSelect.value = getLanguage();
   if (typeof document !== 'undefined' && document.documentElement) document.documentElement.lang = getLanguage();
   renderThemeToggle();
@@ -751,15 +756,15 @@ function applyStaticTranslations() {
 // Issue #206 follow-up: the mode-dispatch glue for the shared combine/split
 // field creation modals (combine-split-fields-ui.ts, deliberately
 // mode-agnostic — see its own doc comment for why this glue lives here
-// instead of in any one mode's own -ui.js file: popup.js is the one place
+// instead of in any one mode's own -ui.js file: popup.ts is the one place
 // that already imports every mode's own field-name/insert/update helper,
 // and — per Architecture Decision #12 — logic that doesn't cleanly belong
-// to any single extracted feature module is exactly what popup.js itself
+// to any single extracted feature module is exactly what popup.ts itself
 // is meant to still hold, the same role it already plays for switchMode.
 //
-// scope shapes (see popup.js's own pendingDerivedFieldScope doc comment):
+// scope shapes (see popup.ts's own pendingDerivedFieldScope doc comment):
 // { mode: 'flat' } | { mode: 'container', parentPath } | { mode: 'api', groupPath }
-function computeDerivedFieldAvailableNames(state, scope) {
+function computeDerivedFieldAvailableNames(state: State, scope: DerivedFieldScope | null): string[] {
   if (!scope) return [];
   if (scope.mode === 'flat') return (state.fields || []).map(f => f.name);
   if (scope.mode === 'container') return collectSiblingFieldNames(state.groups, scope.parentPath);
@@ -773,7 +778,9 @@ function computeDerivedFieldAvailableNames(state, scope) {
 // new field's own combine/split transform to read via the runtime's usual
 // sibling lookup, see scraping-config-builder.ts's own updateField doc
 // comment). Returns the full _state patch to apply in one setState call.
-function insertDerivedField(state, scope, name, transform, sourceFieldNames, removeOriginals) {
+function insertDerivedField(
+  state: State, scope: DerivedFieldScope, name: string, transform: SFWire.FieldTransform, sourceFieldNames: string[], removeOriginals: boolean,
+): StatePatch {
   if (scope.mode === 'flat') {
     let fields = addField(state.fields, name, null, { transforms: [transform] });
     if (removeOriginals) {
@@ -789,10 +796,10 @@ function insertDerivedField(state, scope, name, transform, sourceFieldNames, rem
     let groups = insertContainerNode(state.groups, scope.parentPath, node);
     if (removeOriginals) {
       const siblingsPath = scope.parentPath || [];
-      const siblings = siblingsPath.length === 0 ? state.groups : resolveGroupNode(state.groups, siblingsPath).children;
+      const siblings = siblingsPath.length === 0 ? state.groups : (resolveGroupNode(state.groups, siblingsPath) as SFDraft.GroupNode).children;
       siblings.forEach((sibling, i) => {
         if (sibling.kind === 'field' && sourceFieldNames.includes(sibling.name)) {
-          groups = updateGroupTreeNode(groups, [...siblingsPath, i], (n) => ({ ...n, hiddenFromOutput: true }));
+          groups = updateGroupTreeNode(groups, [...siblingsPath, i], (n) => ({ ...n, hiddenFromOutput: true } as SFDraft.ContainerNode)); // only fields are updated
         }
       });
     }
@@ -800,26 +807,29 @@ function insertDerivedField(state, scope, name, transform, sourceFieldNames, rem
   }
   // scope.mode === 'api'
   const node = buildApiFieldDraft(name, null, [transform]);
-  let apiGroups = insertApiTreeNode(state.apiConfigDraft.groups, scope.groupPath, node);
+  // The API_CONFIG screen is the only place the API scope is opened from, so the draft and its tree exist.
+  const draft = state.apiConfigDraft as ApiConfigDraft;
+  const draftGroups = draft.groups as ApiNodeDraft[];
+  let apiGroups = insertApiTreeNode(draftGroups, scope.groupPath, node);
   if (removeOriginals) {
-    const siblings = resolveApiTreeNode(state.apiConfigDraft.groups, scope.groupPath).children;
+    const siblings = (resolveApiTreeNode(draftGroups, scope.groupPath) as ApiGroupDraft).children;
     siblings.forEach((sibling, i) => {
       if (sibling.kind === 'field' && sourceFieldNames.includes(sibling.name)) {
-        apiGroups = updateApiTreeNode(apiGroups, [...scope.groupPath, i], (n) => ({ ...n, hiddenFromOutput: true }));
+        apiGroups = updateApiTreeNode(apiGroups, [...(scope.groupPath as number[]), i], (n) => ({ ...(n as ApiFieldDraft), hiddenFromOutput: true }));
       }
     });
   }
-  return { apiConfigDraft: { ...state.apiConfigDraft, groups: apiGroups } };
+  return { apiConfigDraft: { ...draft, groups: apiGroups } };
 }
 
-function onConfirmCombineField(scope, name, sourceFieldNames, separator, removeOriginals) {
+function onConfirmCombineField(scope: DerivedFieldScope, name: string, sourceFieldNames: string[], separator: string, removeOriginals: boolean): boolean {
   const transform = buildCombineFieldsTransform(sourceFieldNames, separator);
   const patch = insertDerivedField(_state, scope, name, transform, sourceFieldNames, removeOriginals);
   setState(scope.mode === 'api' ? STATES.API_CONFIG : STATES.IDLE, patch);
   return true;
 }
 
-function onConfirmSplitField(scope, name, sourceFieldName, separator, index, removeOriginal) {
+function onConfirmSplitField(scope: DerivedFieldScope, name: string, sourceFieldName: string, separator: string, index: number, removeOriginal: boolean): boolean {
   const transform = buildSplitFieldTransform(sourceFieldName, separator, index);
   const patch = insertDerivedField(_state, scope, name, transform, [sourceFieldName], removeOriginal);
   setState(scope.mode === 'api' ? STATES.API_CONFIG : STATES.IDLE, patch);
@@ -834,9 +844,9 @@ function onConfirmSplitField(scope, name, sourceFieldName, separator, index, rem
 // inputs for; null whenever that block didn't run (mirrors the modal being
 // closed), so the same selector picked again after a cancel still resets on
 // its next genuine open.
-let lastFieldModalSelector = null;
+let lastFieldModalSelector: string | null = null;
 
-function render() {
+function render(): void {
   ['checking', 'error', 'idle', 'selecting', 'api-config', 'settings', 'generating', 'done'].forEach(s =>
     hide(`screen-${s}`)
   );
@@ -868,7 +878,7 @@ function render() {
   // visible/clickable, like theme-toggle/lang-select), so its own "active"
   // visual state has to be driven from here rather than from
   // renderSettingsScreen, which only ever runs while that screen is current.
-  document.getElementById('btn-open-settings')?.classList.toggle('active', _state.current === STATES.SETTINGS);
+  byIdOrNull('btn-open-settings')?.classList.toggle('active', _state.current === STATES.SETTINGS);
   if (_state.current === STATES.SETTINGS) {
     renderSettingsScreen(bridge);
     renderTransformPresetsSettings(bridge);
@@ -915,7 +925,7 @@ function render() {
   }
 
   if (_state.current === STATES.DONE) {
-    const downloadBtn = document.getElementById('btn-download');
+    const downloadBtn = byIdOrNull('btn-download');
     if (downloadBtn) {
       const filename = `${sanitizeFileNameBase(_state.scriptFileName, 'scraper')}.py`;
       downloadBtn.textContent = t('done.downloadBtn', { filename });
@@ -923,14 +933,14 @@ function render() {
     // Issue #161: only shown at all when includeOutputFile actually
     // produced a file — an older/incompatible companion, or the toggle
     // simply being off, both look identical here (outputFile stays null).
-    const downloadOutputBtn = document.getElementById('btn-download-output');
+    const downloadOutputBtn = byIdOrNull('btn-download-output');
     if (downloadOutputBtn) {
       downloadOutputBtn.classList.toggle('hidden', !_state.outputFile);
       if (_state.outputFile) downloadOutputBtn.textContent = t('done.downloadOutputBtn', { filename: _state.outputFile.fileName });
     }
     // Issue #202: same visibility gate as btn-download-output — saving a
     // run's output only makes sense once one was actually produced.
-    const saveOutputBtn = document.getElementById('btn-save-output');
+    const saveOutputBtn = byIdOrNull('btn-save-output');
     if (saveOutputBtn) saveOutputBtn.classList.toggle('hidden', !_state.outputFile);
     renderDataPreview(_state.dataPreview);
     renderBlocksOutput(_state.blocksOutput);
@@ -987,10 +997,10 @@ function render() {
 // mode/engine/notify-method change specifically, since that's simpler than
 // threading a "did the active button change" flag through every one of
 // those call sites for a cheap, idempotent DOM read.
-function syncModeToggleThumbs() {
-  document.querySelectorAll('.mode-toggle').forEach((toggleEl) => {
-    const thumb = toggleEl.querySelector('.mode-toggle-thumb');
-    const active = toggleEl.querySelector('.mode-btn.active');
+function syncModeToggleThumbs(): void {
+  qsa('.mode-toggle').forEach((toggleEl) => {
+    const thumb = toggleEl.querySelector<HTMLElement>('.mode-toggle-thumb');
+    const active = toggleEl.querySelector<HTMLElement>('.mode-btn.active');
     if (!thumb || !active) return;
     thumb.style.width = `${active.offsetWidth}px`;
     thumb.style.transform = `translateX(${active.offsetLeft - 3}px)`;
@@ -1013,15 +1023,15 @@ function syncModeToggleThumbs() {
 // actually populated (xmlSample/jsonSample vs. columns/rows) rather than by
 // outputFormat alone — outputFormat is still shown to the user via i18n
 // copy, but no longer drives the branch itself.
-function renderDataPreview(preview) {
-  const panel = document.getElementById('data-preview-panel');
+function renderDataPreview(preview: DataPreview | null): void {
+  const panel = byIdOrNull('data-preview-panel');
   if (!panel) return;
   if (!preview) { panel.classList.add('hidden'); return; }
   panel.classList.remove('hidden');
 
-  const tableWrap = document.getElementById('data-preview-table-wrap');
-  const textWrap = document.getElementById('data-preview-text');
-  const truncatedNote = document.getElementById('data-preview-truncated');
+  const tableWrap = byIdOrNull('data-preview-table-wrap');
+  const textWrap = byIdOrNull('data-preview-text');
+  const truncatedNote = byIdOrNull('data-preview-truncated');
   const textSample = preview.xmlSample ?? preview.jsonSample;
 
   if (textSample != null) {
@@ -1085,13 +1095,13 @@ function renderDataPreview(preview) {
 // blocks-output-panel's own doc comment in popup.html for why that's out
 // of scope here). blocksOutput is null for every other mode/whenever
 // neither includeDataPreview nor includeOutputFile was requested.
-function renderBlocksOutput(blocksOutput) {
-  const panel = document.getElementById('blocks-output-panel');
+function renderBlocksOutput(blocksOutput: BlockOutput[] | null): void {
+  const panel = byIdOrNull('blocks-output-panel');
   if (!panel) return;
   if (!blocksOutput) { panel.classList.add('hidden'); return; }
   panel.classList.remove('hidden');
 
-  const listEl = document.getElementById('blocks-output-list');
+  const listEl = byIdOrNull('blocks-output-list');
   if (!listEl) return;
   listEl.innerHTML = '';
   blocksOutput.forEach((block) => {
@@ -1104,7 +1114,8 @@ function renderBlocksOutput(blocksOutput) {
       btn.type = 'button';
       btn.className = 'btn-secondary btn-tiny';
       btn.textContent = t('done.blocksOutputDownloadBtn');
-      btn.addEventListener('click', () => downloadFile(block.outputFile.fileName, block.outputFile.content));
+      const outputFile = block.outputFile;
+      btn.addEventListener('click', () => downloadFile(outputFile.fileName, outputFile.content));
       li.appendChild(btn);
     }
     listEl.appendChild(li);
@@ -1115,19 +1126,19 @@ function renderBlocksOutput(blocksOutput) {
 // preview.ts/companion-client.js/saved-configs-ui.js handler, instead of
 // those functions closing over this file's own module-level state — see
 // api-config-ui.ts's own doc comment for why. Declared at module scope
-// (not just inside wireEvents()) so popup.js's own top-level functions
+// (not just inside wireEvents()) so popup.ts's own top-level functions
 // (generate, ...) can use it too; safe to
 // reference functions defined further down in this file because they're
 // only ever called through the arrow functions below, never at bridge-
 // construction time itself.
-const bridge = {
+const bridge: PopupBridge = {
   getState: () => _state,
   setState,
   patchState,
   stopPreviewIfActive: () => stopPreviewIfActive(bridge),
   requestDomTree: () => requestDomTree(bridge),
   showToast,
-  fetchSavedConfigs: (url) => fetchSavedConfigs(bridge, url),
+  fetchSavedConfigs: (url: string) => fetchSavedConfigs(bridge, url),
   fetchAllSavedConfigs: () => fetchAllSavedConfigs(bridge),
   fetchOutputBlueprints: () => fetchOutputBlueprints(bridge),
   fetchTransformPresets: () => fetchTransformPresets(bridge),
@@ -1135,10 +1146,11 @@ const bridge = {
 
 // ── Event wiring ──────────────────────────────────────────────────────────────
 
-function wireEvents() {
-  document.getElementById('lang-select')?.addEventListener('change', async (e) => {
-    log('LANG_SELECT change', e.target.value);
-    await setLanguage(e.target.value);
+function wireEvents(): void {
+  byIdOrNull('lang-select')?.addEventListener('change', async (e) => {
+    const language = (e.target as HTMLSelectElement).value;
+    log('LANG_SELECT change', language);
+    await setLanguage(language);
     applyStaticTranslations();
     render(); // re-render currently-visible dynamic content (group tree, API candidates, …) in the new language
   });
@@ -1148,15 +1160,15 @@ function wireEvents() {
   // feeling from the user's perspective (cycleTheme sets the data-theme
   // attribute immediately, the chrome.storage.local write just happens to
   // also be awaited here) — only the icon needs a re-render, no full render().
-  document.getElementById('theme-toggle')?.addEventListener('click', async () => {
+  byIdOrNull('theme-toggle')?.addEventListener('click', async () => {
     const next = await cycleTheme();
     log('THEME_TOGGLE click', next ?? 'system');
     renderThemeToggle();
   });
 
-  document.getElementById('btn-report-bug-error')?.addEventListener('click', () => reportBug(_state.url));
-  document.getElementById('btn-report-bug-toast')?.addEventListener('click', () => reportBug(_state.url));
-  document.getElementById('btn-report-bug-domtree')?.addEventListener('click', () => reportBug(_state.url));
+  byIdOrNull('btn-report-bug-error')?.addEventListener('click', () => reportBug(_state.url));
+  byIdOrNull('btn-report-bug-toast')?.addEventListener('click', () => reportBug(_state.url));
+  byIdOrNull('btn-report-bug-domtree')?.addEventListener('click', () => reportBug(_state.url));
 
   wireCompanionErrorEvents(bridge);
 
@@ -1197,7 +1209,7 @@ function wireEvents() {
     onConfirmSplit: onConfirmSplitField,
   });
 
-  document.getElementById('btn-cancel-selection')?.addEventListener('click', () => {
+  byIdOrNull('btn-cancel-selection')?.addEventListener('click', () => {
     log('BTN cancel-selection → STOP_SELECTION');
     chrome.runtime.sendMessage({ type: 'STOP_SELECTION' });
     cancelPendingDomTreeRequest();
@@ -1213,20 +1225,20 @@ function wireEvents() {
 
   wireDomTreeViewEvents(bridge);
 
-  document.getElementById('btn-generate')?.addEventListener('click', () => {
+  byIdOrNull('btn-generate')?.addEventListener('click', () => {
     log('BTN generate');
     generate(bridge);
   });
-  document.getElementById('btn-download')?.addEventListener('click', () => triggerDownload(bridge));
-  document.getElementById('btn-download-output')?.addEventListener('click', () => triggerOutputFileDownload(bridge));
-  document.getElementById('btn-export-config')?.addEventListener('click', () => downloadConfigExport(bridge));
+  byIdOrNull('btn-download')?.addEventListener('click', () => triggerDownload(bridge));
+  byIdOrNull('btn-download-output')?.addEventListener('click', () => triggerOutputFileDownload(bridge));
+  byIdOrNull('btn-export-config')?.addEventListener('click', () => downloadConfigExport(bridge));
 
   wireSavedConfigsEvents(bridge);
 
   wireOutputBlueprintsEvents(bridge);
   wireSettingsScreenEvents(bridge);
 
-  document.getElementById('btn-new-scraper')?.addEventListener('click', () => {
+  byIdOrNull('btn-new-scraper')?.addEventListener('click', () => {
     log('BTN new-scraper → reset state');
     stopPreviewIfActive(bridge);
     // scriptFileName/outputFileName are reset here too (Issue-driven
@@ -1247,7 +1259,7 @@ function wireEvents() {
   // losing the current configuration (see generate()'s 400/422/catch
   // branches). Lets the user tweak a selector/transform and regenerate
   // instead of starting over when the sample data preview isn't right yet.
-  document.getElementById('btn-back-to-config')?.addEventListener('click', () => {
+  byIdOrNull('btn-back-to-config')?.addEventListener('click', () => {
     log('BTN back-to-config');
     setState(STATES.IDLE);
   });
@@ -1276,9 +1288,9 @@ function wireEvents() {
 // that plenty of existing tests already reserve for the real /health and
 // /generate calls checkCompanion()/generate() make later in the same
 // startup sequence.
-async function loadScreenPartial(elementId, path) {
+async function loadScreenPartial(elementId: string, path: string): Promise<void> {
   if (process.env.NODE_ENV === 'test') return;
-  const el = document.getElementById(elementId);
+  const el = byIdOrNull(elementId);
   if (!el) return;
   try {
     const response = await fetch(chrome.runtime.getURL(path));
@@ -1289,7 +1301,7 @@ async function loadScreenPartial(elementId, path) {
   }
 }
 
-async function loadScreenPartials() {
+async function loadScreenPartials(): Promise<void> {
   await Promise.all([
     loadScreenPartial('screen-idle', 'popup/screens/idle.html'),
     loadScreenPartial('screen-api-config', 'popup/screens/api-config.html'),
@@ -1298,7 +1310,7 @@ async function loadScreenPartials() {
   ]);
 }
 
-async function init() {
+async function init(): Promise<void> {
   // Must happen before applyStaticTranslations()/wireEvents()/the first
   // render() — all three depend on this markup already being in the DOM.
   await loadScreenPartials();
@@ -1344,7 +1356,7 @@ if (typeof document !== 'undefined') {
   }
 }
 
-module.exports = {
+export {
   buildScrapingConfig, addField, removeField, escapeHtml, renderFields, STATES,
   formatTreeLabel, renderDomTree, highlightHover, highlightSelected,
   formatLogSection, buildGithubIssueUrl, setLastError, buildVerificationErrorMessage,

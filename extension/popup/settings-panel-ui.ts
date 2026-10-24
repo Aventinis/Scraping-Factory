@@ -1,11 +1,11 @@
 // ── Settings panel: change detection, proxy, pagination, hardening ─────────
-// Extracted from popup.js (see CLAUDE.md's "Popup module boundaries"
+// Extracted from popup.ts (see CLAUDE.md's "Popup module boundaries"
 // architecture decision) — the "Monitoring" (change detection + hardening)
 // and "Settings" (proxy, pagination, output toggles) collapsible sections'
 // own render + event-wiring for these four largely independent, mode-
 // agnostic opt-in features (Issues #87/#88/#129/#130/#131/#132/#133/#174).
 // Functions take a `bridge` object (same convention as api-config-ui.ts/
-// companion-client.ts) instead of closing over popup.js's own module-level
+// companion-client.ts) instead of closing over popup.ts's own module-level
 // state.
 import type * as SFDraft from '../types/drafts';
 import type { PopupBridge } from '../types/popup';
