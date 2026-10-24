@@ -263,15 +263,9 @@ public class AuthenticationEndpointTests : IDisposable
 
     public AuthenticationEndpointTests()
     {
-        string Db(string name) { var p = Path.Combine(Path.GetTempPath(), $"sf-auth-{name}-{Guid.NewGuid():N}.db"); _files.Add(p); return p; }
-        var settings = new Dictionary<string, string?>
-        {
-            [AuthOptions.EnabledKey] = "true",
-            ["Companion:SavedConfigsDbPath"] = Db("configs"), ["Companion:OutputBlueprintsDbPath"] = Db("blueprints"),
-            ["Companion:TransformPresetsDbPath"] = Db("presets"), ["Companion:UsersDbPath"] = Db("users"),
-        };
-        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(settings)));
+        var settings = TestCompanionFactory.TempDatabaseSettings("auth", _files);
+        settings[AuthOptions.EnabledKey] = "true";
+        _factory = TestCompanionFactory.Create(settings);
         var users = _factory.Services.GetRequiredService<IUserStore>();
         _aliceKey = users.Create("alice").Key;
         _bobKey = users.Create("bob").Key;
@@ -280,8 +274,7 @@ public class AuthenticationEndpointTests : IDisposable
     public void Dispose()
     {
         _factory.Dispose();
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-        foreach (var file in _files) if (File.Exists(file)) File.Delete(file);
+        TestCompanionFactory.DeleteDatabases(_files);
     }
 
     private HttpClient Client(string? key)
@@ -411,8 +404,7 @@ public class WithoutAuthenticationTests
         {
             ["Companion:SavedConfigsDbPath"] = Path.Combine(Path.GetTempPath(), $"sf-noauth-{Guid.NewGuid():N}.db"),
         };
-        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(settings)));
+        using var factory = TestCompanionFactory.Create(settings);
         using var client = factory.CreateClient();
 
         Assert.False((await client.GetFromJsonAsync<JsonElement>("/health")).GetProperty("authRequired").GetBoolean());

@@ -13,28 +13,10 @@ namespace ScrapingFactory.Tests;
 // override, not the shared CompanionEndpointTests fixture).
 public class OutputBlueprintsEndpointTests : IDisposable
 {
-    private readonly string _dbPath;
-    private readonly WebApplicationFactory<Program> _factory;
-    private readonly HttpClient _client;
+    private readonly TempDatabaseCompanion _companion = new("Companion:OutputBlueprintsDbPath", "output-blueprints-endpoint-test");
+    private HttpClient _client => _companion.Client;
 
-    public OutputBlueprintsEndpointTests()
-    {
-        _dbPath = Path.Combine(Path.GetTempPath(), $"sf-output-blueprints-endpoint-test-{Guid.NewGuid():N}.db");
-        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-            builder.ConfigureAppConfiguration((_, config) =>
-                config.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["Companion:OutputBlueprintsDbPath"] = _dbPath,
-                })));
-        _client = _factory.CreateClient();
-    }
-
-    public void Dispose()
-    {
-        _client.Dispose();
-        _factory.Dispose();
-        if (File.Exists(_dbPath)) File.Delete(_dbPath);
-    }
+    public void Dispose() => _companion.Dispose();
 
     private static StringContent JsonBody(object value) =>
         new(JsonSerializer.Serialize(value), Encoding.UTF8, "application/json");
