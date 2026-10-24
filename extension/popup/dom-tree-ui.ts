@@ -1,9 +1,9 @@
 // ── DOM tree view ────────────────────────────────────────────────────────────
-// Extracted from popup.js (docs/design-notes/extension.md, "Popup module boundaries") — the optional inspector tree showing the live
+// Extracted from popup.ts (docs/design-notes/extension.md, "Popup module boundaries") — the optional inspector tree showing the live
 // page's own DOM structure inside the side panel, used to click-pick a
 // selector without needing devtools open. Takes a `bridge` object (same
 // convention as api-config-ui.ts/container-tree-ui.js) instead of closing
-// over popup.js's own module-level state.
+// over popup.ts's own module-level state.
 import type { PopupBridge } from '../types/popup';
 import type { DomTreeNode } from '../types/messages';
 import { createLogger } from '../shared/logger';
@@ -38,7 +38,7 @@ export function cancelPendingDomTreeRequest(): void {
   clearTimeout(domTreeTimeoutId);
 }
 
-// Rendered imperatively (not through popup.js's own render()) so a user's
+// Rendered imperatively (not through popup.ts's own render()) so a user's
 // expand/collapse clicks survive unrelated state updates (e.g. adding/
 // removing a field).
 // Issue #139: one static inline chevron per row instead of swapping between
@@ -144,7 +144,7 @@ export function highlightSelected(path: number[]): void {
   }
 }
 
-// Called from popup.js's render() only while _state.current === STATES.SELECTING
+// Called from popup.ts's render() only while _state.current === STATES.SELECTING
 // — the toggle checkbox's own checked state, and the tree wrapper/loading/
 // error/truncated visibility, all driven by _state rather than DOM-local
 // bookkeeping.

@@ -4,7 +4,7 @@
 // (see pagination-template.ts for the pure derivation, settings-panel-ui.ts for
 // the block's remaining inputs — the same <feature>.js/<feature>-ui.js split
 // every other popup feature uses). Every function that touches state takes
-// popup.js's `bridge` as its first parameter, per Architecture Decision #13.
+// popup.ts's `bridge` as its first parameter, per Architecture Decision #13.
 //
 // State this module reads/writes: `_state.pagination.linkHref` — UI-only, the
 // absolute href of the last "next" / "page 2" link the user clicked, kept

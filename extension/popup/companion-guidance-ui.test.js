@@ -25,7 +25,7 @@ async function load({ url = 'http://localhost:5000', failure = { message: 'Faile
   const { renderCompanionGuidance } = require('./companion-guidance-ui');
   const { initHelpPopovers } = require('./help-popover-ui');
   document.body.innerHTML = errorSection;
-  // what popup.js's applyStaticTranslations() does for the static texts
+  // what popup.ts's applyStaticTranslations() does for the static texts
   document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
   initHelpPopovers();
   return { renderCompanionGuidance, initHelpPopovers };

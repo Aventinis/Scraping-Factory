@@ -4,7 +4,7 @@
 // modal, and the per-scrape source-field mapping picker rendered inside the
 // Settings section on the idle screen. Functions take a `bridge` object
 // (same convention as saved-configs-ui.ts/api-config-ui.js) instead of
-// closing over popup.js's own module-level state.
+// closing over popup.ts's own module-level state.
 //
 // Issue #244: a second, tree-shaped target schema alongside the original
 // flat field-name list — the create/edit modal gains a Flat/Tree toggle
@@ -243,7 +243,7 @@ export function renderOutputBlueprintTreeMapping(bridge: PopupBridge): void {
 // instead of a modal — the function itself needed no changes, since it
 // never assumed anything about its container beyond the #manage-
 // blueprints-list/#manage-blueprints-empty ids (the generic hide()/show()
-// sweep in popup.js's render() is what used to toggle the modal, not this
+// sweep in popup.ts's render() is what used to toggle the modal, not this
 // file). modal-blueprint-edit (create/edit) is unaffected — it still opens
 // as an actual overlay on top of whatever screen is behind it.
 

@@ -228,7 +228,7 @@ body {
   flex-direction: column;
   min-height: 100%;
 }
-/* Only one .screen is ever unhidden at a time (see popup.js's render());
+/* Only one .screen is ever unhidden at a time (see popup.ts's render());
    flex:1 lets it fill whatever height the panel actually has instead of
    being intrinsically sized to its own content. */
 .screen {
@@ -349,7 +349,7 @@ body {
 }
 /* Issue #140 modernization: an animated sliding "thumb" behind whichever
    .mode-btn is .active, instead of each button just recoloring itself in
-   place — see popup.js's syncModeToggleThumbs for the positioning (JS,
+   place — see popup.ts's syncModeToggleThumbs for the positioning (JS,
    not CSS-only, since it depends on the active button's actual rendered
    width/offset, not a fixed value). Sits behind the buttons (z-index: 0
    vs. 1) so their own transparent background lets it show through. */
@@ -567,7 +567,7 @@ body {
    (group/api/dom) — one static down-pointing SVG per row instead of each
    swapping between two different Unicode glyphs on click; collapsed state
    is just a rotation via the .collapsed class (see container-tree-ui.ts/
-   api-config-ui.ts/popup.js's buildTreeNodeEl for the class toggling). */
+   api-config-ui.ts/popup.ts's buildTreeNodeEl for the class toggling). */
 .group-tree-toggle svg, .api-tree-toggle svg, .dom-tree-toggle svg {
   width: 12px; height: 12px; display: block; transition: transform var(--transition-fast);
 }
@@ -578,7 +578,7 @@ body {
    chevron+.collapsed convention as the tree-toggle rule above, applied
    to a single fixed-title section header instead of a per-row tree
    toggle. Starts expanded (not collapsed) in the markup itself — see
-   popup.js's own render()-time default-open computation for why the
+   popup.ts's own render()-time default-open computation for why the
    .collapsed class is instead toggled entirely from JS on first
    render, never left implicit in the HTML the way tree rows do. */
 .monitoring-section-header {

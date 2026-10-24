@@ -1,4 +1,4 @@
-// The side panel's own state (popup.js's `_state`) and the `bridge` every feature module receives. Shapes that belong to a module that
+// The side panel's own state (popup.ts's `_state`) and the `bridge` every feature module receives. Shapes that belong to a module that
 // is not converted yet are deliberately loose (`unknown`, an index signature) and are tightened by that module's part of the migration.
 import type * as SFWire from './wire';
 import type * as SFDraft from './drafts';
@@ -276,7 +276,7 @@ export interface State {
   outputBlueprintsLoading: boolean;
   blueprintEditModalOpen: boolean;
   blueprintEditingId: number | null;
-  // popup.js's initial value only has name and fieldNames; the modal opens through openBlueprintCreate/EditModal, which set the rest.
+  // popup.ts's initial value only has name and fieldNames; the modal opens through openBlueprintCreate/EditModal, which set the rest.
   blueprintEditDraft: BlueprintEditDraft;
   blueprintDeletePendingId: number | null;
 }

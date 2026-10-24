@@ -3,7 +3,7 @@
 // of the three transform editors (flat field modal, container field modal,
 // API field-transforms modal), and the preset management section on the
 // Settings screen. Pure logic lives in transform-presets.ts. Every function
-// touching state takes popup.js's `bridge` (Architecture Decision #12).
+// touching state takes popup.ts's `bridge` (Architecture Decision #12).
 //
 // State owned here:
 //   transformPresets                — the companion's saved presets (null

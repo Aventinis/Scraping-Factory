@@ -128,7 +128,7 @@
            separate, capturable network request ever happens) — needs no
            recording toggle at all, so it's always available. Feeds the same
            #api-candidates-panel/-list below; the resulting candidate is
-           dispatched by shape (candidate.scriptSelector) in popup.js. -->
+           dispatched by shape (candidate.scriptSelector) in popup.ts. -->
       <div class="actions" style="margin-top: 6px;">
         <button id="btn-embedded-json-search" class="btn-secondary" type="button" data-i18n="idle.apiEmbeddedJsonSearchBtn" data-i18n-title="idle.apiEmbeddedJsonSearchTitle"></button>
       </div>
@@ -563,7 +563,7 @@
            auto-expands it once, on the first render after a popup (re)open
            if either change detection or any hardening check is already
            configured (see _state.monitoringSectionOpen/
-           computeInitialMonitoringSectionOpen in popup.js) — a returning
+           computeInitialMonitoringSectionOpen in popup.ts) — a returning
            user isn't forced to re-expand it just to see their own
            settings. Reuses the shared chevron+.collapsed convention
            (Issue #139) already used by the group/api/DOM tree views,

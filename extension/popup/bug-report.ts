@@ -1,5 +1,5 @@
 // ── Bug reporting ───────────────────────────────────────────────────────────
-// Extracted from popup.js (docs/design-notes/extension.md, "Popup module boundaries"). Combines this side panel's own log buffer with the
+// Extracted from popup.ts (docs/design-notes/extension.md, "Popup module boundaries"). Combines this side panel's own log buffer with the
 // service worker's and (best-effort, via the service worker) the active
 // tab's content script's, so a user hitting an error can attach real
 // diagnostic context to a GitHub issue in one click instead of having to
@@ -45,7 +45,7 @@ export function formatLogSection(title: string, entries: LogEntry[] | null | und
 
 // `pageUrl` is the popup's own _state.url at call time — passed in rather
 // than read from shared state directly, so this module has no dependency on
-// popup.js's state shape.
+// popup.ts's state shape.
 export async function buildBugReport(pageUrl?: string | null): Promise<string> {
   const { popup, background, content, contentError } = await collectLogs();
   const manifest: { version?: string } = typeof chrome !== 'undefined' && chrome.runtime?.getManifest ? chrome.runtime.getManifest() : {};

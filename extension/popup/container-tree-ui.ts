@@ -1,13 +1,13 @@
 // Container mode's own DOM rendering and event-handling logic: the group-
 // tree editor's row rendering, and every handler that adds/confirms a new
-// container/field within it. Split out of popup.js (which had grown past
+// container/field within it. Split out of popup.ts (which had grown past
 // 3800 lines) purely for readability — no behavior change.
 //
 // Like api-config-ui.ts, the handler functions below (anything that reads or
 // mutates popup state) take a `bridge` object — `{ getState, setState,
 // patchState, stopPreviewIfActive, requestDomTree }` — as their first
-// parameter, built once by popup.js's wireEvents() and passed through on
-// every call, instead of closing over popup.js's own `_state`/`setState`/etc.
+// parameter, built once by popup.ts's wireEvents() and passed through on
+// every call, instead of closing over popup.ts's own `_state`/`setState`/etc.
 // See api-config-ui.ts's own doc comment for why (load order + Jest module
 // isolation both rule out a plain closure here). renderGroupTree/
 // buildGroupTreeNodeEl need none of this — already pure, explicit-argument
@@ -37,7 +37,7 @@ const log = createLogger('SF:ContainerTreeUI');
 // two different Unicode glyphs (▸/▾) on click — collapsed/expanded is now a
 // CSS rotation driven by the .collapsed class (see popup.html's shared
 // .group-tree-toggle svg / .collapsed rule). Same duplicated-per-file
-// pattern api-config-ui.ts/popup.js use for their own tree toggles.
+// pattern api-config-ui.ts/popup.ts use for their own tree toggles.
 const TREE_TOGGLE_CHEVRON_SVG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" ' +
   'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +

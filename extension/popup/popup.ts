@@ -756,13 +756,13 @@ function applyStaticTranslations(): void {
 // Issue #206 follow-up: the mode-dispatch glue for the shared combine/split
 // field creation modals (combine-split-fields-ui.ts, deliberately
 // mode-agnostic — see its own doc comment for why this glue lives here
-// instead of in any one mode's own -ui.js file: popup.js is the one place
+// instead of in any one mode's own -ui.js file: popup.ts is the one place
 // that already imports every mode's own field-name/insert/update helper,
 // and — per Architecture Decision #12 — logic that doesn't cleanly belong
-// to any single extracted feature module is exactly what popup.js itself
+// to any single extracted feature module is exactly what popup.ts itself
 // is meant to still hold, the same role it already plays for switchMode.
 //
-// scope shapes (see popup.js's own pendingDerivedFieldScope doc comment):
+// scope shapes (see popup.ts's own pendingDerivedFieldScope doc comment):
 // { mode: 'flat' } | { mode: 'container', parentPath } | { mode: 'api', groupPath }
 function computeDerivedFieldAvailableNames(state: State, scope: DerivedFieldScope | null): string[] {
   if (!scope) return [];
@@ -1126,7 +1126,7 @@ function renderBlocksOutput(blocksOutput: BlockOutput[] | null): void {
 // preview.ts/companion-client.js/saved-configs-ui.js handler, instead of
 // those functions closing over this file's own module-level state — see
 // api-config-ui.ts's own doc comment for why. Declared at module scope
-// (not just inside wireEvents()) so popup.js's own top-level functions
+// (not just inside wireEvents()) so popup.ts's own top-level functions
 // (generate, ...) can use it too; safe to
 // reference functions defined further down in this file because they're
 // only ever called through the arrow functions below, never at bridge-

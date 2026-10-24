@@ -2,7 +2,7 @@
 // wiring for the "Follow the Link header" section on the API_CONFIG screen
 // (see api-link-pagination.ts for the pure draft/wire logic, the same
 // <feature>.js/<feature>-ui.js split api-cursor-pagination-ui.ts uses). Every
-// function that touches state takes popup.js's `bridge` as its first
+// function that touches state takes popup.ts's `bridge` as its first
 // parameter, per Architecture Decision #12.
 //
 // State this module owns:
@@ -19,7 +19,7 @@ import { byIdOrNull } from './dom';
 
 const log = createLogger('SF:ApiLinkPaginationUI');
 
-// Called from popup.js's render() while the API_CONFIG screen is showing.
+// Called from popup.ts's render() while the API_CONFIG screen is showing.
 // Hidden for an embedded-JSON source (a page load has no Link header to
 // follow); a POST request keeps the section visible but disabled with an
 // explanation, since the next page is requested by URL alone.

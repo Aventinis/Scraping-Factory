@@ -9,7 +9,7 @@
 //   - static inputs (idle.html): mark with `data-env-var`;
 //   - inputs built in JS: add `data-env-var` to the input and put envVarNoteHtml()
 //     where the explanation line should go;
-//   - popup.js's render() calls refreshEnvVarValidation() at its end (dynamic rows
+//   - popup.ts's render() calls refreshEnvVarValidation() at its end (dynamic rows
 //     are rebuilt on every render, the message with them) and wires the live check
 //     once with wireEnvVarValidation().
 import { t } from '../i18n/i18n';

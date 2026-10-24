@@ -2,7 +2,7 @@
 // rendering and event wiring for the "Request headers" subsection of the
 // Settings section (see request-headers.ts for the pure draft/wire logic, the
 // same <feature>.js/<feature>-ui.js split every other popup feature uses).
-// Every function that touches state takes popup.js's `bridge` as its first
+// Every function that touches state takes popup.ts's `bridge` as its first
 // parameter, per Architecture Decision #13.
 //
 // State this module owns:

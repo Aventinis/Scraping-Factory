@@ -1,11 +1,11 @@
 // ── Local saved-configuration history (Issue #141) + saved run outputs
 // (Issue #202) ───────────────────────────────────────────────────────────────
-// Extracted from popup.js (see CLAUDE.md's "Popup module boundaries"
+// Extracted from popup.ts (see CLAUDE.md's "Popup module boundaries"
 // architecture decision) — everything talking to the companion's local
 // SQLite-backed /configs and /configs/{id}/outputs endpoints, plus the
 // "Saved configurations" panel's own rendering, lives here. Functions take
 // a `bridge` object (same convention as api-config-ui.ts/companion-client.js)
-// instead of closing over popup.js's own module-level state.
+// instead of closing over popup.ts's own module-level state.
 import type {
   HardeningReplayResult, HardeningReplayState, PopupBridge, SavedConfigRecord, SavedConfigSummary, SavedOutputRecord, SavedOutputSummary,
 } from '../types/popup';

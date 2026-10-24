@@ -3,7 +3,7 @@
 // screen (see api-cursor-pagination.ts for the pure draft/wire logic, the
 // same <feature>.js/<feature>-ui.js split api-bootstrap.ts/
 // api-bootstrap-ui.ts use). Every function that touches state takes
-// popup.js's `bridge` as its first parameter, per Architecture Decision #12.
+// popup.ts's `bridge` as its first parameter, per Architecture Decision #12.
 //
 // State this module owns:
 //   apiConfigDraft.cursorPagination — the cursor draft (null = disabled)
@@ -61,7 +61,7 @@ function cursorConfigHtml(cursor: SFDraft.ApiCursorPagination, draft: ApiConfigD
       <input type="number" min="1" step="1" class="api-cursor-field" data-field="maxPages" value="${escapeHtml(cursor.maxPages)}" />`;
 }
 
-// Called from popup.js's render() while the API_CONFIG screen is showing.
+// Called from popup.ts's render() while the API_CONFIG screen is showing.
 // An embedded-JSON source hides the whole section: a page load has no
 // cursor to follow (ScrapingPlanValidator rejects the combination).
 export function renderApiCursorPaginationSection(bridge: PopupBridge): void {

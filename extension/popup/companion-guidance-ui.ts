@@ -1,5 +1,5 @@
 // Issue #406: renders the structured explanation on the COMPANION_ERROR
-// screen (logic in companion-guidance.ts). Called from popup.js's render()
+// screen (logic in companion-guidance.ts). Called from popup.ts's render()
 // next to renderCompanionErrorScreen(); needs no `bridge` — it only reads the
 // last health-check failure and the persisted "reached" flag.
 //

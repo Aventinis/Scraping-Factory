@@ -1,4 +1,4 @@
-// Pure scraping-config builder functions, extracted from popup.js: every function is a data transformation with no DOM or state access,
+// Pure scraping-config builder functions, extracted from popup.ts: every function is a data transformation with no DOM or state access,
 // plain values in, plain values out (see scraping-config-builder.test.js). Inputs are typed against the popup's draft shapes (SFDraft),
 // outputs against the wire format (SFWire).
 import type * as SFWire from '../types/wire';

@@ -4,7 +4,7 @@
 // ApiGroup/ApiField response-tree draft (build/resolve/insert/remove/
 // serialize/update/validate), the ApiBodyNode request-body draft (build/
 // resolve/update/reference-check/bound-check/serialize), and top-level
-// ApiConfig assembly. Split out of popup.js (which had grown past 3800 loc)
+// ApiConfig assembly. Split out of popup.ts (which had grown past 3800 loc)
 // purely for readability — no behavior change.
 import type * as SFWire from '../types/wire';
 import type * as SFDraft from '../types/drafts';
@@ -146,7 +146,7 @@ export interface ApiSubtreeCandidate {
   siblings?: Array<{ name: string; value?: unknown }>;
 }
 
-// Popup screen names. Lives here (rather than in popup.js, which loads
+// Popup screen names. Lives here (rather than in popup.ts, which loads
 // after this module) purely so api-config-ui.ts/container-tree-ui.js's
 // event handlers can reference it too; it has no other tie to API mode
 // specifically.
@@ -803,7 +803,7 @@ export function lastPathSegmentName(path: string | null | undefined): string | n
 // represented by existing ancestor groups, see resolveApiGroupScopePath's
 // doc comment). candidate.treeSkeleton is content-script.js's
 // deriveApiTreeSkeleton output, pre-computed and attached to the candidate
-// message (findApiCandidates) — popup.js runs in a different execution
+// message (findApiCandidates) — popup.ts runs in a different execution
 // context and has no access to content-script.js's own functions, the same
 // reason candidate.itemsPath/valuePath are pre-derived there too. Auto-names
 // intermediate groups (see lastPathSegmentName); siblings are always direct

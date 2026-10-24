@@ -1,11 +1,11 @@
 // ── Preview mode ─────────────────────────────────────────────────────────────
-// Extracted from popup.js (docs/design-notes/extension.md, "Popup module boundaries"). Sends the current Fields/Groups to the content
+// Extracted from popup.ts (docs/design-notes/extension.md, "Popup module boundaries"). Sends the current Fields/Groups to the content
 // script so it can match them against the live DOM and highlight the
 // results directly on the page — see content-script.js's
 // computePreviewMatches/startPreview for the matching semantics (mirrors
 // the backend codegen exactly). Takes a `bridge` object (same convention as
 // api-config-ui.ts/container-tree-ui.js/dom-tree-ui.js) instead of closing
-// over popup.js's own module-level state.
+// over popup.ts's own module-level state.
 //
 // Not to be confused with Issue #122's unrelated trial-run "data preview"
 // (dataPreview/renderDataPreview) — this is the pre-existing DOM-highlight
