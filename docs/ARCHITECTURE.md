@@ -1934,7 +1934,7 @@ map into a different target branch.
 - Extension: `popup/output-blueprints.ts` (pure — editing a blueprint's own
   ordered field-name list in the create/edit modal;
   building/validating the per-scrape source-field mapping draft) and
-  `popup/output-blueprints-ui.js` (CRUD against `/blueprints`, the
+  `popup/output-blueprints-ui.ts` (CRUD against `/blueprints`, the
   management modal, the create/edit modal, and the mapping picker itself —
   one `<select>` row per target field, sourced via the same
   `collectFieldNames` the hardening null-rate/required-fields pickers
@@ -2128,7 +2128,7 @@ shape; only *where the extension sources those four values from* changed.
   `popup/global-settings-ui.ts` (`renderSettingsScreen`/
   `wireSettingsScreenEvents` — the four toggles and the script-name
   mode/fixed-name controls directly; delegates blueprint management to
-  `output-blueprints-ui.js`'s `renderManageBlueprintsModal` — unchanged,
+  `output-blueprints-ui.ts`'s `renderManageBlueprintsModal` — unchanged,
   just repointed from a modal to a permanent section — and the cross-site
   list to `saved-configs-ui.ts`'s new `renderAllSavedConfigsList`/
   `wireAllSavedConfigsEvents`, which read the already-unconditionally-

@@ -9,7 +9,7 @@ import type * as SFDraft from '../types/drafts';
 type MappingDraft = Record<string, string | null>;
 
 // A fetched schema tree: a group has `children`, a leaf does not (no `kind`).
-interface SchemaTreeWireNode {
+export interface SchemaTreeWireNode {
   name: string;
   children?: SchemaTreeWireNode[] | null;
 }
@@ -234,7 +234,7 @@ export function blueprintTreeSchemaIsValid(name: string, tree: SFDraft.Blueprint
 
 // One entry per target field, source starting unset — targetFieldNames is
 // the picked blueprint's own ordered field list (see fetchOutputBlueprint
-// in output-blueprints-ui.js).
+// in output-blueprints-ui.ts).
 export function createMappingDraft(targetFieldNames: string[]): MappingDraft {
   const draft: MappingDraft = {};
   for (const name of targetFieldNames) draft[name] = null;

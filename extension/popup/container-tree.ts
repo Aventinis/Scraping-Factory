@@ -108,14 +108,19 @@ export function hasRepeatingAncestor(groups: Nodes, path: number[] | null | unde
   return false;
 }
 
+// insertContainerNode, removeGroupTreeNode, updateGroupTreeNode and moveGroupTreeNode only read and rewrite `children`, so they are generic
+// over any node with a `kind` and also serve the Output Blueprint tree editor's smaller nodes (output-blueprints-ui.ts).
+type TreeNode = { kind: string };
+const childrenOf = <N>(node: N): N[] => (node as unknown as { children: N[] }).children;
+
 /** Appends `node` as the last child at `parentPath` (or at root level when it is null). Immutable. */
-export function insertContainerNode(groups: Nodes, parentPath: number[] | null | undefined, node: SFDraft.ContainerNode): Nodes {
+export function insertContainerNode<N extends TreeNode>(groups: N[], parentPath: number[] | null | undefined, node: N): N[] {
   const path = parentPath || [];
   if (path.length === 0) return [...groups, node];
   const [head, ...rest] = path;
   return groups.map((n, i) => (i === head
-    ? { ...n, children: insertContainerNode((n as SFDraft.GroupNode).children, rest, node) }
-    : n)) as Nodes;
+    ? { ...n, children: insertContainerNode(childrenOf(n), rest, node) }
+    : n));
 }
 
 /**
@@ -132,32 +137,31 @@ export function collectSiblingFieldNames(groups: Nodes, parentPath: number[] | n
 }
 
 /** Removes the node (and its subtree) at `path`, which is never empty (unlike insertContainerNode's parentPath). */
-export function removeGroupTreeNode(groups: Nodes, path: number[]): Nodes {
+export function removeGroupTreeNode<N extends TreeNode>(groups: N[], path: number[]): N[] {
   if (path.length === 1) return groups.filter((_, i) => i !== path[0]);
   const [head, ...rest] = path;
   return groups.map((n, i) => (i === head
-    ? { ...n, children: removeGroupTreeNode((n as SFDraft.GroupNode).children, rest) }
-    : n)) as Nodes;
+    ? { ...n, children: removeGroupTreeNode(childrenOf(n), rest) }
+    : n));
 }
 
 /** Replaces the node at `path` with `updater(node)` (like api-config's updateApiTreeNode). */
-export function updateGroupTreeNode(groups: Nodes, path: number[], updater: (node: SFDraft.ContainerNode) => SFDraft.ContainerNode): Nodes {
+export function updateGroupTreeNode<N extends TreeNode>(groups: N[], path: number[], updater: (node: N) => N): N[] {
   const [head, ...rest] = path;
   return groups.map((n, i) => {
     if (i !== head) return n;
     return rest.length === 0
       ? updater(n)
-      : { ...n, children: updateGroupTreeNode((n as SFDraft.GroupNode).children, rest, updater) };
-  }) as Nodes;
+      : { ...n, children: updateGroupTreeNode(childrenOf(n), rest, updater) };
+  });
 }
 
 /** Swaps the node at `path` with its adjacent sibling (-1 up, 1 down, like moveTransform); a no-op past either end, so a button can call it unconditionally. */
-export function moveGroupTreeNode(groups: Nodes, path: number[], direction: number): Nodes {
+export function moveGroupTreeNode<N extends TreeNode>(groups: N[], path: number[], direction: number): N[] {
   const parentPath = path.slice(0, -1);
   const index = path[path.length - 1];
-  const siblings = parentPath.length === 0
-    ? groups
-    : (resolveGroupNode(groups, parentPath) as SFDraft.GroupNode).children;
+  let siblings = groups;
+  for (const step of parentPath) siblings = childrenOf(siblings[step]);
   const target = index + direction;
   if (target < 0 || target >= siblings.length) return groups;
 
@@ -166,7 +170,7 @@ export function moveGroupTreeNode(groups: Nodes, path: number[], direction: numb
 
   return parentPath.length === 0
     ? swapped
-    : updateGroupTreeNode(groups, parentPath, (n) => ({ ...n, children: swapped }) as SFDraft.ContainerNode);
+    : updateGroupTreeNode(groups, parentPath, (n) => ({ ...n, children: swapped }));
 }
 
 /** The part of formatGroupNodeLabel that is not the name, so the tree row can show an editable name and this suffix. */

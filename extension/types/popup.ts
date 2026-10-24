@@ -8,6 +8,7 @@ import type { ApiCandidate, DomTreeNode, RobotsTxtResult } from './messages';
 import type { showToast } from '../popup/toast';
 import type { CaptureEntryLike, PathTreeResult } from '../popup/json-path-picker';
 import type { SavedPreset } from '../popup/transform-presets';
+import type { SchemaTreeWireNode } from '../popup/output-blueprints';
 
 export type Screen =
   | 'CHECKING_COMPANION' | 'COMPANION_ERROR' | 'IDLE' | 'SELECTING' | 'API_CONFIG' | 'GENERATING' | 'DONE' | 'SETTINGS';
@@ -65,6 +66,33 @@ export interface SavedConfigSummary {
 // GET /configs/{id}: the summary plus the stored configuration, verbatim as it was sent to /generate.
 export interface SavedConfigRecord extends SavedConfigSummary {
   config: SFWire.ScrapingConfig;
+}
+
+// GET /blueprints: one Output Blueprint (a reusable target schema) as listed; `fieldCount` counts the leaves of a tree.
+export interface OutputBlueprintSummary {
+  id: number;
+  name: string;
+  savedAt: string;
+  fieldCount: number;
+  schemaKind: SFWire.OutputBlueprintSchemaKind;
+}
+
+// GET /blueprints/{id}: `fieldNames` is meaningful for a Flat schema, `tree` for a Tree schema.
+export interface OutputBlueprintRecord {
+  id: number;
+  name: string;
+  savedAt: string;
+  fieldNames: string[];
+  schemaKind: SFWire.OutputBlueprintSchemaKind;
+  tree: SchemaTreeWireNode[] | null;
+}
+
+// The create/edit modal's draft: both schema shapes are always present, so toggling Flat/Tree never loses either.
+export interface BlueprintEditDraft {
+  name: string;
+  schemaKind: SFWire.OutputBlueprintSchemaKind;
+  fieldNames: string[];
+  tree: SFDraft.BlueprintSchemaNode[];
 }
 
 export interface SavedOutputSummary {
@@ -231,7 +259,7 @@ export interface State {
   selectedOutputBlueprintSchemaKind?: SFWire.OutputBlueprintSchemaKind;
   selectedOutputBlueprintTree?: SFDraft.OutputBlueprintTreeNode[];
   outputBlueprintTreeMapping?: Record<string, string | null>;
-  outputBlueprints: Array<{ id: number; name: string; [key: string]: unknown }> | null;
+  outputBlueprints: OutputBlueprintSummary[] | null;
   transformPresets: SavedPreset[] | null;
   transformPresetsAvailable: boolean;
   transformPresetSaveOpen: boolean;
@@ -240,7 +268,8 @@ export interface State {
   outputBlueprintsLoading: boolean;
   blueprintEditModalOpen: boolean;
   blueprintEditingId: number | null;
-  blueprintEditDraft: { name: string; fieldNames: string[]; [key: string]: unknown };
+  // popup.js's initial value only has name and fieldNames; the modal opens through openBlueprintCreate/EditModal, which set the rest.
+  blueprintEditDraft: BlueprintEditDraft;
   blueprintDeletePendingId: number | null;
 }
 

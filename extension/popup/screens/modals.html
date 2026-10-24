@@ -315,7 +315,7 @@
   <!-- Modal: create/edit one Output Blueprint's own name + ordered target
        field-name list — opened from modal-manage-blueprints' own "+ New"
        button or a row's "Edit" button (blueprintEditingId distinguishes the
-       two, see output-blueprints-ui.js). Field-name rows reuse the same
+       two, see output-blueprints-ui.ts). Field-name rows reuse the same
        add/remove/move-with-adjacent-sibling shape field-transforms-ui.ts's
        transform rows already established. -->
   <div id="modal-blueprint-edit" class="modal hidden">
@@ -341,7 +341,7 @@
            CSV header row/plain newline/comma-separated list) is
            auto-detected from the pasted content, no format picker. Shared
            between both schema kinds (importBlueprintFieldNamesFromSample in
-           output-blueprints-ui.js dispatches on blueprintEditDraft.schemaKind
+           output-blueprints-ui.ts dispatches on blueprintEditDraft.schemaKind
            to replace either fieldNames or tree), so it sits above both
            schema-specific sections below rather than inside either one. Only
            shown while CREATING a new blueprint (blueprintEditingId is null)

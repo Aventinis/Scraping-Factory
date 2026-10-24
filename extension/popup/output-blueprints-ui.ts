@@ -14,64 +14,64 @@
 // buildBlueprintSchemaNodeEl), and the per-scrape mapping picker gains a
 // parallel tree-mapping view (renderOutputBlueprintTreeMapping) shown
 // instead of the flat mapping list once a Tree-schema blueprint is picked.
-const { createLogger } = require('../shared/logger');
-const log = createLogger('SF:Popup');
-
-const { t } = require('../i18n/i18n');
-
-const { escapeHtml, STATES } = require('./api-config');
-
-const { showToast } = require('./toast');
-
-const { collectFieldNames } = require('./scraping-config-builder');
-
-const { getResolvedCompanionUrl, companionFetch } = require('./companion-client');
-
-const {
+import type * as SFDraft from '../types/drafts';
+import type {
+  BlueprintEditDraft, OutputBlueprintRecord, OutputBlueprintSummary, PopupBridge, State, StatePatch,
+} from '../types/popup';
+import { createLogger } from '../shared/logger';
+import { t } from '../i18n/i18n';
+import { escapeHtml, STATES } from './api-config';
+import { showToast } from './toast';
+import { collectFieldNames } from './scraping-config-builder';
+import { getResolvedCompanionUrl, companionFetch } from './companion-client';
+import {
   addBlueprintFieldName, removeBlueprintFieldName, updateBlueprintFieldName, moveBlueprintFieldName,
   blueprintDraftIsValid, createMappingDraft, updateMappingSource, parseFieldNamesFromSample,
   buildBlueprintSchemaGroup, buildBlueprintSchemaField, parseBlueprintSchemaTree, serializeBlueprintSchemaTree,
   blueprintTreeSchemaIsValid, createTreeMappingDraft, updateTreeMappingSource,
   buildBlueprintTreeFromSample, countBlueprintTreeLeaves,
-} = require('./output-blueprints');
+} from './output-blueprints';
+import { byIdOrNull } from './dom';
+
+const log = createLogger('SF:Popup');
 
 // Issue #244: the tree schema editor's own structural editing (add/remove/
 // rename/move a group or field node) reuses container-tree.ts's generic
 // path-based helpers directly — see output-blueprints.ts's own doc comment
 // on why they apply unchanged to a blueprint schema node's much smaller
 // {kind, name, children} shape.
-const {
+import {
   insertContainerNode, removeGroupTreeNode, updateGroupTreeNode, moveGroupTreeNode,
-} = require('./container-tree');
+} from './container-tree';
 
-const EMPTY_OUTPUT_BLUEPRINT_STATE = {
+const EMPTY_OUTPUT_BLUEPRINT_STATE: StatePatch = {
   selectedOutputBlueprintId: '', selectedOutputBlueprintFieldNames: [], outputBlueprintMapping: {},
   selectedOutputBlueprintSchemaKind: 'Flat', selectedOutputBlueprintTree: [], outputBlueprintTreeMapping: {},
 };
 
 // ── Fetch wrappers, mirroring saved-configs-ui.ts's own style ──────────
 
-async function fetchOutputBlueprints(bridge) {
+export async function fetchOutputBlueprints(bridge: PopupBridge): Promise<void> {
   bridge.patchState({ outputBlueprintsLoading: true });
   try {
     const res = await companionFetch(`${getResolvedCompanionUrl()}/blueprints`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const outputBlueprints = await res.json();
+    const outputBlueprints: OutputBlueprintSummary[] = await res.json(); // GET /blueprints
     log('OUTPUT_BLUEPRINTS_LIST', outputBlueprints.length);
     bridge.patchState({ outputBlueprints, outputBlueprintsLoading: false });
   } catch (err) {
     // Non-fatal: an older companion without /blueprints, or a transient
     // network hiccup — same "optional companion capability" treatment
     // fetchSavedConfigs already gives its own failure case.
-    log('OUTPUT_BLUEPRINTS_LIST FAIL', err.message);
+    log('OUTPUT_BLUEPRINTS_LIST FAIL', (err as Error).message);
     bridge.patchState({ outputBlueprints: [], outputBlueprintsLoading: false });
   }
 }
 
-async function fetchOutputBlueprint(id) {
+export async function fetchOutputBlueprint(id: number | string): Promise<OutputBlueprintRecord> {
   const res = await companionFetch(`${getResolvedCompanionUrl()}/blueprints/${id}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return res.json(); // GET /blueprints/{id}
 }
 
 // ── Per-scrape mapping picker (Settings section) ────────────────────────
@@ -82,14 +82,14 @@ async function fetchOutputBlueprint(id) {
 // (container mode, or Api mode's own tree response shape). A Tree-schema
 // blueprint is filtered out of the picker entirely for any other mode —
 // there would be nothing for its target groups to resolve against.
-function currentShapeSupportsTreeBlueprint(state) {
+function currentShapeSupportsTreeBlueprint(state: State): boolean {
   return state.mode === 'container'
     || (state.mode === 'api' && !!state.apiConfig && Array.isArray(state.apiConfig.groups) && state.apiConfig.groups.length > 0);
 }
 
 // idValue is the <select>'s own string value — '' means "None" picked,
 // clearing the mapping entirely.
-async function selectOutputBlueprint(bridge, idValue) {
+export async function selectOutputBlueprint(bridge: PopupBridge, idValue: string): Promise<void> {
   if (!idValue) {
     log('SELECT_OUTPUT_BLUEPRINT none');
     bridge.patchState({ ...EMPTY_OUTPUT_BLUEPRINT_STATE });
@@ -118,22 +118,22 @@ async function selectOutputBlueprint(bridge, idValue) {
       outputBlueprintTreeMapping: {},
     });
   } catch (err) {
-    log('SELECT_OUTPUT_BLUEPRINT FAIL', err.message);
-    showToast(t('toast.blueprintLoadFailed', { message: err.message }), 'Output Blueprint');
+    log('SELECT_OUTPUT_BLUEPRINT FAIL', (err as Error).message);
+    showToast(t('toast.blueprintLoadFailed', { message: (err as Error).message }), 'Output Blueprint');
   }
 }
 
-function updateOutputBlueprintMappingSource(bridge, targetField, sourceField) {
+export function updateOutputBlueprintMappingSource(bridge: PopupBridge, targetField: string, sourceField: string): void {
   const state = bridge.getState();
   bridge.patchState({
     outputBlueprintMapping: updateMappingSource(state.outputBlueprintMapping, targetField, sourceField),
   });
 }
 
-function updateOutputBlueprintTreeMappingSource(bridge, leafPath, sourceField) {
+export function updateOutputBlueprintTreeMappingSource(bridge: PopupBridge, leafPath: string, sourceField: string): void {
   const state = bridge.getState();
   bridge.patchState({
-    outputBlueprintTreeMapping: updateTreeMappingSource(state.outputBlueprintTreeMapping, leafPath, sourceField),
+    outputBlueprintTreeMapping: updateTreeMappingSource(state.outputBlueprintTreeMapping ?? {}, leafPath, sourceField),
   });
 }
 
@@ -146,9 +146,9 @@ function updateOutputBlueprintTreeMappingSource(bridge, leafPath, sourceField) {
 // itself is reachable (flat mode, or Api mode's flat shape, or — since
 // #192 — container mode/Api's tree shape) — idle-screen-ui.ts gates
 // #output-blueprint-toggle-row's own visibility.
-function renderOutputBlueprintMappingSection(bridge) {
+export function renderOutputBlueprintMappingSection(bridge: PopupBridge): void {
   const state = bridge.getState();
-  const selectEl = document.getElementById('select-output-blueprint');
+  const selectEl = byIdOrNull<HTMLSelectElement>('select-output-blueprint');
   if (selectEl && document.activeElement !== selectEl) {
     const treeEligible = currentShapeSupportsTreeBlueprint(state);
     const options = (state.outputBlueprints || [])
@@ -160,13 +160,13 @@ function renderOutputBlueprintMappingSection(bridge) {
   }
 
   if (state.selectedOutputBlueprintSchemaKind === 'Tree') {
-    document.getElementById('output-blueprint-mapping')?.classList.add('hidden');
+    byIdOrNull('output-blueprint-mapping')?.classList.add('hidden');
     renderOutputBlueprintTreeMapping(bridge);
     return;
   }
 
-  document.getElementById('output-blueprint-tree-mapping')?.classList.add('hidden');
-  const mappingSection = document.getElementById('output-blueprint-mapping');
+  byIdOrNull('output-blueprint-tree-mapping')?.classList.add('hidden');
+  const mappingSection = byIdOrNull('output-blueprint-mapping');
   const targetFields = state.selectedOutputBlueprintFieldNames || [];
   if (!mappingSection) return;
   if (!state.selectedOutputBlueprintId || targetFields.length === 0) {
@@ -176,7 +176,7 @@ function renderOutputBlueprintMappingSection(bridge) {
   mappingSection.classList.remove('hidden');
 
   const availableSourceFields = collectFieldNames(state.mode, state.fields, state.groups, state.apiConfig);
-  const listEl = document.getElementById('output-blueprint-mapping-list');
+  const listEl = byIdOrNull('output-blueprint-mapping-list');
   if (listEl) {
     listEl.innerHTML = targetFields.map(target => {
       const picked = state.outputBlueprintMapping[target] || '';
@@ -198,7 +198,9 @@ function renderOutputBlueprintMappingSection(bridge) {
 // own per-row <select>. `path` addresses a node the same dot-joined-index
 // scheme output-blueprints.ts's own createTreeMappingDraft uses as its
 // draft keys, so a row's `data-path` can be used directly as the lookup.
-function buildOutputBlueprintTreeMappingRowHtml(node, path, depth, availableSourceFields, draft) {
+function buildOutputBlueprintTreeMappingRowHtml(
+  node: SFDraft.OutputBlueprintTreeNode, path: string, depth: number, availableSourceFields: string[], draft: Record<string, string | null>,
+): string {
   const indent = `style="padding-left:${depth * 12}px"`;
   if (Array.isArray(node.children)) {
     const children = node.children.map((child, i) =>
@@ -216,9 +218,9 @@ function buildOutputBlueprintTreeMappingRowHtml(node, path, depth, availableSour
     `</div></li>`;
 }
 
-function renderOutputBlueprintTreeMapping(bridge) {
+export function renderOutputBlueprintTreeMapping(bridge: PopupBridge): void {
   const state = bridge.getState();
-  const section = document.getElementById('output-blueprint-tree-mapping');
+  const section = byIdOrNull('output-blueprint-tree-mapping');
   const tree = state.selectedOutputBlueprintTree || [];
   if (!section) return;
   if (!state.selectedOutputBlueprintId || tree.length === 0) {
@@ -228,10 +230,10 @@ function renderOutputBlueprintTreeMapping(bridge) {
   section.classList.remove('hidden');
 
   const availableSourceFields = collectFieldNames(state.mode, state.fields, state.groups, state.apiConfig);
-  const listEl = document.getElementById('output-blueprint-tree-mapping-list');
+  const listEl = byIdOrNull('output-blueprint-tree-mapping-list');
   if (listEl) {
     listEl.innerHTML = tree.map((node, i) =>
-      buildOutputBlueprintTreeMappingRowHtml(node, `${i}`, 0, availableSourceFields, state.outputBlueprintTreeMapping)).join('');
+      buildOutputBlueprintTreeMappingRowHtml(node, `${i}`, 0, availableSourceFields, state.outputBlueprintTreeMapping ?? {})).join('');
   }
 }
 
@@ -245,10 +247,10 @@ function renderOutputBlueprintTreeMapping(bridge) {
 // file). modal-blueprint-edit (create/edit) is unaffected — it still opens
 // as an actual overlay on top of whatever screen is behind it.
 
-function renderManageBlueprintsModal(bridge) {
+export function renderManageBlueprintsModal(bridge: PopupBridge): void {
   const state = bridge.getState();
-  const listEl = document.getElementById('manage-blueprints-list');
-  const emptyEl = document.getElementById('manage-blueprints-empty');
+  const listEl = byIdOrNull('manage-blueprints-list');
+  const emptyEl = byIdOrNull('manage-blueprints-empty');
   if (!listEl) return;
 
   const blueprints = state.outputBlueprints || [];
@@ -272,15 +274,15 @@ function renderManageBlueprintsModal(bridge) {
   }).join('');
 }
 
-function requestDeleteBlueprint(bridge, id) {
+export function requestDeleteBlueprint(bridge: PopupBridge, id: number): void {
   bridge.patchState({ blueprintDeletePendingId: id });
 }
 
-function cancelDeleteBlueprint(bridge) {
+export function cancelDeleteBlueprint(bridge: PopupBridge): void {
   bridge.patchState({ blueprintDeletePendingId: null });
 }
 
-async function deleteBlueprint(bridge, id) {
+export async function deleteBlueprint(bridge: PopupBridge, id: number): Promise<void> {
   log('DELETE_BLUEPRINT', id);
   try {
     const res = await companionFetch(`${getResolvedCompanionUrl()}/blueprints/${id}`, { method: 'DELETE' });
@@ -296,8 +298,8 @@ async function deleteBlueprint(bridge, id) {
     }
     await fetchOutputBlueprints(bridge);
   } catch (err) {
-    log('DELETE_BLUEPRINT FAIL', err.message);
-    showToast(t('toast.blueprintDeleteFailed', { message: err.message }), 'Output Blueprint');
+    log('DELETE_BLUEPRINT FAIL', (err as Error).message);
+    showToast(t('toast.blueprintDeleteFailed', { message: (err as Error).message }), 'Output Blueprint');
   }
 }
 
@@ -309,12 +311,12 @@ async function deleteBlueprint(bridge, id) {
 // listener below), so it has to be put back to the "no file selected"
 // placeholder explicitly whenever the modal is (re)opened, or a stale
 // filename from a previous attempt would otherwise linger across reopens.
-function resetBlueprintImportFileIndicator() {
-  const nameEl = document.getElementById('blueprint-import-file-name');
+function resetBlueprintImportFileIndicator(): void {
+  const nameEl = byIdOrNull('blueprint-import-file-name');
   if (nameEl) nameEl.textContent = t('modals.blueprintEdit.importFileNone');
 }
 
-function openBlueprintCreateModal(bridge) {
+export function openBlueprintCreateModal(bridge: PopupBridge): void {
   log('OPEN blueprint-edit modal (new)');
   resetBlueprintImportFileIndicator();
   bridge.patchState({
@@ -323,7 +325,7 @@ function openBlueprintCreateModal(bridge) {
   });
 }
 
-async function openBlueprintEditModal(bridge, id) {
+export async function openBlueprintEditModal(bridge: PopupBridge, id: number): Promise<void> {
   log('OPEN blueprint-edit modal (edit)', id);
   resetBlueprintImportFileIndicator();
   try {
@@ -341,16 +343,16 @@ async function openBlueprintEditModal(bridge, id) {
       },
     });
   } catch (err) {
-    log('OPEN blueprint-edit modal FAIL', err.message);
-    showToast(t('toast.blueprintLoadFailed', { message: err.message }), 'Output Blueprint');
+    log('OPEN blueprint-edit modal FAIL', (err as Error).message);
+    showToast(t('toast.blueprintLoadFailed', { message: (err as Error).message }), 'Output Blueprint');
   }
 }
 
-function closeBlueprintEditModal(bridge) {
+export function closeBlueprintEditModal(bridge: PopupBridge): void {
   bridge.patchState({ blueprintEditModalOpen: false });
 }
 
-function setBlueprintSchemaKind(bridge, schemaKind) {
+export function setBlueprintSchemaKind(bridge: PopupBridge, schemaKind: BlueprintEditDraft['schemaKind']): void {
   const state = bridge.getState();
   bridge.patchState({ blueprintEditDraft: { ...state.blueprintEditDraft, schemaKind } });
 }
@@ -365,7 +367,7 @@ function setBlueprintSchemaKind(bridge, schemaKind) {
 // own visibility gate), so there's no already-saved field list/tree this
 // could ever clobber. Dispatches purely on the draft's own current
 // schemaKind — the same textarea/button serves either schema kind.
-function importBlueprintFieldNamesFromSample(bridge, sampleText) {
+export function importBlueprintFieldNamesFromSample(bridge: PopupBridge, sampleText: string): void {
   const state = bridge.getState();
   const isTree = state.blueprintEditDraft.schemaKind === 'Tree';
 
@@ -400,12 +402,12 @@ function importBlueprintFieldNamesFromSample(bridge, sampleText) {
 // download-helpers.test.js/popup.test.js's own readBlobText helper already
 // established, since jsdom (this project's test environment) doesn't
 // implement Blob/File.text().
-function loadBlueprintImportSampleFile(file) {
-  const textarea = document.getElementById('input-blueprint-import-sample');
-  return new Promise((resolve) => {
+function loadBlueprintImportSampleFile(file: File): Promise<void> {
+  const textarea = byIdOrNull<HTMLTextAreaElement>('input-blueprint-import-sample');
+  return new Promise<void>((resolve) => {
     const reader = new FileReader();
     reader.onload = () => {
-      if (textarea) textarea.value = reader.result;
+      if (textarea) textarea.value = reader.result as string; // readAsText
       resolve();
     };
     reader.onerror = () => {
@@ -418,7 +420,7 @@ function loadBlueprintImportSampleFile(file) {
   });
 }
 
-async function saveBlueprintEdit(bridge) {
+export async function saveBlueprintEdit(bridge: PopupBridge): Promise<void> {
   const state = bridge.getState();
   const { name, schemaKind, fieldNames, tree } = state.blueprintEditDraft;
   const isTree = schemaKind === 'Tree';
@@ -426,7 +428,7 @@ async function saveBlueprintEdit(bridge) {
 
   const trimmedName = name.trim();
   const editingId = state.blueprintEditingId;
-  log('SAVE_BLUEPRINT', editingId ?? '(new)', trimmedName, schemaKind);
+  log('SAVE_BLUEPRINT', editingId ?? '(new)');
   try {
     const url = editingId
       ? `${getResolvedCompanionUrl()}/blueprints/${editingId}`
@@ -450,31 +452,31 @@ async function saveBlueprintEdit(bridge) {
       await selectOutputBlueprint(bridge, String(editingId));
     }
   } catch (err) {
-    log('SAVE_BLUEPRINT FAIL', err.message);
-    showToast(t('toast.blueprintSaveFailed', { message: err.message }), 'Output Blueprint');
+    log('SAVE_BLUEPRINT FAIL', (err as Error).message);
+    showToast(t('toast.blueprintSaveFailed', { message: (err as Error).message }), 'Output Blueprint');
   }
 }
 
-function renderBlueprintEditModal(bridge) {
+export function renderBlueprintEditModal(bridge: PopupBridge): void {
   const state = bridge.getState();
   const { name, schemaKind, fieldNames, tree } = state.blueprintEditDraft;
   const isTree = schemaKind === 'Tree';
-  const nameInput = document.getElementById('input-blueprint-name');
+  const nameInput = byIdOrNull<HTMLInputElement>('input-blueprint-name');
   if (nameInput && document.activeElement !== nameInput) nameInput.value = name;
 
-  document.getElementById('btn-blueprint-schema-kind-flat')?.classList.toggle('active', !isTree);
-  document.getElementById('btn-blueprint-schema-kind-tree')?.classList.toggle('active', isTree);
-  document.getElementById('blueprint-flat-schema-section')?.classList.toggle('hidden', isTree);
-  document.getElementById('blueprint-tree-schema-section')?.classList.toggle('hidden', !isTree);
+  byIdOrNull('btn-blueprint-schema-kind-flat')?.classList.toggle('active', !isTree);
+  byIdOrNull('btn-blueprint-schema-kind-tree')?.classList.toggle('active', isTree);
+  byIdOrNull('blueprint-flat-schema-section')?.classList.toggle('hidden', isTree);
+  byIdOrNull('blueprint-tree-schema-section')?.classList.toggle('hidden', !isTree);
   // Issue #193 (Flat), extended to Tree by Issue #253: import only ever
   // targets a brand-new blueprint (see importBlueprintFieldNamesFromSample's
   // own doc comment) — hidden once editing an already-existing one,
   // regardless of schema kind. No longer schema-kind-gated: Tree-schema
   // import is fully supported now, dispatched purely by schemaKind inside
   // importBlueprintFieldNamesFromSample itself.
-  document.getElementById('blueprint-import-section')?.classList.toggle('hidden', !!state.blueprintEditingId);
+  byIdOrNull('blueprint-import-section')?.classList.toggle('hidden', !!state.blueprintEditingId);
 
-  const listEl = document.getElementById('blueprint-field-list');
+  const listEl = byIdOrNull('blueprint-field-list');
   if (listEl) {
     listEl.innerHTML = fieldNames.map((fieldName, index) => {
       const escaped = escapeHtml(fieldName);
@@ -489,7 +491,7 @@ function renderBlueprintEditModal(bridge) {
 
   renderBlueprintSchemaTree(tree);
 
-  const saveBtn = document.getElementById('btn-blueprint-edit-save');
+  const saveBtn = byIdOrNull<HTMLButtonElement>('btn-blueprint-edit-save');
   if (saveBtn) saveBtn.disabled = isTree ? !blueprintTreeSchemaIsValid(name, tree) : !blueprintDraftIsValid(name, fieldNames);
 }
 
@@ -500,7 +502,7 @@ function renderBlueprintEditModal(bridge) {
 // site-independent (see OutputBlueprintTreeSchema.cs), so there's nothing
 // here to pick from the page.
 
-function buildBlueprintSchemaNodeEl(node, path, depth, siblingCount) {
+function buildBlueprintSchemaNodeEl(node: SFDraft.BlueprintSchemaNode, path: number[], depth: number, siblingCount: number): HTMLElement {
   const li = document.createElement('li');
   li.className = 'group-tree-node blueprint-schema-node';
   li.dataset.path = JSON.stringify(path);
@@ -561,8 +563,8 @@ function buildBlueprintSchemaNodeEl(node, path, depth, siblingCount) {
   return li;
 }
 
-function renderBlueprintSchemaTree(tree) {
-  const root = document.getElementById('blueprint-schema-tree-root');
+export function renderBlueprintSchemaTree(tree: SFDraft.BlueprintSchemaNode[]): void {
+  const root = byIdOrNull('blueprint-schema-tree-root');
   if (!root) return;
   root.innerHTML = '';
   tree.forEach((node, i) => root.appendChild(buildBlueprintSchemaNodeEl(node, [i], 0, tree.length)));
@@ -570,154 +572,148 @@ function renderBlueprintSchemaTree(tree) {
 
 // ── Wiring ────────────────────────────────────────────────────────────
 
-function wireOutputBlueprintsEvents(bridge) {
-  document.getElementById('select-output-blueprint')?.addEventListener('change', (e) => {
-    selectOutputBlueprint(bridge, e.target.value);
+export function wireOutputBlueprintsEvents(bridge: PopupBridge): void {
+  byIdOrNull('select-output-blueprint')?.addEventListener('change', (e) => {
+    selectOutputBlueprint(bridge, (e.target as HTMLSelectElement).value);
   });
 
-  document.getElementById('output-blueprint-mapping-list')?.addEventListener('change', (e) => {
-    const select = e.target.closest('.output-blueprint-source-select');
+  byIdOrNull('output-blueprint-mapping-list')?.addEventListener('change', (e) => {
+    const select = (e.target as Element).closest<HTMLSelectElement>('.output-blueprint-source-select');
     if (!select) return;
-    updateOutputBlueprintMappingSource(bridge, select.dataset.target, select.value);
+    updateOutputBlueprintMappingSource(bridge, select.dataset.target as string, select.value);
   });
 
-  document.getElementById('output-blueprint-tree-mapping-list')?.addEventListener('change', (e) => {
-    const select = e.target.closest('.output-blueprint-source-select');
+  byIdOrNull('output-blueprint-tree-mapping-list')?.addEventListener('change', (e) => {
+    const select = (e.target as Element).closest<HTMLSelectElement>('.output-blueprint-source-select');
     if (!select) return;
-    updateOutputBlueprintTreeMappingSource(bridge, select.dataset.path, select.value);
+    updateOutputBlueprintTreeMappingSource(bridge, select.dataset.path as string, select.value);
   });
 
   // Issue-driven follow-up: blueprint management moved from a modal
   // (openManageBlueprintsModal) into the permanent global Settings tab —
   // this button now just navigates there.
-  document.getElementById('btn-manage-blueprints')?.addEventListener('click', () => {
+  byIdOrNull('btn-manage-blueprints')?.addEventListener('click', () => {
     bridge.setState(STATES.SETTINGS, { blueprintDeletePendingId: null });
   });
 
-  document.getElementById('manage-blueprints-list')?.addEventListener('click', (e) => {
-    const editBtn = e.target.closest('.btn-blueprint-edit');
-    if (editBtn) { openBlueprintEditModal(bridge, parseInt(editBtn.dataset.id, 10)); return; }
-    const deleteBtn = e.target.closest('.btn-blueprint-delete');
-    if (deleteBtn) { requestDeleteBlueprint(bridge, parseInt(deleteBtn.dataset.id, 10)); return; }
-    const confirmBtn = e.target.closest('.btn-blueprint-delete-confirm');
-    if (confirmBtn) { deleteBlueprint(bridge, parseInt(confirmBtn.dataset.id, 10)); return; }
-    const cancelBtn = e.target.closest('.btn-blueprint-delete-cancel');
+  byIdOrNull('manage-blueprints-list')?.addEventListener('click', (e) => {
+    const target = e.target as Element;
+    const editBtn = target.closest<HTMLElement>('.btn-blueprint-edit');
+    if (editBtn) { openBlueprintEditModal(bridge, parseInt(editBtn.dataset.id as string, 10)); return; }
+    const deleteBtn = target.closest<HTMLElement>('.btn-blueprint-delete');
+    if (deleteBtn) { requestDeleteBlueprint(bridge, parseInt(deleteBtn.dataset.id as string, 10)); return; }
+    const confirmBtn = target.closest<HTMLElement>('.btn-blueprint-delete-confirm');
+    if (confirmBtn) { deleteBlueprint(bridge, parseInt(confirmBtn.dataset.id as string, 10)); return; }
+    const cancelBtn = target.closest<HTMLElement>('.btn-blueprint-delete-cancel');
     if (cancelBtn) cancelDeleteBlueprint(bridge);
   });
 
-  document.getElementById('btn-blueprint-new')?.addEventListener('click', () => openBlueprintCreateModal(bridge));
-  document.getElementById('btn-blueprint-edit-cancel')?.addEventListener('click', () => closeBlueprintEditModal(bridge));
-  document.getElementById('btn-blueprint-edit-save')?.addEventListener('click', () => saveBlueprintEdit(bridge));
+  byIdOrNull('btn-blueprint-new')?.addEventListener('click', () => openBlueprintCreateModal(bridge));
+  byIdOrNull('btn-blueprint-edit-cancel')?.addEventListener('click', () => closeBlueprintEditModal(bridge));
+  byIdOrNull('btn-blueprint-edit-save')?.addEventListener('click', () => saveBlueprintEdit(bridge));
 
-  document.getElementById('btn-blueprint-schema-kind-flat')?.addEventListener('click', () => setBlueprintSchemaKind(bridge, 'Flat'));
-  document.getElementById('btn-blueprint-schema-kind-tree')?.addEventListener('click', () => setBlueprintSchemaKind(bridge, 'Tree'));
+  byIdOrNull('btn-blueprint-schema-kind-flat')?.addEventListener('click', () => setBlueprintSchemaKind(bridge, 'Flat'));
+  byIdOrNull('btn-blueprint-schema-kind-tree')?.addEventListener('click', () => setBlueprintSchemaKind(bridge, 'Tree'));
 
-  document.getElementById('btn-blueprint-import-parse')?.addEventListener('click', () => {
-    const textarea = document.getElementById('input-blueprint-import-sample');
+  byIdOrNull('btn-blueprint-import-parse')?.addEventListener('click', () => {
+    const textarea = byIdOrNull<HTMLTextAreaElement>('input-blueprint-import-sample');
     importBlueprintFieldNamesFromSample(bridge, textarea ? textarea.value : '');
   });
 
-  document.getElementById('input-blueprint-import-file')?.addEventListener('change', async (e) => {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = ''; // allow re-picking the same file to re-trigger 'change'
+  byIdOrNull<HTMLInputElement>('input-blueprint-import-file')?.addEventListener('change', async (e) => {
+    const input = e.target as HTMLInputElement;
+    const file = input.files && input.files[0];
+    input.value = ''; // allow re-picking the same file to re-trigger 'change'
     if (!file) return;
-    const nameEl = document.getElementById('blueprint-import-file-name');
+    const nameEl = byIdOrNull('blueprint-import-file-name');
     if (nameEl) nameEl.textContent = file.name;
     await loadBlueprintImportSampleFile(file);
   });
 
-  document.getElementById('input-blueprint-name')?.addEventListener('change', (e) => {
+  byIdOrNull('input-blueprint-name')?.addEventListener('change', (e) => {
     const state = bridge.getState();
-    bridge.patchState({ blueprintEditDraft: { ...state.blueprintEditDraft, name: e.target.value } });
+    bridge.patchState({ blueprintEditDraft: { ...state.blueprintEditDraft, name: (e.target as HTMLInputElement).value } });
   });
 
-  document.getElementById('btn-blueprint-field-add')?.addEventListener('click', () => {
+  byIdOrNull('btn-blueprint-field-add')?.addEventListener('click', () => {
     const state = bridge.getState();
     bridge.patchState({
       blueprintEditDraft: { ...state.blueprintEditDraft, fieldNames: addBlueprintFieldName(state.blueprintEditDraft.fieldNames) },
     });
   });
 
-  document.getElementById('blueprint-field-list')?.addEventListener('change', (e) => {
-    const row = e.target.closest('.blueprint-field-row');
-    if (!row || !e.target.classList.contains('blueprint-field-name-input')) return;
-    const index = parseInt(row.dataset.index, 10);
+  byIdOrNull('blueprint-field-list')?.addEventListener('change', (e) => {
+    const target = e.target as HTMLInputElement;
+    const row = target.closest<HTMLElement>('.blueprint-field-row');
+    if (!row || !target.classList.contains('blueprint-field-name-input')) return;
+    const index = parseInt(row.dataset.index as string, 10);
     const state = bridge.getState();
     bridge.patchState({
       blueprintEditDraft: {
         ...state.blueprintEditDraft,
-        fieldNames: updateBlueprintFieldName(state.blueprintEditDraft.fieldNames, index, e.target.value),
+        fieldNames: updateBlueprintFieldName(state.blueprintEditDraft.fieldNames, index, target.value),
       },
     });
   });
 
-  document.getElementById('blueprint-field-list')?.addEventListener('click', (e) => {
-    const row = e.target.closest('.blueprint-field-row');
+  byIdOrNull('blueprint-field-list')?.addEventListener('click', (e) => {
+    const target = e.target as Element;
+    const row = target.closest<HTMLElement>('.blueprint-field-row');
     if (!row) return;
-    const index = parseInt(row.dataset.index, 10);
+    const index = parseInt(row.dataset.index as string, 10);
     const state = bridge.getState();
     const { fieldNames } = state.blueprintEditDraft;
 
-    if (e.target.closest('.btn-blueprint-field-move-up')) {
+    if (target.closest('.btn-blueprint-field-move-up')) {
       bridge.patchState({ blueprintEditDraft: { ...state.blueprintEditDraft, fieldNames: moveBlueprintFieldName(fieldNames, index, -1) } });
-    } else if (e.target.closest('.btn-blueprint-field-move-down')) {
+    } else if (target.closest('.btn-blueprint-field-move-down')) {
       bridge.patchState({ blueprintEditDraft: { ...state.blueprintEditDraft, fieldNames: moveBlueprintFieldName(fieldNames, index, 1) } });
-    } else if (e.target.closest('.btn-blueprint-field-remove')) {
+    } else if (target.closest('.btn-blueprint-field-remove')) {
       bridge.patchState({ blueprintEditDraft: { ...state.blueprintEditDraft, fieldNames: removeBlueprintFieldName(fieldNames, index) } });
     }
   });
 
   // ── Tree schema editor wiring ──────────────────────────────────────────
 
-  document.getElementById('btn-blueprint-schema-add-root-group')?.addEventListener('click', () => {
+  byIdOrNull('btn-blueprint-schema-add-root-group')?.addEventListener('click', () => {
     const state = bridge.getState();
     const tree = insertContainerNode(state.blueprintEditDraft.tree, null, buildBlueprintSchemaGroup(''));
     bridge.patchState({ blueprintEditDraft: { ...state.blueprintEditDraft, tree } });
   });
 
-  document.getElementById('btn-blueprint-schema-add-root-field')?.addEventListener('click', () => {
+  byIdOrNull('btn-blueprint-schema-add-root-field')?.addEventListener('click', () => {
     const state = bridge.getState();
     const tree = insertContainerNode(state.blueprintEditDraft.tree, null, buildBlueprintSchemaField(''));
     bridge.patchState({ blueprintEditDraft: { ...state.blueprintEditDraft, tree } });
   });
 
-  document.getElementById('blueprint-schema-tree-root')?.addEventListener('change', (e) => {
-    if (!e.target.classList.contains('blueprint-schema-name')) return;
-    const path = JSON.parse(e.target.dataset.path);
+  byIdOrNull('blueprint-schema-tree-root')?.addEventListener('change', (e) => {
+    const target = e.target as HTMLInputElement;
+    if (!target.classList.contains('blueprint-schema-name')) return;
+    const path: number[] = JSON.parse(target.dataset.path as string); // written by buildBlueprintSchemaNodeEl
     const state = bridge.getState();
-    const tree = updateGroupTreeNode(state.blueprintEditDraft.tree, path, (n) => ({ ...n, name: e.target.value }));
+    const tree = updateGroupTreeNode(state.blueprintEditDraft.tree, path, (n) => ({ ...n, name: target.value }));
     bridge.patchState({ blueprintEditDraft: { ...state.blueprintEditDraft, tree } });
   });
 
-  document.getElementById('blueprint-schema-tree-root')?.addEventListener('click', (e) => {
-    const nodeEl = e.target.closest('.blueprint-schema-node');
+  byIdOrNull('blueprint-schema-tree-root')?.addEventListener('click', (e) => {
+    const target = e.target as Element;
+    const nodeEl = target.closest<HTMLElement>('.blueprint-schema-node');
     if (!nodeEl) return;
-    const path = JSON.parse(nodeEl.dataset.path);
+    const path: number[] = JSON.parse(nodeEl.dataset.path as string); // written by buildBlueprintSchemaNodeEl
     const state = bridge.getState();
     const { tree } = state.blueprintEditDraft;
 
-    if (e.target.closest('.btn-blueprint-schema-move-up')) {
+    if (target.closest('.btn-blueprint-schema-move-up')) {
       bridge.patchState({ blueprintEditDraft: { ...state.blueprintEditDraft, tree: moveGroupTreeNode(tree, path, -1) } });
-    } else if (e.target.closest('.btn-blueprint-schema-move-down')) {
+    } else if (target.closest('.btn-blueprint-schema-move-down')) {
       bridge.patchState({ blueprintEditDraft: { ...state.blueprintEditDraft, tree: moveGroupTreeNode(tree, path, 1) } });
-    } else if (e.target.closest('.btn-blueprint-schema-remove')) {
+    } else if (target.closest('.btn-blueprint-schema-remove')) {
       bridge.patchState({ blueprintEditDraft: { ...state.blueprintEditDraft, tree: removeGroupTreeNode(tree, path) } });
-    } else if (e.target.closest('.btn-blueprint-schema-add-group')) {
+    } else if (target.closest('.btn-blueprint-schema-add-group')) {
       bridge.patchState({ blueprintEditDraft: { ...state.blueprintEditDraft, tree: insertContainerNode(tree, path, buildBlueprintSchemaGroup('')) } });
-    } else if (e.target.closest('.btn-blueprint-schema-add-field')) {
+    } else if (target.closest('.btn-blueprint-schema-add-field')) {
       bridge.patchState({ blueprintEditDraft: { ...state.blueprintEditDraft, tree: insertContainerNode(tree, path, buildBlueprintSchemaField('')) } });
     }
   });
 }
-
-module.exports = {
-  fetchOutputBlueprints, fetchOutputBlueprint, selectOutputBlueprint,
-  updateOutputBlueprintMappingSource, updateOutputBlueprintTreeMappingSource,
-  renderOutputBlueprintMappingSection, renderOutputBlueprintTreeMapping,
-  renderManageBlueprintsModal,
-  requestDeleteBlueprint, cancelDeleteBlueprint, deleteBlueprint,
-  openBlueprintCreateModal, openBlueprintEditModal, closeBlueprintEditModal, saveBlueprintEdit,
-  setBlueprintSchemaKind, importBlueprintFieldNamesFromSample, renderBlueprintEditModal, renderBlueprintSchemaTree,
-  wireOutputBlueprintsEvents,
-};
-

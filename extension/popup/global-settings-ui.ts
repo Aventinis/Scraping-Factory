@@ -1,7 +1,7 @@
 // The global Settings tab (screens/settings.html) — a thin orchestrator per the popup module rule (Architecture Decision #13): the four
 // cross-session preference toggles and the default-script-name preference
 // are rendered/wired directly here, while Output Blueprint management
-// (output-blueprints-ui.js) and cross-site saved-config browsing
+// (output-blueprints-ui.ts) and cross-site saved-config browsing
 // (saved-configs-ui.ts) are each rendered/wired by the existing module that
 // already owns that concern — this file only calls into them, it doesn't
 // duplicate their logic. Same `bridge`-parameter convention every other
