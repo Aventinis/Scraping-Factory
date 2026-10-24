@@ -597,7 +597,7 @@ let _state = {
   // string (matching the <select>'s own value, '' = "None"). selectedOutput
   // BlueprintFieldNames is that blueprint's own ordered target-field list,
   // resolved once via GET /blueprints/{id} when picked (see
-  // selectOutputBlueprint in output-blueprints-ui.js) — persisted alongside
+  // selectOutputBlueprint in output-blueprints-ui.ts) — persisted alongside
   // the id so the mapping table renders immediately on popup reopen with no
   // extra round trip; if the blueprint is since edited server-side, this can
   // go stale until re-picked, the same "resolved once, not continuously kept
