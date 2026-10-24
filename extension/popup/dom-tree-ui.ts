@@ -8,7 +8,7 @@ import type { PopupBridge } from '../types/popup';
 import type { DomTreeNode } from '../types/messages';
 import { createLogger } from '../shared/logger';
 import { setLastError } from './toast';
-import { byIdOrNull } from './dom';
+import { byIdOrNull, TREE_TOGGLE_CHEVRON_SVG } from './dom';
 
 const log = createLogger('SF:Popup');
 
@@ -41,16 +41,6 @@ export function cancelPendingDomTreeRequest(): void {
 // Rendered imperatively (not through popup.ts's own render()) so a user's
 // expand/collapse clicks survive unrelated state updates (e.g. adding/
 // removing a field).
-// Issue #139: one static inline chevron per row instead of swapping between
-// two different Unicode glyphs (▸/▾) on click — see container-tree-ui.ts's
-// own copy of this constant for the full rationale. Unlike the group/api
-// trees, this one starts *collapsed* (see buildTreeNodeEl/expandAncestors
-// below), so the .collapsed class is applied at build time here too.
-const TREE_TOGGLE_CHEVRON_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" ' +
-  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-  '<polyline points="6 9 12 15 18 9"></polyline></svg>';
-
 export function formatTreeLabel(node: DomTreeNode): string {
   let label = node.tag;
   if (node.id) label += `#${node.id}`;
@@ -70,7 +60,7 @@ export function buildTreeNodeEl(node: DomTreeNode, depth: number): HTMLElement {
   const hasChildren = node.children.length > 0;
   const toggle = document.createElement('span');
   toggle.className = 'dom-tree-toggle';
-  if (hasChildren) toggle.innerHTML = TREE_TOGGLE_CHEVRON_SVG;
+  if (hasChildren) toggle.innerHTML = TREE_TOGGLE_CHEVRON_SVG; // unlike the group/API trees, this one starts collapsed (see below)
   toggle.classList.toggle('collapsed', hasChildren); // starts collapsed, unlike the group/api trees
   row.appendChild(toggle);
 

@@ -5,7 +5,7 @@ import type * as SFWire from '../types/wire';
 import type { DerivedFieldScope, DataPreview, BlockOutput, PopupBridge, Screen, State, StatePatch } from '../types/popup';
 import type { StoredSession } from './session-restore';
 import type { ApiConfigDraft, ApiFieldDraft, ApiGroupDraft, ApiNodeDraft } from './api-config';
-import { byIdOrNull, qsa } from './dom';
+import { byIdOrNull, qsa, escapeHtml } from './dom';
 import { createLogger } from '../shared/logger';
 const log = createLogger('SF:Popup');
 
@@ -16,8 +16,7 @@ import { initTheme, getTheme, cycleTheme } from '../shared/theme';
 import { loadGlobalSettings, getGlobalSettings, updateGlobalSettings } from '../shared/global-settings';
 
 import {
-  STATES, escapeHtml,
-  parseUrlTemplateParts, buildUrlTemplate, parseValueListInput, findUrlTemplateMatches, mergeValueListValues,
+  STATES, parseUrlTemplateParts, buildUrlTemplate, parseValueListInput, findUrlTemplateMatches, mergeValueListValues,
   buildStaticListSource, buildDiscoverySource, buildRangeSource, buildBrowserDiscoverySource, RANGE_FORMAT_PRESETS,
   detectRangeFormat, findUrlPartValue, rangeFormatExample,
   buildApiHeaders, buildApiConfig,

@@ -20,7 +20,7 @@ import type {
 } from '../types/popup';
 import { createLogger } from '../shared/logger';
 import { t } from '../i18n/i18n';
-import { escapeHtml, STATES } from './api-config';
+import { STATES } from './api-config';
 import { showToast } from './toast';
 import { collectFieldNames } from './scraping-config-builder';
 import { getResolvedCompanionUrl, companionFetch } from './companion-client';
@@ -31,7 +31,7 @@ import {
   blueprintTreeSchemaIsValid, createTreeMappingDraft, updateTreeMappingSource,
   buildBlueprintTreeFromSample, countBlueprintTreeLeaves,
 } from './output-blueprints';
-import { byIdOrNull } from './dom';
+import { byIdOrNull, escapeHtml } from './dom';
 
 const log = createLogger('SF:Popup');
 

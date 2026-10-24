@@ -14,12 +14,12 @@ import { t } from '../i18n/i18n';
 import { applyRecommendedHardening } from './hardening-presets';
 import { autoOpenAdvanced } from './advanced-disclosure-ui';
 import { retryStatusCodesDiffer } from './advanced-defaults';
-import { STATES, escapeHtml } from './api-config';
+import { STATES } from './api-config';
 import {
   collectFieldNames, addNullRateCheck, removeNullRateCheck, updateNullRateCheck,
   addRequiredField, removeRequiredField,
 } from './scraping-config-builder';
-import { byIdOrNull } from './dom';
+import { byIdOrNull, escapeHtml } from './dom';
 
 const log = createLogger('SF:Popup');
 

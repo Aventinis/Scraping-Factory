@@ -15,7 +15,7 @@ import { isDerivedField } from './combine-split-fields';
 import { openCombineFieldModal, openSplitFieldModal } from './combine-split-fields-ui';
 import { patchApiConfigDraft } from './api-config-shared-ui';
 import { wirePathPickerEvents } from './json-path-picker-ui';
-import { byIdOrNull } from './dom';
+import { byIdOrNull, TREE_TOGGLE_CHEVRON_SVG } from './dom';
 
 const log = createLogger('SF:ApiConfigUI');
 
@@ -23,14 +23,6 @@ const log = createLogger('SF:ApiConfigUI');
 const currentDraft = (bridge: PopupBridge): ApiConfigDraft => bridge.getState().apiConfigDraft as ApiConfigDraft;
 // A tree draft (the flat `fields` shape only exists on the wire): `groups` is always set while the screen is open.
 const currentGroups = (bridge: PopupBridge): ApiNodeDraft[] => currentDraft(bridge).groups as ApiNodeDraft[];
-
-// Issue #139: one static inline chevron per row instead of swapping between
-// two different Unicode glyphs (▸/▾) on click — see container-tree-ui.ts's
-// own copy of this constant for the full rationale.
-const TREE_TOGGLE_CHEVRON_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" ' +
-  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-  '<polyline points="6 9 12 15 18 9"></polyline></svg>';
 
 // Same pattern as the container tree editor (buildGroupTreeNodeEl). Rows differ: an editable name input and a read-only path; no
 // repeating / attribute / mode label and no frame badge (JSON has no iframes).

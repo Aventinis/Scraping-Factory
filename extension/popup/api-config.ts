@@ -166,16 +166,6 @@ export const STATES: { readonly [K in Screen]: K } = {
   SETTINGS:           'SETTINGS',
 };
 
-// Generic, dependency-free HTML-escaping helper — lives here for the same
-// reason as STATES above.
-export function escapeHtml(str: unknown): string {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 // ── API-Mode config assembly (Issue #53 Phase 5) ────────────────────────────
 // Turns a confirmed Phase-4 candidate request into a parameterized ApiConfig
 // (companion/ScrapingFactory.Compiler/IR/ApiConfig.cs) — URL decomposed into

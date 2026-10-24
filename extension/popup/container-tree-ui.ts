@@ -29,19 +29,9 @@ import { resetTextFilter, effectiveMatchCount, wireTextFilter } from './selector
 import { renderTransformList, renderTransformPreview, wireTransformList } from './field-transforms-ui';
 import { openCombineFieldModal, openSplitFieldModal } from './combine-split-fields-ui';
 import { renderMatchCountHint, populateAttributeSelect } from './field-modal';
-import { byIdOrNull, parseDataPath } from './dom';
+import { byIdOrNull, parseDataPath, TREE_TOGGLE_CHEVRON_SVG } from './dom';
 
 const log = createLogger('SF:ContainerTreeUI');
-
-// Issue #139: one static inline chevron per row instead of swapping between
-// two different Unicode glyphs (▸/▾) on click — collapsed/expanded is now a
-// CSS rotation driven by the .collapsed class (see popup.html's shared
-// .group-tree-toggle svg / .collapsed rule). Same duplicated-per-file
-// pattern api-config-ui.ts/popup.ts use for their own tree toggles.
-const TREE_TOGGLE_CHEVRON_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" ' +
-  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-  '<polyline points="6 9 12 15 18 9"></polyline></svg>';
 
 // ── Container tree editor ────────────────────────────────────────────────────
 // Same visual pattern as the DOM-tree-view below (indentation, toggle arrow,

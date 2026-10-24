@@ -39,3 +39,10 @@ export function escapeHtml(value: unknown): string {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
+
+// The chevron of the three tree views (container, API response, DOM inspector): one static inline SVG per row; collapsed/expanded
+// is a CSS rotation driven by the .collapsed class (popup.html's shared .group-tree-toggle svg rule), so no glyph is swapped on click.
+export const TREE_TOGGLE_CHEVRON_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<polyline points="6 9 12 15 18 9"></polyline></svg>';
