@@ -21,7 +21,8 @@ const NODE_SCRIPTS = ['build.js', 'docs-build.js', 'jest-transform.js'];
 
 function jsSources(dir = ROOT) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    if (['node_modules', 'dist', 'dist.building'].includes(entry.name)) return [];
+    // test-support/ holds the shared setup of the (JavaScript) tests.
+    if (['node_modules', 'dist', 'dist.building', 'test-support'].includes(entry.name)) return [];
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) return jsSources(full);
     return /\.js$/.test(entry.name) && !/\.test\.js$/.test(entry.name) ? [path.relative(ROOT, full)] : [];

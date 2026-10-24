@@ -2,7 +2,7 @@
 // below (written against the original hardcoded German copy) depends on it,
 // via the "Engine + browser actions integration" describe's own
 // require('./popup') (which calls initI18n() as part of init()). Same setup
-// as popup.test.js's own top-level line.
+// as test-support/popup-env.js.
 Object.defineProperty(window.navigator, 'language', { value: 'de-DE', configurable: true });
 
 const { renderBrowserActions } = require('./browser-actions-ui');

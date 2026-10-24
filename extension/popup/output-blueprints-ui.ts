@@ -399,7 +399,7 @@ export function importBlueprintFieldNamesFromSample(bridge: PopupBridge, sampleT
 // existing paste flow, and reusing the exact same
 // importBlueprintFieldNamesFromSample code path for both). Uses
 // FileReader rather than File.text() — same convention
-// download-helpers.test.js/popup.test.js's own readBlobText helper already
+// download-helpers.test.js/test-support/popup-env.js's readBlobText helper already
 // established, since jsdom (this project's test environment) doesn't
 // implement Blob/File.text().
 function loadBlueprintImportSampleFile(file: File): Promise<void> {

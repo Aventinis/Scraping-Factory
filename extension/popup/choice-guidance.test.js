@@ -1,7 +1,7 @@
 // Issue #398: guidance for the first decisions of a scrape — the pure logic
 // (choice-guidance.ts), the match-count toast that now checks the count against
 // the chosen container type, and the container type toggle in the tree rows.
-// German is the language every popup test assumes (see popup.test.js).
+// German is the language every popup test assumes (see test-support/popup-env.js).
 Object.defineProperty(window.navigator, 'language', { value: 'de-DE', configurable: true });
 
 const { containerCountAdvice } = require('./choice-guidance');
