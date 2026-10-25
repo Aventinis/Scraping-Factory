@@ -6,6 +6,9 @@ import type { RecordedStep } from '../types/messages';
 export interface StepRecorderDeps {
   // The selector a replay should use for this element (unique where possible).
   selectorFor(element: Element): string;
+  // Which of several matches of `selector` this element is, when the selector cannot tell them apart: only the first and the last can be
+  // addressed by a click action.
+  targetFor?(element: Element, selector: string): 'first' | 'last';
   resolveFramePath(): Promise<string[] | null>;
   send(step: RecordedStep): void;
   log(...args: unknown[]): void;
@@ -67,11 +70,14 @@ export function createStepRecorder(deps: StepRecorderDeps, doc: Document = docum
   function onClick(event: MouseEvent): void {
     if (!fromUser(event) || !(event.target instanceof Element)) return;
     const target = event.target.closest(CLICK_TARGET_SELECTOR) ?? event.target;
+    // Clicking into a text field only focuses it: the typing that follows is the step.
+    if (fillTypeOf(target) !== null) return;
     lastFillTarget = null;
     const selector = deps.selectorFor(target);
     const late = isLate(target);
+    const position = deps.targetFor?.(target, selector);
     deps.log('STEP click', selector);
-    emit((framePath) => ({ kind: 'click', selector, framePath, late }));
+    emit((framePath) => ({ kind: 'click', selector, framePath, late, ...(position === 'last' ? { target: position } : {}) }));
   }
 
   // Only the field is noted, once per run of typing: the value is deliberately never touched.

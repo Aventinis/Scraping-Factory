@@ -11,6 +11,7 @@ const sameFrame = (a: string[] | null, b: string[] | null): boolean => JSON.stri
 function repeatsPrevious(step: RecordedStep, previous: RecordedStep | undefined): boolean {
   if (!previous || previous.kind !== step.kind || !sameFrame(previous.framePath, step.framePath)) return false;
   if (step.kind === 'scroll') return step.containerSelector === (previous as typeof step).containerSelector;
+  if (step.kind === 'click' && step.target !== (previous as typeof step).target) return false;
   return step.selector === (previous as typeof step).selector;
 }
 
@@ -37,7 +38,7 @@ export function stepsToActions(steps: RecordedStep[]): SFDraft.BrowserAction[] {
     }
 
     if (step.kind === 'click') {
-      actions.push(withFrame({ ...baseAction('click'), selector: step.selector }, step.framePath));
+      actions.push(withFrame({ ...baseAction('click'), selector: step.selector, ...(step.target ? { target: step.target } : {}) }, step.framePath));
     } else if (step.kind === 'fill') {
       // The value is not recorded: the editor asks for the name of the environment variable that will hold it.
       actions.push(withFrame({

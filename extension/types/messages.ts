@@ -69,7 +69,7 @@ export interface ApiCandidatesMessage {
 
 // One thing the user did while recording their steps (Issue #508). Never carries typed text: a fill only names the field.
 export type RecordedStep =
-  | { kind: 'click'; selector: string; framePath: string[] | null; late: boolean }
+  | { kind: 'click'; selector: string; framePath: string[] | null; late: boolean; target?: 'first' | 'last' }
   | { kind: 'fill'; selector: string; framePath: string[] | null; late: boolean; inputType: string }
   | { kind: 'scroll'; containerSelector: string | null; framePath: string[] | null };
 
@@ -99,7 +99,7 @@ export type ForwardedToTabType =
   | 'HOVER_HIGHLIGHT' | 'HOVER_HIGHLIGHT_CLEAR' | 'API_CAPTURE_START' | 'API_CAPTURE_STOP';
 
 // Content script → side panel, forwarded as they are.
-export type ForwardedToPanelType = 'HOVER_ELEMENT' | 'DOM_TREE' | 'PREVIEW_RESULT' | 'API_CAPTURE_ENTRY' | 'API_CANDIDATES' | 'STEP_RECORDED';
+export type ForwardedToPanelType = 'HOVER_ELEMENT' | 'DOM_TREE' | 'PREVIEW_RESULT' | 'API_CAPTURE_ENTRY' | 'API_CANDIDATES';
 
 export type ServiceWorkerInboundMessage =
   | { type: 'GET_LOGS' }

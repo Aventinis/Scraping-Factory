@@ -36,6 +36,27 @@ describe('step recorder', () => {
     expect(sent).toEqual([{ kind: 'click', selector: '#go', framePath: null, late: false }]);
   });
 
+  test('the last of several identical buttons is a click with target "last", the first needs none', async () => {
+    document.body.innerHTML = '<ul><li><button class="t">A</button></li><li><button class="t">A</button></li></ul>';
+    make({
+      selectorFor: () => 'button.t',
+      targetFor: (el, selector) => { const all = document.querySelectorAll(selector); return all[all.length - 1] === el && all[0] !== el ? 'last' : 'first'; },
+    });
+    const [first, second] = document.querySelectorAll('button.t');
+    first.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    second.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flush();
+    expect(sent.map(s => s.target)).toEqual([undefined, 'last']);
+  });
+
+  test('clicking into a text field to focus it is no step; the typing that follows is', async () => {
+    make();
+    document.getElementById('user').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    type(document.getElementById('user'), 'a');
+    await flush();
+    expect(sent.map(s => s.kind)).toEqual(['fill']);
+  });
+
   test('typing records the field and its type once per run — and never the typed text', async () => {
     make();
     const secret = 'correct-horse-battery-staple';

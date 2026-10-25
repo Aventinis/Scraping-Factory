@@ -661,12 +661,5 @@ describe('step recording', () => {
 
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'STEP_RECORDING_ENDED' }));
   });
-
-  test('a recorded step is relayed to the side panel as it is', () => {
-    const step = { kind: 'click', selector: 'button.login', framePath: null, late: false };
-
-    capturedListener({ type: 'STEP_RECORDED', step }, { tab: { id: 7 } });
-
-    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'STEP_RECORDED', step });
-  });
 });
+

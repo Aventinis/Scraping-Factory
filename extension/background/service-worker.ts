@@ -186,7 +186,7 @@ chrome.runtime.onMessage.addListener((message: ServiceWorkerInboundMessage, send
     });
   }
 
-  if (message.type === 'HOVER_ELEMENT' || message.type === 'DOM_TREE' || message.type === 'PREVIEW_RESULT' || message.type === 'API_CAPTURE_ENTRY' || message.type === 'API_CANDIDATES' || message.type === 'STEP_RECORDED') {
+  if (message.type === 'HOVER_ELEMENT' || message.type === 'DOM_TREE' || message.type === 'PREVIEW_RESULT' || message.type === 'API_CAPTURE_ENTRY' || message.type === 'API_CANDIDATES') {
     // Transient, side-panel-only messages — no session storage fallback,
     // since missing one while the panel is closed is harmless.
     chrome.runtime.sendMessage(message)

@@ -20,6 +20,11 @@ describe('stepsToActions', () => {
     expect(stepsToActions([click('.a'), click('.b'), click('.a')]).map(a => a.selector)).toEqual(['.a', '.b', '.a']);
   });
 
+  test('a click on the last of several identical elements keeps target "last"; the same selector with another target is another step', () => {
+    expect(stepsToActions([click('button.t', { target: 'last' })])[0].target).toBe('last');
+    expect(stepsToActions([click('button.t'), click('button.t', { target: 'last' })]).map(a => a.target)).toEqual(['first', 'last']);
+  });
+
   test('many keystrokes into one field are one fill', () => {
     expect(stepsToActions([fill('#q'), fill('#q')])).toHaveLength(1);
   });

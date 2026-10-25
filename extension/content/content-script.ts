@@ -1552,8 +1552,14 @@ function recordedSelectorFor(element: Element): string {
   return querySelectorAllWithText(document, narrowed).length === 1 ? narrowed : base;
 }
 
+function recordedTargetFor(element: Element, selector: string): 'first' | 'last' {
+  const matches = querySelectorAllWithText(document, selector);
+  return matches.length > 1 && matches[0] !== element && matches[matches.length - 1] === element ? 'last' : 'first';
+}
+
 const stepRecorder = createStepRecorder({
   selectorFor: recordedSelectorFor,
+  targetFor: recordedTargetFor,
   resolveFramePath,
   send: (step) => sendToPanel({ type: 'STEP_RECORDED', step }),
   log,
