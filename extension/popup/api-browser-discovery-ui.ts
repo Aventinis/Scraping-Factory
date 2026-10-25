@@ -122,6 +122,8 @@ export function renderBrowserDiscoverySourceFields(draft: ApiConfigDraft, part: 
       card.insertAdjacentHTML('beforeend', `<div class="browser-action-field-row">
           <label>${escapeHtml(t('browserActions.maxIterationsLabel'))}</label>
           <input type="number" class="discovery-action-max-iterations" data-part-id="${safePartId}" data-index="${i}" value="${action.maxIterations}" min="1" />
+        </div>
+        <div class="browser-action-field-row">
           <label>${escapeHtml(t('browserActions.waitAfterRoundSecondsLabel'))}</label>
           <input type="number" class="discovery-action-wait-after-ms" data-part-id="${safePartId}" data-index="${i}" placeholder="1" value="${escapeHtml(msToSecondsText(action.waitAfterMs))}" min="0" step="any" />
         </div>

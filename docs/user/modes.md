@@ -118,10 +118,10 @@ instead: discard it and pick again to change it.
 
 Each **?** on that screen explains the concept in place: what a **variable** URL
 part is, what each value source does (with an example), what **→ Variable** does to
-a request-body value. The everyday value sources — **Value list**, **List from
-another request** and **Range** — are shown first; **Collect from the page (browser)** and the
-**token value** are under **Advanced sources**, and a body value's **value type**
-is under its own **Advanced**.
+a request-body value. All value sources — **Value list**, **List from another
+request**, **Range** and **Collect from the page (browser)** — are plain options of the
+parameter's card (the **token value** joins them when a login token is set up), and
+a body value's **value type** is under its own **Advanced**.
 
 ### Range values and `today`
 

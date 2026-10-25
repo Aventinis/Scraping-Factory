@@ -92,11 +92,20 @@ function assert(condition, message) {
     assert(/→ Variable/.test(bodyHelp.text) && bodyHelp.example.includes('category'), `body popover: ${JSON.stringify(bodyHelp)}`);
 
     const card = popup.locator('.api-config-param-card').first();
-    const everyday = await card.locator('.api-config-source-kind > label .api-config-source-kind-radio').evaluateAll((radios) => radios.filter((r) => !r.closest('details')).map((r) => r.value));
-    assert(JSON.stringify(everyday) === JSON.stringify(['staticList', 'discovery', 'range']), `everyday sources up front: ${JSON.stringify(everyday)}`);
-    const advancedSources = card.locator('details[data-advanced="api-source-advanced"]');
-    assert(!(await advancedSources.evaluate((el) => el.open)), 'advanced sources start collapsed');
-    assert(await advancedSources.locator('.api-config-source-kind-radio[value="browserDiscovery"]').count() === 1, 'browser discovery is under Advanced');
+    // Issue #518: every source is a plain option; the browser-discovery radio is visible without opening anything.
+    const sources = await card.locator('.api-config-source-kind > label .api-config-source-kind-radio').evaluateAll((radios) => radios.map((r) => r.value));
+    assert(JSON.stringify(sources) === JSON.stringify(['staticList', 'discovery', 'range', 'browserDiscovery']), `all sources up front: ${JSON.stringify(sources)}`);
+    assert(await card.locator('.api-config-source-kind details').count() === 0, 'no Advanced sources disclosure');
+    assert(await card.locator('.api-config-source-kind-radio[value="browserDiscovery"]').isVisible(), 'browser discovery is visible without opening anything');
+    for (const width of [280, 320]) {
+      await popup.setViewportSize({ width, height: 900 });
+      const overflow = await card.evaluate((el) => {
+        const right = el.getBoundingClientRect().right;
+        return [...el.querySelectorAll('.api-config-source-kind > label')].filter((l) => l.getBoundingClientRect().right > right + 1).length;
+      });
+      assert(overflow === 0, `the source options must wrap inside the card at ${width}px (${overflow} stick out)`);
+    }
+    await popup.setViewportSize({ width: 1280, height: 720 });
     assert(/List from another request/.test(await card.locator('.api-config-source-kind').textContent()), 'plainer label for the discovery source');
     const staticHelp = await helpText('.api-config-source-kind label:has(input[value="staticList"])');
     assert(staticHelp.example === 'electronics, books', `value-list popover example: ${staticHelp.example}`);

@@ -383,11 +383,13 @@ body {
 .browser-action-selector-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
 .browser-action-selector-row label { flex: none; width: 60px; font-size: 11px; color: var(--color-text-muted); }
 .browser-action-selector-row .field-selector { flex: 1; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 3px 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.browser-action-field-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+/* A long label (German: "Pause nach jeder Runde (Sekunden)") must not squeeze its input to nothing: the label may shrink and the row wraps
+   before the input gets narrower than something one can type a number into. */
+.browser-action-field-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-bottom: 4px; }
 .browser-action-card .advanced-disclosure { margin-top: 4px; }
-.browser-action-field-row label { flex: none; font-size: 11px; color: var(--color-text-muted); }
+.browser-action-field-row label { flex: 0 1 auto; min-width: 0; font-size: 11px; color: var(--color-text-muted); }
 .browser-action-field-row select { flex: 1; min-width: 0; font-size: 11px; }
-.browser-action-field-row input { flex: 1; min-width: 0; font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
+.browser-action-field-row input { flex: 1 1 64px; min-width: 56px; font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
 .browser-action-hint { font-size: 10px; color: var(--color-text-faint); margin: 4px 0 0; }
 
 /* Issue #130: one row per hardening null-rate check. */
@@ -514,7 +516,7 @@ body {
 .api-config-part-name { width: 90px; font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
 .api-config-param-card { padding: 8px; background: var(--color-surface-subtle); border-radius: var(--radius-md); margin-bottom: 6px; }
 .api-config-param-card .row-label { margin-bottom: 4px; }
-.api-config-source-kind { display: flex; gap: 10px; font-size: 11px; margin-bottom: 6px; }
+.api-config-source-kind { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; margin-bottom: 6px; }
 .api-config-source-fields textarea { width: 100%; font-size: 11px; padding: 4px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-family: monospace; }
 .api-config-source-fields .api-config-autofill-pool { margin-top: 4px; }
 .api-config-source-fields input[type="text"] { font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }

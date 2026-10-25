@@ -20,24 +20,29 @@ const radios = (root) => [...root.querySelectorAll('.api-config-source-kind-radi
 describe('value sources', () => {
   beforeEach(() => { document.body.innerHTML = '<div id="api-config-parameters"></div>'; });
 
-  test('static list, another request and range are up front; browser discovery is under Advanced', () => {
+  test('every source is a plain option of the card: no Advanced sources disclosure (Issue #518)', () => {
     renderApiConfigParameters(draftWith('staticList'), null, null);
     const card = document.querySelector('.api-config-param-card');
-    const advanced = card.querySelector('details.advanced-disclosure[data-advanced="api-source-advanced"]');
 
     expect(radios(card)).toEqual(['staticList', 'discovery', 'range', 'browserDiscovery']);
-    expect(radios(advanced)).toEqual(['browserDiscovery']);
-    expect(advanced.open).toBe(false);
+    expect(card.querySelector('details')).toBeNull();
+    expect(card.querySelector('.api-config-source-kind').querySelectorAll(':scope > label')).toHaveLength(4);
   });
 
-  test('Advanced opens by itself while browser discovery is the chosen source', () => {
+  test('browser discovery stays selectable and chosen when it is the source', () => {
     renderApiConfigParameters(draftWith('browserDiscovery'), null, null);
-    expect(document.querySelector('details[data-advanced="api-source-advanced"]').open).toBe(true);
+    const checked = document.querySelector('.api-config-source-kind-radio:checked');
+    expect(checked.value).toBe('browserDiscovery');
+    expect(document.querySelector('details')).toBeNull();
   });
 
-  test('the token value joins the advanced group only while a bootstrap exists', () => {
+  test('the token value joins the options only while a bootstrap exists', () => {
+    renderApiConfigParameters(draftWith('staticList'), null, null);
+    expect(radios(document)).not.toContain(BOOTSTRAP_SOURCE_KIND);
+
     renderApiConfigParameters(draftWith('staticList', { bootstrap: { name: 'token' } }), null, null);
-    expect(radios(document.querySelector('details[data-advanced="api-source-advanced"]'))).toEqual(['browserDiscovery', BOOTSTRAP_SOURCE_KIND]);
+    expect(radios(document)).toEqual(['staticList', 'discovery', 'range', 'browserDiscovery', BOOTSTRAP_SOURCE_KIND]);
+    expect(document.querySelector('details')).toBeNull();
   });
 
   test('every source has a help host with its own key', () => {
