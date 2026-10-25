@@ -9,8 +9,8 @@
 // (one string, present or absent), this holds several related preferences
 // that are always read/written together — the four toggles that used to be
 // per-scrape opt-ins (Output as JSON, trial-run data preview, full output-
-// file download, editable XML config) plus the default-script-name
-// preference — so it's one chrome.storage.local key holding one object,
+// file download, editable XML config) plus the default-script-name and
+// default-output-file-name preferences — so it's one chrome.storage.local key holding one object,
 // rather than one key per value.
 const STORAGE_KEY = 'globalSettings';
 
@@ -22,6 +22,8 @@ export interface GlobalSettingsValues {
   skipVerification: boolean;
   scriptNameMode: 'fixed' | 'hostname';
   scriptNameFixed: string;
+  outputNameMode: 'fixed' | 'script';
+  outputNameFixed: string;
 }
 
 // What may be stored: the current shape, plus the boolean the pre-#229 versions wrote.
@@ -43,6 +45,10 @@ export const DEFAULTS: GlobalSettingsValues = {
   skipVerification: false,
   scriptNameMode: 'fixed',
   scriptNameFixed: 'scraper',
+  // Issue #509: the output file name used when the per-scrape field is empty. 'fixed' with an empty name is today's `output`;
+  // 'script' follows the (effective) script name.
+  outputNameMode: 'fixed',
+  outputNameFixed: '',
 };
 
 let cached: GlobalSettingsValues = { ...DEFAULTS };

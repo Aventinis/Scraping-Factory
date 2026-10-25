@@ -29,6 +29,27 @@ Other output-related preferences in **Settings**: **Show trial-run data
 preview**, **Download the full scraped data file** (the complete trial-run
 output, from the done screen), **Editable config file (XML)** (see below), and **Skip the trial run** (see below).
 
+## Default output file name
+
+The data file a run writes is called `output` plus its extension (`output.csv`,
+`output.xml`, …) unless you type an **Output file name** for the scraper. In
+**Settings**, **Default output file name** sets what is used while that field is
+left empty:
+
+![The default output file name in Settings](images/output-default-name.png)
+
+- **Same as the script name** — the data file is named after the script:
+  `shop-example-com.py` writes `shop-example-com.csv`.
+- **Custom name** — that name is used for every scraper (for example `daily-data`);
+  left empty it stays `output`, as before.
+
+A name you type for a scraper always wins. The default is a preference of this
+browser: it is not saved into a configuration or its export, and it applies when the
+script is generated. Both kinds of name are cleaned up the same way (letters,
+digits, `-` and `_`), so `Mein Skript!` becomes `Mein_Skript`. In
+[Blocks mode](modes.md#blocks) every block names its own file, so the default does
+not apply there.
+
 ## Skip the trial run
 
 Normally the companion runs the generated script once against the live page

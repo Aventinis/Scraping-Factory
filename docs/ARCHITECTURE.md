@@ -736,6 +736,21 @@ docs/design-notes/extension.md for the details.
 - Tests: `popup/hardening-presets.test.js`, `popup/hardening-presets-ui.test.js`,
   real-browser check `e2e/examples/issue-399-hardening-plain-language-check.js`
 
+### 2.10s Default output file name (Issue #509)
+
+Settings → **Default output file name** (`outputNameMode` `'fixed' | 'script'`, `outputNameFixed`, in the global
+settings) supplies the output file name for a run whose per-scraper **Output file name** field is empty:
+typed name → else the default → else nothing (today's `output`). It is applied when the script is generated,
+not in `configOptionsFromState`, so saved configurations and exports never carry it. See
+docs/design-notes/extension.md.
+
+- Extension: `popup/output-name.ts` (pure `resolveOutputFileName`), `popup/companion-client.ts` (generate passes
+  the resolved name as an override), `shared/global-settings.ts`, `popup/global-settings-ui.ts`,
+  `popup/screens/settings.html`, `settings.outputName*` / `help.outputName.overview` in `i18n/*.json`,
+  `popup/docs-links.ts` (`outputName`)
+- Tests: `popup/output-name.test.js`, `popup/output-name-popup.test.js`, `popup/global-settings-ui.test.js`,
+  real-browser check `e2e/examples/issue-509-default-output-name-check.js` (fixture `speisekarte`)
+
 ### 2.10r Record my steps (Issue #508)
 
 The Browser engine's actions can be recorded instead of built by hand. The panel asks the service worker to

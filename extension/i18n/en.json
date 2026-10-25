@@ -526,6 +526,11 @@
     "scriptNameModeFixed": "Fixed name",
     "scriptNameModeHostname": "From website",
     "scriptNameFixedLabel": "Fixed script name",
+    "outputNameModeLabel": "Default output file name",
+    "outputNameModeScript": "Same as the script name",
+    "outputNameModeFixed": "Custom name",
+    "outputNameFixedLabel": "Custom output file name",
+    "outputNameHint": "Used when the Output file name field is left empty.",
     "allConfigsTitle": "All saved configurations",
     "allConfigsEmpty": "No saved configurations yet.",
     "outputFormatLabel": "Output format",
@@ -1049,6 +1054,11 @@
     "scriptName": {
       "overview": {
         "text": "Fixed name: pre-fills the script name of every new scraper. From website: the name is derived from the current site's address each time. You can still change it per scraper."
+      }
+    },
+    "outputName": {
+      "overview": {
+        "text": "Same as the script name: an empty Output file name uses the script's name, so shop-example-com.py writes shop-example-com.csv. Custom name: that name is used instead; left empty it stays output. A name typed for a scraper always wins."
       }
     },
     "account": {

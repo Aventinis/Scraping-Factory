@@ -13,6 +13,7 @@ import {
 } from '../shared/companion-config';
 import { STATES } from './api-config';
 import { showToast, showErrorToast, hideToast, setLastError } from './toast';
+import { resolveOutputFileName } from './output-name';
 import { buildScrapingConfig, buildVerificationValues, computeScriptFileNamePatch, configOptionsFromState } from './scraping-config-builder';
 import type { CombinedComponentRef } from './combined-config';
 import { buildHeaderVerificationValues } from './request-headers';
@@ -248,7 +249,9 @@ export async function generate(bridge: PopupBridge): Promise<void> {
   // externalConfig moved from per-scrape _state to the cross-session global
   // Settings tab (shared/global-settings.ts) — read from there now.
   const globalSettings = getGlobalSettings();
-  const config = buildScrapingConfig(configOptionsFromState(state, globalSettings, { combinedComponents }));
+  // Issue #509: only a real run takes the default output file name; a saved or exported configuration keeps what the user typed.
+  const outputFileName = resolveOutputFileName(state.outputFileName, state.scriptFileName, globalSettings);
+  const config = buildScrapingConfig(configOptionsFromState(state, globalSettings, { combinedComponents, outputFileName }));
   // One-time test values (Fill, bootstrap, request headers) go only in this request body, deliberately out of `config` and so
   // out of the log line, the export and bug reports. A bad environment-variable name is reported up front, naming it.
   const invalidEnvVars = findInvalidEnvVarNames(config);
