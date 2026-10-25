@@ -736,6 +736,24 @@ docs/design-notes/extension.md for the details.
 - Tests: `popup/hardening-presets.test.js`, `popup/hardening-presets-ui.test.js`,
   real-browser check `e2e/examples/issue-399-hardening-plain-language-check.js`
 
+### 2.10r Record my steps (Issue #508)
+
+The Browser engine's actions can be recorded instead of built by hand. The panel asks the service worker to
+reload the tab and arm the recorder in it; the recorder (every frame) reports clicks, typing and scrolling as
+`STEP_RECORDED` messages, which the panel collects and converts into `BrowserAction`s on stop. The service worker
+re-arms the recorder after every load of the recorded tab, so a navigation does not end the recording. Typed
+text is never read. See docs/design-notes/extension.md for the rules.
+
+- Extension: `content/step-recorder.ts` (event listeners, scroll and late-element detection),
+  `content/content-script.ts` (`recordedSelectorFor`, `recordedTargetFor`, the START/STOP handlers),
+  `background/service-worker.ts` (`STEP_RECORDING_START/STOP`, `armStepRecording`, tab id in session storage),
+  `popup/step-recording.ts` (pure `stepsToActions`), `popup/step-recording-ui.ts` (button, live list,
+  append / replace choice), `popup/message-router.ts` (`STEP_RECORDED`, `STEP_RECORDING_ENDED`),
+  `types/messages.ts` (`RecordedStep`), `browserActions.record.*` in `i18n/*.json`
+- Tests: `content/step-recorder.test.js`, `popup/step-recording.test.js`, `popup/step-recording-popup.test.js`,
+  `background/service-worker.test.js`, real-browser check `e2e/examples/issue-508-record-steps-check.js`
+  (fixtures `login-flow`, `infinite-scroll`, `click-targets`)
+
 ### 2.10q One data-point search for recorded requests and embedded JSON (Issue #507)
 
 The main **Find data point** search clicks once and searches both the recorded responses and the page's own

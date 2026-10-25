@@ -1,4 +1,4 @@
-<!-- source: c35bfabaf422 -->
+<!-- source: 4ec1c286d4ad -->
 # Browser-Engine und Aktionen
 
 Standardmäßig holt ein Skript die Seite mit einfachem HTTP und liest das HTML, das
@@ -82,6 +82,42 @@ Zeiten werden in einfachen **Sekunden** angegeben (zum Beispiel **Höchstens war
 geklickt wird, der Scroll-Schritt, der Container eines Scrollens und sein
 „Mehr laden“-Button — stehen unter einem zugeklappten **Erweitert**, das sich merkt,
 ob du es geöffnet hast.
+
+### Meine Schritte aufzeichnen
+
+Du weißt, was *du* auf der Seite tust, um an die Daten zu kommen, nicht, welche Selektoren
+einzutragen sind. Klicke auf **Meine Schritte aufzeichnen** und mache es von Hand:
+
+1. Die Seite lädt neu, damit die Aufzeichnung vom Zustand startet, von dem auch das
+   Skript startet.
+2. Klicke, tippe und scrolle wie gewohnt. Das Panel listet jeden Schritt auf, sobald er
+   aufgezeichnet wird.
+3. Klicke auf **Aufzeichnung beenden**. Die Schritte werden zu den Aktionen oben, jede
+   weiter änderbar oder entfernbar. Enthält die Liste schon Aktionen, wählst du **An die
+   Liste anhängen**, **Liste ersetzen** oder **Verwerfen**.
+
+![Die Schritte während der Aufzeichnung eines Logins](images/browser-engine-record-steps.png)
+
+Was aufgezeichnet wird und was nicht:
+
+- Ein **Klick** wird zu **Klicken** (mehrere Klicks hintereinander auf dasselbe Element
+  werden einer). Ein Klick in ein Textfeld setzt nur den Fokus und ist kein Schritt.
+- Tippen wird zu **Ausfüllen**, aber **was du tippst, wird nie aufgezeichnet**: Die Aktion
+  nennt nur das Feld, und der Editor fragt nach dem Namen der Umgebungsvariable, die den
+  Wert enthält, wie bei jedem Ausfüllen. Ein Passwort gelangt nie in ein Skript, eine
+  gespeicherte Konfiguration oder ein Log.
+- Ein **Scrollen** wird nur dann zu **Scrollen**, wenn die Seite dadurch mehr Inhalt geladen
+  hat; ein bloßes Lese-Scrollen wird ignoriert.
+- Ein Element, das direkt nach dem Laden nicht auf der Seite war (ein aufklappendes Menü,
+  ein erscheinendes Feld), bekommt ein **Warten** davor.
+- Nicht aufgezeichnet: Enter zum Absenden (klicke stattdessen den Button), Auswahllisten,
+  Ziehen und Tastenkürzel. Ergänze sie von Hand. Ein CAPTCHA wird nie gelöst oder
+  aufgezeichnet; erscheint eines, schlägt das Skript ehrlich fehl.
+- Navigiert die Seite während der Aufzeichnung, läuft sie auf der neuen Seite weiter. Sie
+  endet mit einem Hinweis, wenn der Tab geschlossen wird oder die Seite sich nicht
+  aufzeichnen lässt.
+
+Die Daten, die du auslesen willst, wählst du wie immer danach aus.
 
 ### Klicken: erster, letzter oder alle
 
