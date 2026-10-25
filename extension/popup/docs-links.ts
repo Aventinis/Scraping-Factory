@@ -11,6 +11,7 @@ export const DOC_TARGETS: Readonly<Record<string, string>> = Object.freeze({
   modes: 'modes',
   textFilter: 'modes#elements-that-look-alike',
   modesApi: 'modes#api',
+  range: 'modes#range-values-and-today',
   modesCombined: 'modes#combined',
   modesBlocks: 'modes#blocks',
   browserEngine: 'browser-engine',

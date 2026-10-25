@@ -969,8 +969,8 @@
         "example": "GET /api/categories  →  jede ID der Liste"
       },
       "sourceRange": {
-        "text": "Zählt durch einen Bereich: ISO-Wochen, einfache Zahlen oder Daten.",
-        "example": "2026-W30 … 2026-W35"
+        "text": "Zählt durch einen Bereich: ISO-Wochen, einfache Zahlen oder Daten. Bei ISO-Wochen geht das Wort today auch als Start, bei Daten nur als Ende. Es steht für die aktuelle Woche oder den aktuellen Tag beim Lauf des Skripts, und today … today ergibt nur diese eine.",
+        "example": "2026-W30 … today"
       },
       "sourceBrowserDiscovery": {
         "text": "Für Werte, die erst beim Benutzen der Seite auftauchen: Das Skript öffnet einen Browser, führt Ihre Klicks und Scrolls aus und merkt sich, welche Werte die Seite anfragt.",
