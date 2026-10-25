@@ -87,6 +87,13 @@ HTML. API mode finds that request for you:
    it makes its requests.
 2. Click **Find data point in recording**, then click a value on the page. The
    extension searches the recorded responses for it.
+   Each match is a card with a name field and **Use**. Leave the name empty and
+   **Use** takes it from the request itself — the last key of the path, so
+   `products[0].title` becomes `title` (the field shows it in grey). A name you
+   type wins. If the name is already taken, a counter is added (`title_2`).
+
+   ![A match card: the field name is taken from the path](images/modes-api-use-name.png)
+
 3. On the API screen, decide for each part of the request address whether it is
    fixed or **variable** (a list of values, a second endpoint that supplies the
    values, or a range such as ISO weeks), and name your fields.

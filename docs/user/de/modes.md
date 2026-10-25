@@ -1,4 +1,4 @@
-<!-- source: 57625e54d79c -->
+<!-- source: 7caa3997b8ca -->
 # Scraping-Modi
 
 Die Schaltflächen oben auf dem Startbildschirm legen fest, *wie* die Daten
@@ -96,6 +96,14 @@ schreiben. Der API-Modus findet diese Anfrage für dich:
    einen Tab öffnen), damit sie ihre Anfragen stellt.
 2. Klicke auf **Datenpunkt in Aufzeichnung suchen** und klicke dann einen Wert auf
    der Seite an. Die Erweiterung sucht ihn in den aufgezeichneten Antworten.
+   Jeder Treffer ist eine Karte mit Namensfeld und **Verwenden**. Lässt du den Namen
+   leer, übernimmt **Verwenden** ihn aus der Anfrage selbst — der letzte Schlüssel des
+   Pfads, aus `products[0].title` wird also `title` (das Feld zeigt ihn grau an). Ein
+   getippter Name hat Vorrang. Ist der Name schon vergeben, wird ein Zähler angehängt
+   (`title_2`).
+
+   ![Eine Treffer-Karte: der Feldname kommt aus dem Pfad](images/modes-api-use-name.png)
+
 3. Entscheide auf dem API-Bildschirm für jeden Teil der Anfrage-Adresse, ob er fest
    oder **variabel** ist (eine Werteliste, ein zweiter Endpunkt, der die Werte
    liefert, oder ein Bereich wie ISO-Wochen), und benenne deine Felder.
