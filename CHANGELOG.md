@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.21.2](https://github.com/Aventinis/Scraping-Factory/compare/v1.21.1...v1.21.2) (2026-10-25)
+
+
+### Features
+
+* **extension:** edit a field's transformations after it was created (Flat and Container mode) ([8d6cd05](https://github.com/Aventinis/Scraping-Factory/commit/8d6cd05ffc66036d4ec0c58edeeb7ede82a64598))
+* **extension:** edit a Flat or Container field's name and transformations after creation ([#505](https://github.com/Aventinis/Scraping-Factory/issues/505)) ([8afbb3a](https://github.com/Aventinis/Scraping-Factory/commit/8afbb3a17f2969c5dbd71962d6adc81309e988b2))
+* **extension:** edit combine and split fields through their own dialogs ([#505](https://github.com/Aventinis/Scraping-Factory/issues/505)) ([2688c2a](https://github.com/Aventinis/Scraping-Factory/commit/2688c2afdbe7dca2cf3ac008852871a53089f145))
+
 ## [1.21.1](https://github.com/Aventinis/Scraping-Factory/compare/v1.21.0...v1.21.1) (2026-10-25)
 
 
