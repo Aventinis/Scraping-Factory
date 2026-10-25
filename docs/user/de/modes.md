@@ -1,4 +1,4 @@
-<!-- source: 5c11fad5f336 -->
+<!-- source: 03af6e343be6 -->
 # Scraping-Modi
 
 Die Schaltflächen oben auf dem Startbildschirm legen fest, *wie* die Daten
@@ -130,10 +130,11 @@ Konfiguration zeigt stattdessen einen Hinweis: verwirf sie und wähle neu, um si
 
 Jedes **?** auf diesem Bildschirm erklärt das Konzept an Ort und Stelle: was ein
 **variabler** URL-Teil ist, was jede Wertquelle tut (mit Beispiel), was **→ Variabel**
-mit einem Wert im Anfrage-Body macht. Die gängigen Wertquellen — **Werteliste**,
-**Liste aus anderer Anfrage** und **Bereich** — stehen zuerst; **Aus der Seite
-sammeln (Browser)** und der **Token-Wert** stehen unter **Erweiterte Quellen**, und
-der **Werttyp** eines Body-Wertes unter seinem eigenen **Erweitert**.
+mit einem Wert im Anfrage-Body macht. Alle Wertquellen — **Werteliste**, **Liste aus
+anderer Anfrage**, **Bereich** und **Aus der Seite sammeln (Browser)** — sind einfache
+Optionen auf der Karte des Parameters (der **Token-Wert** kommt dazu, wenn ein
+Anmelde-Token eingerichtet ist), und der **Werttyp** eines Body-Wertes steht unter
+seinem eigenen **Erweitert**.
 
 ### Bereichswerte und `today`
 
