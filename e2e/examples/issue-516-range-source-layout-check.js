@@ -1,7 +1,8 @@
 // Issue #516: real-browser check that a Range value source (type select, From, To, format row) stays inside its card and the panel
 // at narrow side-panel widths. A parameter of the recorded catalog request is made variable and given the Range source; then
 // every element of the source is measured against the card and the viewport — for the narrowest widths and for both Range types
-// that have a format row (IsoWeek, Date) as well as Number (none), in English and German.
+// that have a format row (IsoWeek, Date) as well as Number (none), in English and German. The dropdowns of the source must also look like
+// the inputs next to them (font size, border, corner radius).
 //
 // Runs its own companion on port 5055, so a companion a human already has running on the default port is never used.
 //
@@ -56,6 +57,16 @@ function assert(condition, message) {
         .map((el) => ({ cls: el.className || el.tagName, right: el.getBoundingClientRect().right }));
       return { cardRight: cardRect.right, viewport, scrollWidth: document.documentElement.scrollWidth, parts };
     });
+
+    // The dropdowns look like the inputs next to them: same font size, border colour and corner radius, and a themed background.
+    const look = (selector) => popup.locator(selector).first().evaluate((el) => {
+      const style = getComputedStyle(el);
+      return { fontSize: style.fontSize, radius: style.borderTopLeftRadius, border: style.borderTopColor, borderWidth: style.borderTopWidth };
+    });
+    const selectLook = await look('.api-config-range-type');
+    const inputLook = await look('.api-config-range-from');
+    assert(JSON.stringify(selectLook) === JSON.stringify(inputLook), `the range select should look like the inputs: ${JSON.stringify(selectLook)} vs ${JSON.stringify(inputLook)}`);
+    assert(JSON.stringify(await look('.api-config-range-format-preset')) === JSON.stringify(inputLook), 'the format dropdown should look like the inputs too');
 
     const problems = [];
     for (const language of ['en', 'de']) {
