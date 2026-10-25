@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.21.5](https://github.com/Aventinis/Scraping-Factory/compare/v1.21.4...v1.21.5) (2026-10-25)
+
+
+### Features
+
+* **extension:** Browser engine — "Record my steps" to build the browser actions ([c6e9ba8](https://github.com/Aventinis/Scraping-Factory/commit/c6e9ba89a808e5f60f770e05f8c85bf43d16d680))
+* **extension:** record my steps — recorder, service worker relay and panel flow ([#508](https://github.com/Aventinis/Scraping-Factory/issues/508)) ([913da74](https://github.com/Aventinis/Scraping-Factory/commit/913da74186056d38a12612cfd36479fc3e85acca))
+
+
+### Bug Fixes
+
+* **extension:** record my steps — one relay per message, no step for focusing a field, click target last ([#508](https://github.com/Aventinis/Scraping-Factory/issues/508)) ([0a47660](https://github.com/Aventinis/Scraping-Factory/commit/0a476604e5f54ce73a0bf3ca26c87980a5f6b6bc))
+
 ## [1.21.4](https://github.com/Aventinis/Scraping-Factory/compare/v1.21.3...v1.21.4) (2026-10-25)
 
 
