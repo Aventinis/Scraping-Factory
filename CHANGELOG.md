@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.21.8](https://github.com/Aventinis/Scraping-Factory/compare/v1.21.7...v1.21.8) (2026-10-25)
+
+
+### Bug Fixes
+
+* **extension:** API mode — the "To" box of a Range value source overflows the panel ([3390c45](https://github.com/Aventinis/Scraping-Factory/commit/3390c450ec51620030397d46b0e6b234ce9a363f))
+
 ## [1.21.7](https://github.com/Aventinis/Scraping-Factory/compare/v1.21.6...v1.21.7) (2026-10-25)
 
 
