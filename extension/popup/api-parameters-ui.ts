@@ -112,7 +112,7 @@ export function renderApiConfigParameters(
           <input type="radio" name="source-kind-${safePartId}" class="api-config-source-kind-radio"
             data-part-id="${safePartId}" value="${kind}" ${source?.kind === kind ? 'checked' : ''} />
           ${escapeHtml(sourceKindLabels[kind])}
-          ${helpHostHtml(`help.apiConfig.source${sourceHelpSuffix(kind)}`)}
+          ${helpHostHtml(`help.apiConfig.source${sourceHelpSuffix(kind)}`, kind === 'range' ? 'range' : undefined)}
         </label>
       `;
     kindRow.setAttribute('data-help-anchor', '');

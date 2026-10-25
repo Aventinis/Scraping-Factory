@@ -969,8 +969,8 @@
         "example": "GET /api/categories  →  every id in the list"
       },
       "sourceRange": {
-        "text": "Counts through a range: ISO weeks, plain numbers or dates.",
-        "example": "2026-W30 … 2026-W35"
+        "text": "Counts through a range: ISO weeks, plain numbers or dates. For ISO weeks the word today also works as the start; for dates only as the end. It means the current week or day when the script runs, and today … today gives just that one.",
+        "example": "2026-W30 … today"
       },
       "sourceBrowserDiscovery": {
         "text": "For values that only show up while the page is used: the script opens a browser, performs your clicks and scrolls and notes which values the site requests.",

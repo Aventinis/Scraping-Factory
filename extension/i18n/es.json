@@ -969,8 +969,8 @@
         "example": "GET /api/categories  →  cada id de la lista"
       },
       "sourceRange": {
-        "text": "Recorre un rango: semanas ISO, números o fechas.",
-        "example": "2026-W30 … 2026-W35"
+        "text": "Recorre un rango: semanas ISO, números simples o fechas. En semanas ISO la palabra today también vale como inicio; en fechas solo como final. Significa la semana o el día actual cuando se ejecuta el script, y today … today da solo ese.",
+        "example": "2026-W30 … today"
       },
       "sourceBrowserDiscovery": {
         "text": "Para valores que solo aparecen al usar la página: el script abre un navegador, hace tus clics y desplazamientos y anota qué valores pide el sitio.",

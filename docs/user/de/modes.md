@@ -1,4 +1,4 @@
-<!-- source: 8e9a764f69b2 -->
+<!-- source: 5c11fad5f336 -->
 # Scraping-Modi
 
 Die Schaltflächen oben auf dem Startbildschirm legen fest, *wie* die Daten
@@ -134,6 +134,29 @@ mit einem Wert im Anfrage-Body macht. Die gängigen Wertquellen — **Werteliste
 **Liste aus anderer Anfrage** und **Bereich** — stehen zuerst; **Aus der Seite
 sammeln (Browser)** und der **Token-Wert** stehen unter **Erweiterte Quellen**, und
 der **Werttyp** eines Body-Wertes unter seinem eigenen **Erweitert**.
+
+### Bereichswerte und `today`
+
+Die Wertquelle **Bereich** zählt für einen Teil der Anfrage-Adresse durch Werte: ISO-Wochen
+(`2026-W30`), einfache Zahlen oder Daten. Trage den Anfang in **Von** und das Ende in **Bis**
+ein; die Formatzeile darunter zeigt, wie ein Wert aussehen muss.
+
+Das Wort **`today`** funktioniert als Grenze und wird beim *Lauf* des Skripts aufgelöst, nicht
+beim Erzeugen — eine gespeicherte Konfiguration zählt also immer bis zur aktuellen Woche
+beziehungsweise zum aktuellen Tag:
+
+| Typ | `today` in **Von** | `today` in **Bis** |
+| --- | --- | --- |
+| **IsoWeek** | ja: die aktuelle ISO-Woche | ja |
+| **Date** | nein | ja: der Tag des Laufs |
+| **Number** | nein | nein |
+
+**Beispiel.** Eine Seite lädt ihre Wochenzahlen von `/api/weeks/{week}`. Wähle **Bereich**,
+den Typ `IsoWeek`, **Von** `2026-W30` und **Bis** `today`: Jeder Lauf fragt alle Wochen von
+Woche 30 bis zur aktuellen ab. Mit **Von** `today` und **Bis** `today` (IsoWeek) ergibt der
+Bereich genau einen Wert, die aktuelle Woche — praktisch für „nur die neuesten Daten“. Bei
+Daten ergibt **Bis** `today` jeden Tag bis zum Tag des Laufs, der Anfang muss aber ein echtes
+Datum sein.
 
 ### JSON-Pfade auswählen
 

@@ -63,6 +63,8 @@ describe('the markup and the code only use registered keys', () => {
     const text = fs.readFileSync(file, 'utf8');
     collectDocKeysFromHtml(text).forEach((k) => used.add(k));
     for (const m of text.matchAll(/learnMoreHtml\('([^']+)'\)/g)) used.add(m[1]);
+    // helpHostHtml(helpKey, 'docKey') builds the same help host in JS (a doc key may sit in a conditional there).
+    for (const m of text.matchAll(/helpHostHtml\([^;\n]*?[,?:]\s*'([A-Za-z][A-Za-z0-9]*)'/g)) used.add(m[1]);
   }
 
   test('every data-doc / learnMoreHtml key is in DOC_TARGETS', () => {
