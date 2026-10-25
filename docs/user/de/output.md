@@ -1,4 +1,4 @@
-<!-- source: 75dfdcada3a8 -->
+<!-- source: b23b85effbbc -->
 # Ausgabeformate und Ausgabe-Layouts
 
 ## Ausgabeformat
@@ -24,9 +24,12 @@ Hinweise:
 - SQLite und Excel gibt es nicht für den Blöcke- und den Kombiniert-Modus, und sie lassen
   sich nicht mit der Änderungserkennung kombinieren.
 - Die Namen von Skript und Ausgabedatei kommen aus **Skriptname** und **Name der
-  Ausgabedatei** unten auf dem Startbildschirm. Unter **Einstellungen** kann der
-  **Standard-Skriptname** ein fester Name sein oder aus dem Hostnamen der Website
-  abgeleitet werden.
+  Ausgabedatei** unten auf dem Startbildschirm. Beide Felder bleiben leer und zeigen den
+  Standard, auf den sie zurückfallen, grau an; tippe einen Namen, um deinen eigenen zu
+  nutzen (ohne vorher zu löschen), leere das Feld, um zum Standard zurückzukehren. Unter
+  **Einstellungen** kann der **Standard-Skriptname** ein fester Name sein oder aus dem
+  Hostnamen der Website abgeleitet werden, und der
+  [Standard-Ausgabedateiname](#standard-ausgabedateiname) legt den der Datendatei fest.
 
 Weitere ausgabebezogene Einstellungen unter **Einstellungen**: **Testlauf-Datenvorschau
 anzeigen**, **Vollständige Scraping-Datei herunterladen** (die vollständige Ausgabe des
@@ -46,9 +49,11 @@ legt **Standard-Ausgabedateiname** fest, was gilt, solange dieses Feld leer blei
 - **Eigener Name** — dieser Name gilt für jeden Scraper (zum Beispiel `daily-data`);
   leer bleibt es `output`, wie bisher.
 
-Ein für einen Scraper getippter Name gewinnt immer. Der Standard ist eine Einstellung
-dieses Browsers: Er wird nicht in eine Konfiguration oder deren Export gespeichert und
-gilt beim Erzeugen des Skripts. Beide Arten von Namen werden gleich bereinigt (Buchstaben,
+Ein für einen Scraper getippter Name gewinnt immer. Das Feld **Name der Ausgabedatei**
+zeigt den Standard grau an, solange es leer ist (bei **Wie der Skriptname** folgt er dem
+Feld **Skriptname**, während du tippst). Der Standard ist eine Einstellung dieses
+Browsers: Er wird nicht in eine Konfiguration oder deren Export gespeichert und gilt beim
+Erzeugen des Skripts. Beide Arten von Namen werden gleich bereinigt (Buchstaben,
 Ziffern, `-` und `_`), aus `Mein Skript!` wird also `Mein_Skript`. Im
 [Blöcke-Modus](modes.md#blöcke) benennt jeder Block seine Datei selbst, daher gilt der
 Standard dort nicht.

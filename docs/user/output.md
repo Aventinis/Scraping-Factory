@@ -22,8 +22,12 @@ Notes:
 - SQLite and Excel are not available for Blocks or Combined mode and cannot be
   combined with change detection.
 - The script and output file names come from **Script name** and **Output file
-  name** at the bottom of the idle screen. In **Settings**, **Default script
-  name** can be a fixed name or derived from the website's hostname.
+  name** at the bottom of the idle screen. Both fields stay empty and show the
+  default they fall back to in grey; type a name to use your own (no deleting
+  first), clear the field to return to the default. In **Settings**,
+  **Default script name** can be a fixed name or derived from the website's
+  hostname, and [Default output file name](#default-output-file-name) sets the
+  data file's.
 
 Other output-related preferences in **Settings**: **Show trial-run data
 preview**, **Download the full scraped data file** (the complete trial-run
@@ -43,9 +47,11 @@ left empty:
 - **Custom name** — that name is used for every scraper (for example `daily-data`);
   left empty it stays `output`, as before.
 
-A name you type for a scraper always wins. The default is a preference of this
-browser: it is not saved into a configuration or its export, and it applies when the
-script is generated. Both kinds of name are cleaned up the same way (letters,
+A name you type for a scraper always wins. The **Output file name** field shows the
+default in grey while it is empty (with **Same as the script name** it follows the
+**Script name** field as you type). The default is a preference of this browser: it
+is not saved into a configuration or its export, and it applies when the script is
+generated. Both kinds of name are cleaned up the same way (letters,
 digits, `-` and `_`), so `Mein Skript!` becomes `Mein_Skript`. In
 [Blocks mode](modes.md#blocks) every block names its own file, so the default does
 not apply there.

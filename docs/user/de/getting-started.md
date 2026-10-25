@@ -1,4 +1,4 @@
-<!-- source: 2022b2f6b063 -->
+<!-- source: 38bd20c29c5c -->
 # Erste Schritte
 
 Diese Seite führt dich in etwa zehn Minuten von null zu einem funktionierenden Scraper.
@@ -94,8 +94,9 @@ anzeigen** ein:
 
 ### Das Skript ausführen
 
-Lade das Skript herunter (es heißt wie das Feld **Skriptname**, standardmäßig
-`scraper.py`) und führe es aus:
+Lade das Skript herunter (es heißt wie das Feld **Skriptname**; solange das leer ist,
+wie der darin grau angezeigte Standard — der Hostname der Website oder `scraper`) und
+führe es aus:
 
 ```bash
 pip install requests beautifulsoup4

@@ -736,6 +736,19 @@ docs/design-notes/extension.md for the details.
 - Tests: `popup/hardening-presets.test.js`, `popup/hardening-presets-ui.test.js`,
   real-browser check `e2e/examples/issue-399-hardening-plain-language-check.js`
 
+### 2.10t Name defaults as placeholders (Issue #510)
+
+The Script name and Output file name fields hold only what the user typed; the default they fall back to is the
+placeholder, and a request resolves an empty field to it. `popup/name-defaults.ts` (pure) computes the defaults
+(host name / fixed name for the script, the #509 setting for the output); `computeScriptFileNamePatch` is gone, so
+nothing writes a default into the state. See docs/design-notes/extension.md.
+
+- Extension: `popup/name-defaults.ts`, `popup/output-name.ts`, `popup/companion-client.ts` (generate resolves both
+  names as overrides of `configOptionsFromState`), `popup/idle-screen-ui.ts` (placeholders on every render),
+  `popup/download-helpers.ts` and `popup/popup.ts` (script file name of the download and its label)
+- Tests: `popup/name-defaults.test.js`, `popup/name-placeholders-popup.test.js`, `popup/output-name-popup.test.js`,
+  real-browser check `e2e/examples/issue-510-name-placeholders-check.js` (fixture `speisekarte`)
+
 ### 2.10s Default output file name (Issue #509)
 
 Settings → **Default output file name** (`outputNameMode` `'fixed' | 'script'`, `outputNameFixed`, in the global
