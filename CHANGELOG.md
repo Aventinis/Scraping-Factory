@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.21.1](https://github.com/Aventinis/Scraping-Factory/compare/v1.21.0...v1.21.1) (2026-10-25)
+
+
+### Features
+
+* **extension:** API mode — "Use" without typing a field name (default: the name from the query) ([dcb061f](https://github.com/Aventinis/Scraping-Factory/commit/dcb061fc7849b67c1bfe3f123ce58291164ac066))
+* **extension:** let Use take the field name from the query when none is typed ([#504](https://github.com/Aventinis/Scraping-Factory/issues/504)) ([cd9869e](https://github.com/Aventinis/Scraping-Factory/commit/cd9869e81d326d734a56a59a07fc2fa21bd9edc8))
+
 ## [1.21.0](https://github.com/Aventinis/Scraping-Factory/compare/v1.20.4...v1.21.0) (2026-10-25)
 
 
