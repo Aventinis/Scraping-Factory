@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.21.3](https://github.com/Aventinis/Scraping-Factory/compare/v1.21.2...v1.21.3) (2026-10-25)
+
+
+### Features
+
+* **extension:** API mode — reopen and edit the configuration after "Apply" ([0591b46](https://github.com/Aventinis/Scraping-Factory/commit/0591b4642f1b9dc27a33d226d8bc64d71f97e240))
+* **extension:** reopen an applied API configuration with Edit ([#506](https://github.com/Aventinis/Scraping-Factory/issues/506)) ([d27b2e4](https://github.com/Aventinis/Scraping-Factory/commit/d27b2e489aec81fc11345d59c06585a6bcbf6308))
+
 ## [1.21.2](https://github.com/Aventinis/Scraping-Factory/compare/v1.21.1...v1.21.2) (2026-10-25)
 
 
