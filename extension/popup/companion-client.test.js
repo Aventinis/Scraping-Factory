@@ -490,10 +490,9 @@ describe('robots.txt check (btn-check-robots)', () => {
 // externalConfig moved off per-scrape state into the cross-session global
 // Settings tab (shared/global-settings.ts) — generate() now has to read
 // them from there, persisted via chrome.storage.local, instead of from
-// _state. checkCompanion()'s own default-script-name preference is exercised
-// separately by scraping-config-builder.test.js's computeScriptFileNamePatch
-// coverage; this describe block is specifically about generate() picking up
-// a toggle flipped on the Settings screen.
+// _state. The default script and output file names are covered by
+// name-defaults.test.js; this describe block is specifically about generate()
+// picking up a toggle flipped on the Settings screen.
 describe('generate() reads the global Settings tab\'s preferences, not per-scrape state', () => {
   const flushMicrotasks = async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));

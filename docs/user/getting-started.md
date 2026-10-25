@@ -89,8 +89,9 @@ preview** in the **Settings** screen (the gear icon) before generating:
 
 ### Run the script
 
-Download the script (it is named after the **Script name** field, `scraper.py`
-by default) and run it:
+Download the script (it is named after the **Script name** field; while that is
+empty, after the default shown in grey in it — the website's host name, or
+`scraper`) and run it:
 
 ```bash
 pip install requests beautifulsoup4

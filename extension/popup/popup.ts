@@ -143,6 +143,7 @@ import {
   renderCompanionErrorScreen, wireCompanionErrorEvents,
 } from './companion-client';
 
+import { scriptFileBase } from './name-defaults';
 import { triggerDownload, downloadFile, triggerOutputFileDownload, downloadConfigExport } from './download-helpers';
 
 import {
@@ -943,7 +944,7 @@ function render(): void {
   if (_state.current === STATES.DONE) {
     const downloadBtn = byIdOrNull('btn-download');
     if (downloadBtn) {
-      const filename = `${sanitizeFileNameBase(_state.scriptFileName, 'scraper')}.py`;
+      const filename = `${scriptFileBase(_state.scriptFileName, _state.url, getGlobalSettings())}.py`;
       downloadBtn.textContent = t('done.downloadBtn', { filename });
     }
     // Issue #161: only shown at all when includeOutputFile actually
@@ -1263,13 +1264,8 @@ function wireEvents(): void {
   byIdOrNull('btn-new-scraper')?.addEventListener('click', () => {
     log('BTN new-scraper → reset state');
     stopPreviewIfActive(bridge);
-    // scriptFileName/outputFileName are reset here too (Issue-driven
-    // follow-up): 'fixed' scriptNameMode only ever fills a *blank*
-    // scriptFileName (computeScriptFileNamePatch), so without this reset a
-    // manually-typed name from the previous scrape would keep being carried
-    // over instead of "New scraper" giving 'fixed' mode's own default a
-    // fresh chance to apply, the same "start over" behavior every other
-    // field here already gets.
+    // scriptFileName/outputFileName are reset here too: a name typed for the previous scrape must not be carried over (the empty
+    // fields show the defaults again, Issue #510).
     chrome.storage.session.set({ fields: [], url: '', groups: [], apiConfig: null, apiConfigApplied: null, scriptFileName: '', outputFileName: '' });
     setState(STATES.CHECKING_COMPANION, { fields: [], groups: [], apiConfig: null, apiConfigApplied: null, scriptText: '', url: '', scriptFileName: '', outputFileName: '' });
     checkCompanion(bridge);

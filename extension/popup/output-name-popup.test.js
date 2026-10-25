@@ -42,3 +42,40 @@ describe('the default output file name in the requests', () => {
     expect(config.blocks[0].outputFileName).toBe('a');
   });
 });
+
+// Issue #510: the script name resolves the same way — typed, else the default — and only for a real run.
+describe('the default script name in the requests', () => {
+  const { buildScrapingConfig, configOptionsFromState } = require('./scraping-config-builder');
+  const { resolveScriptFileName, scriptFileBase } = require('./name-defaults');
+  const { resolveOutputFileName } = require('./output-name');
+
+  const state = (over = {}) => ({
+    url: 'https://shop.example.com/menu', mode: 'flat',
+    fields: [{ name: 'Preis', selector: '.price', attribute: null, framePath: null, transforms: null, download: false, maxDownloadSizeBytes: null, allowedContentTypes: [], hiddenFromOutput: false }],
+    groups: [], apiConfig: null, scriptFileName: '', outputFileName: '', engine: 'Static', browserActions: [], ...over,
+  });
+  const settings = { scriptNameMode: 'hostname', scriptNameFixed: 'scraper', outputNameMode: 'script', outputNameFixed: '' };
+
+  function generate(s) {
+    const scriptFileName = resolveScriptFileName(s.scriptFileName, s.url, settings);
+    const outputFileName = resolveOutputFileName(s.outputFileName, scriptFileBase(s.scriptFileName, s.url, settings), settings);
+    return buildScrapingConfig(configOptionsFromState(s, settings, { scriptFileName, outputFileName }));
+  }
+
+  test('both fields empty: the request carries the concrete defaults', () => {
+    const config = generate(state());
+    expect(config.scriptFileName).toBe('shop_example_com');
+    expect(config.outputFileName).toBe('shop_example_com');
+  });
+
+  test('typed names win and "same as the script" follows the typed script name', () => {
+    expect(generate(state({ scriptFileName: 'mein-skript' }))).toMatchObject({ scriptFileName: 'mein-skript', outputFileName: 'mein-skript' });
+    expect(generate(state({ scriptFileName: 'a', outputFileName: 'b' }))).toMatchObject({ scriptFileName: 'a', outputFileName: 'b' });
+  });
+
+  test('a saved or exported configuration holds only what was typed, so it follows the site it is loaded on', () => {
+    const saved = buildScrapingConfig(configOptionsFromState(state(), settings, { includeOutputFile: false }));
+    expect(saved.scriptFileName).toBeNull();
+    expect(saved.outputFileName).toBeNull();
+  });
+});
