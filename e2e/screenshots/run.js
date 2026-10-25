@@ -19,7 +19,7 @@ const fs = require('fs');
 const { launchBrowser, startCompanion, startFixture } = require('../harness');
 const { openScenario } = require('./lib');
 
-const SCENARIO_FILES = ['getting-started', 'modes', 'pagination', 'transforms', 'monitoring', 'network', 'browser-engine', 'troubleshooting'];
+const SCENARIO_FILES = ['getting-started', 'modes', 'pagination', 'transforms', 'monitoring', 'network', 'output', 'browser-engine', 'troubleshooting'];
 const COMPANION_PORT = 5056;
 // The images are what this script makes: the extension build that precedes it must not fail on one that is still missing.
 process.env.SF_DOCS_ALLOW_MISSING_IMAGES = '1';

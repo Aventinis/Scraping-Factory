@@ -1,4 +1,4 @@
-<!-- source: c7698bcebc0f -->
+<!-- source: 75dfdcada3a8 -->
 # Ausgabeformate und Ausgabe-Layouts
 
 ## Ausgabeformat
@@ -32,6 +32,26 @@ Weitere ausgabebezogene Einstellungen unter **Einstellungen**: **Testlauf-Datenv
 anzeigen**, **Vollständige Scraping-Datei herunterladen** (die vollständige Ausgabe des
 Testlaufs, vom Fertig-Bildschirm), **Bearbeitbare Konfigurationsdatei (XML)** (siehe
 unten) und **Testlauf überspringen** (siehe unten).
+
+## Standard-Ausgabedateiname
+
+Die Datendatei eines Laufs heißt `output` plus Endung (`output.csv`, `output.xml`, …),
+solange du für den Scraper keinen **Ausgabedateinamen** tippst. In den **Einstellungen**
+legt **Standard-Ausgabedateiname** fest, was gilt, solange dieses Feld leer bleibt:
+
+![Der Standard-Ausgabedateiname in den Einstellungen](images/output-default-name.png)
+
+- **Wie der Skriptname** — die Datendatei heißt wie das Skript: `shop-example-com.py`
+  schreibt `shop-example-com.csv`.
+- **Eigener Name** — dieser Name gilt für jeden Scraper (zum Beispiel `daily-data`);
+  leer bleibt es `output`, wie bisher.
+
+Ein für einen Scraper getippter Name gewinnt immer. Der Standard ist eine Einstellung
+dieses Browsers: Er wird nicht in eine Konfiguration oder deren Export gespeichert und
+gilt beim Erzeugen des Skripts. Beide Arten von Namen werden gleich bereinigt (Buchstaben,
+Ziffern, `-` und `_`), aus `Mein Skript!` wird also `Mein_Skript`. Im
+[Blöcke-Modus](modes.md#blöcke) benennt jeder Block seine Datei selbst, daher gilt der
+Standard dort nicht.
 
 ## Den Testlauf überspringen
 
