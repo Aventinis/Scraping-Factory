@@ -6,7 +6,7 @@ newer** on your computer — the companion runs your generated script once as a
 trial before handing it to you. Nothing else has to be installed by hand.
 
 The user documentation is in the `docs/` folder of this bundle (start with
-`docs/README.md`) and also inside the extension: the **Learn more** links in the
+`docs/README.md`, in German `docs/de/README.md`) and also inside the extension: the **Learn more** links in the
 side panel open it in a browser tab, no internet needed.
 
 ## 1. Install the companion

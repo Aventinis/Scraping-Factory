@@ -15,7 +15,7 @@ module.exports = [
         await fixturePage.waitForTimeout(150);
         await fixturePage.click(selector);
         await s.waitForIdle();
-        await popupPage.waitForFunction((i) => !/No element/.test(document.querySelectorAll('#browser-actions-list .field-selector')[i].textContent), index);
+        await popupPage.waitForFunction((i) => !/No element|Kein Element/.test(document.querySelectorAll('#browser-actions-list .field-selector')[i].textContent), index);
       }
       await s.shot('browser-engine-login-starter', '#browser-actions-section');
     },

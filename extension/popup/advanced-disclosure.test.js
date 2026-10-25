@@ -1,11 +1,11 @@
 // Issue #396: the "Advanced" disclosure — pure logic/storage
-// (advanced-disclosure.js) and its DOM wiring (advanced-disclosure-ui.js).
+// (advanced-disclosure.ts) and its DOM wiring (advanced-disclosure-ui.ts).
 const { STORAGE_KEY, isSectionOpen, withSectionOpen, loadAdvancedSections, persistAdvancedSections } = require('./advanced-disclosure');
 const { createAdvancedDisclosure, initAdvancedDisclosures, wireAdvancedDisclosureEvents } = require('./advanced-disclosure-ui');
 
 afterEach(() => { delete global.chrome; });
 
-describe('advanced-disclosure.js', () => {
+describe('advanced-disclosure.ts', () => {
   test('a section is open only when it was stored as opened', () => {
     expect(isSectionOpen({ a: true }, 'a')).toBe(true);
     expect(isSectionOpen({ a: true }, 'b')).toBe(false);
@@ -44,7 +44,7 @@ describe('advanced-disclosure.js', () => {
   });
 });
 
-describe('advanced-disclosure-ui.js', () => {
+describe('advanced-disclosure-ui.ts', () => {
   const mount = () => {
     document.body.innerHTML = `
       <details class="advanced-disclosure" data-advanced="one"><summary>Advanced</summary>x</details>

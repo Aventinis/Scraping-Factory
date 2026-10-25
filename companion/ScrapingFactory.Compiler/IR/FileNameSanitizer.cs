@@ -2,14 +2,9 @@ using System.Text.RegularExpressions;
 
 namespace ScrapingFactory.Compiler.IR;
 
-// Reduces a user-typed base filename (script name / output filename) down to
-// characters that are always safe to embed verbatim into generated Python
-// source and to use as a real filename in PythonScriptVerifier's temp
-// directory — no quotes/backslashes to escape, no path separators to enable
-// directory traversal, no OS-reserved characters. Falls back to `fallback`
-// for empty/whitespace-only/fully-invalid input, the same "don't reject,
-// just default" approach OutputFormat/Engine already take elsewhere in
-// ScrapingPlanBuilder.
+// Reduces a user-typed base file name to characters that are safe in generated Python source and as a real file
+// name (no quotes, path separators or reserved characters). Empty or fully invalid input falls back instead of
+// being rejected. Mirrored by sanitizeFileNameBase in the extension (test-vectors/file-name-sanitizer.json).
 public static class FileNameSanitizer
 {
     private static readonly Regex InvalidChars = new("[^A-Za-z0-9_-]+");

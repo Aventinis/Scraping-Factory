@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
@@ -291,39 +290,6 @@ public class CombinedEndToEndTests(WebApplicationFactory<Program> factory)
 // test needs to.
 public class CombinedSidecarPersistenceTests
 {
-    private static async Task<(int ExitCode, string Stderr)> RunScriptAsync(string scriptPath, string workDir)
-    {
-        Exception? lastError = null;
-        foreach (var candidate in new[] { "python3", "python" })
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = candidate,
-                WorkingDirectory = workDir,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            psi.ArgumentList.Add(scriptPath);
-
-            try
-            {
-                using var process = new Process { StartInfo = psi };
-                process.Start();
-                var stderrTask = process.StandardError.ReadToEndAsync();
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                await process.WaitForExitAsync(cts.Token);
-                return (process.ExitCode, await stderrTask);
-            }
-            catch (System.ComponentModel.Win32Exception ex)
-            {
-                lastError = ex; // executable not found — try the next candidate
-            }
-        }
-        throw new InvalidOperationException("No Python interpreter found (tried: python3, python).", lastError);
-    }
-
     private static string BuildPageWithItems(int count)
     {
         var items = string.Join("", Enumerable.Range(1, count).Select(i => $"<h1 class='item'>Item {i}</h1>"));
@@ -368,7 +334,7 @@ public class CombinedSidecarPersistenceTests
             var scriptPath = Path.Combine(workDir, "combined.py");
             await File.WriteAllTextAsync(scriptPath, combinedScript);
 
-            var (firstExit, firstStderr) = await RunScriptAsync(scriptPath, workDir);
+            var (firstExit, firstStderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
             Assert.True(firstExit == 0, firstStderr);
 
             var baselinePath = Path.Combine(workDir, "output_components", "with_baseline", "output.json.hardening-baseline.json");
@@ -379,7 +345,7 @@ public class CombinedSidecarPersistenceTests
             // directory — only the component's own stable subdirectory
             // (not a disposable temp dir) makes this sidecar file findable
             // again on this second, separate run.
-            var (secondExit, secondStderr) = await RunScriptAsync(scriptPath, workDir);
+            var (secondExit, secondStderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
             Assert.True(secondExit == 0, secondStderr);
             Assert.Equal(10, ReadBaselineCount(baselinePath));
 

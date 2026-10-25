@@ -16,28 +16,10 @@ namespace ScrapingFactory.Tests;
 // per-user app-data path even during test runs.
 public class SavedConfigsEndpointTests : IDisposable
 {
-    private readonly string _dbPath;
-    private readonly WebApplicationFactory<Program> _factory;
-    private readonly HttpClient _client;
+    private readonly TempDatabaseCompanion _companion = new("Companion:SavedConfigsDbPath", "saved-configs-endpoint-test");
+    private HttpClient _client => _companion.Client;
 
-    public SavedConfigsEndpointTests()
-    {
-        _dbPath = Path.Combine(Path.GetTempPath(), $"sf-saved-configs-endpoint-test-{Guid.NewGuid():N}.db");
-        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-            builder.ConfigureAppConfiguration((_, config) =>
-                config.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["Companion:SavedConfigsDbPath"] = _dbPath,
-                })));
-        _client = _factory.CreateClient();
-    }
-
-    public void Dispose()
-    {
-        _client.Dispose();
-        _factory.Dispose();
-        if (File.Exists(_dbPath)) File.Delete(_dbPath);
-    }
+    public void Dispose() => _companion.Dispose();
 
     private static StringContent JsonBody(object value) =>
         new(JsonSerializer.Serialize(value), Encoding.UTF8, "application/json");

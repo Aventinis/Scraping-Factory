@@ -13,7 +13,7 @@ for (const f of fs.readdirSync(DOCS_DIR).filter((n) => n.endsWith('.md'))) {
 function sourceFiles() {
   const dirs = [__dirname, path.join(__dirname, 'screens')];
   return dirs.flatMap((d) => fs.readdirSync(d).map((f) => path.join(d, f)))
-    .filter((f) => /\.(html|js)$/.test(f) && !/\.test\.js$/.test(f));
+    .filter((f) => /\.(html|js|ts)$/.test(f) && !/\.test\.js$/.test(f));
 }
 
 describe('DOC_TARGETS', () => {
@@ -34,6 +34,26 @@ describe('resolveDocTarget', () => {
     expect(resolveDocTarget('nope')).toBeNull();
     expect(resolveDocTarget('constructor')).toBeNull();
     expect(resolveDocTarget('')).toBeNull();
+  });
+});
+
+describe('resolveDocTarget in German', () => {
+  const anchors = { de: { monitoring: { 'safety-checks': 'sicherheitspruefungen' }, output: {} } };
+
+  test('German with a translated page opens docs/de at the German anchor', () => {
+    expect(resolveDocTarget('safetyChecks', 'de', anchors)).toEqual({ page: 'monitoring', anchor: 'sicherheitspruefungen', file: 'docs/de/monitoring.html#sicherheitspruefungen' });
+    expect(resolveDocTarget('monitoring', 'de', anchors).file).toBe('docs/de/monitoring.html');
+  });
+
+  test('a heading without a mapping opens the German page without an anchor', () => {
+    expect(resolveDocTarget('dedup', 'de', anchors).file).toBe('docs/de/output.html');
+  });
+
+  test('English, Spanish, no table, or a page without a German version stay English', () => {
+    expect(resolveDocTarget('safetyChecks', 'en', anchors).file).toBe('docs/monitoring.html#safety-checks');
+    expect(resolveDocTarget('safetyChecks', 'es', anchors).file).toBe('docs/monitoring.html#safety-checks');
+    expect(resolveDocTarget('safetyChecks', 'de', null).file).toBe('docs/monitoring.html#safety-checks');
+    expect(resolveDocTarget('pause', 'de', anchors).file).toBe('docs/network-settings.html#pause-between-requests');
   });
 });
 

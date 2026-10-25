@@ -9,7 +9,7 @@ namespace ScrapingFactory.Tests;
 // Python's `re` in Jest; this proves the same shapes pass the companion's .NET
 // `Regex` validation (ScrapingPlanValidator) AND produce the expected value when
 // the real generated script runs — the "stay in the common subset" requirement.
-// The patterns below are what transform-helpers.js generates for the named
+// The patterns below are what transform-helpers.ts generates for the named
 // recipes, including ones whose user text contains regex metacharacters.
 public class RegexRecipeEndToEndTests
 {

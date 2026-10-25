@@ -1,0 +1,30 @@
+{{~ if blueprint_mapping_enabled ~}}
+    # Issue #192: BLUEPRINT_MAPPING flattens the tree into rows instead of
+    # writing it out nested — `root` itself (used for hardening/change-
+    # detection below) is unaffected, still the full, unflattened tree.
+    output_fieldnames = [m["target"] for m in BLUEPRINT_MAPPING]
+    output_rows = [{m["target"]: row.get(m["source"], "") for m in BLUEPRINT_MAPPING} for row in blueprint_rows]
+#@include main_write_rows
+    count = {{ if append_output }}appended_count{{ else }}len(output_rows){{ end }}
+{{~ else if blueprint_tree_mapping_enabled ~}}
+    # Issue #244: BLUEPRINT_TREE_MAPPING builds a real nested output tree of
+    # its own instead of denormalizing into rows — `root` itself (used for
+    # hardening/change-detection below) is unaffected, still the full,
+    # unmapped source tree.
+    blueprint_tree_root = ET.Element("Ergebnis")
+    for el in blueprint_tree_elements:
+        blueprint_tree_root.append(el)
+{{~ if output_is_json ~}}
+{{~ if append_output ~}}
+    json_tree = _append_previous_json_tree(OUTPUT_PATH, _xml_to_dict(blueprint_tree_root))
+{{~ end ~}}
+    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
+        json.dump({{ if append_output }}json_tree{{ else }}_xml_to_dict(blueprint_tree_root){{ end }}, f, ensure_ascii=False, indent=2)
+{{~ else ~}}
+    tree = ET.ElementTree({{ if append_output }}_append_previous_xml(OUTPUT_PATH, blueprint_tree_root){{ else }}blueprint_tree_root{{ end }})
+    _strip_illegal_xml_chars(tree.getroot())
+    ET.indent(tree)
+    tree.write(OUTPUT_PATH, encoding="utf-8", xml_declaration=True)
+{{~ end ~}}
+    count = len(blueprint_tree_root.findall(".//*"))
+{{~ else ~}}

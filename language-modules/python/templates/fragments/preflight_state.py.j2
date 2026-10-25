@@ -1,0 +1,24 @@
+PREFLIGHT_STATE_PATH = OUTPUT_PATH + ".preflight-state.json"
+EXIT_PREFLIGHT_UNCHANGED = 4
+EXIT_PREFLIGHT_UNREACHABLE = 5
+
+
+def _read_preflight_state():
+    try:
+        with open(PREFLIGHT_STATE_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, ValueError, OSError):
+        return {}
+
+
+def _write_preflight_state(etag, last_modified):
+    with open(PREFLIGHT_STATE_PATH, "w", encoding="utf-8") as f:
+        json.dump({"etag": etag, "lastModified": last_modified}, f)
+
+
+# Returns (status, etag, last_modified) — status is "unreachable" (the
+# request itself failed or came back with an error status), "unchanged" (a
+# response header matches the value stored from the last successful run),
+# or "proceed" (no comparable header, no previous state yet, or the value
+# differs — the main run should go ahead as normal).
+def _run_preflight_check(url):

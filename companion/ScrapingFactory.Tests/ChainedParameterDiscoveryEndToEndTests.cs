@@ -1,6 +1,7 @@
 using ScrapingFactory.Compiler.Backends.Python;
 using ScrapingFactory.Compiler.IR;
 using Xunit;
+using static ScrapingFactory.Tests.ApiScriptPlans;
 
 namespace ScrapingFactory.Tests;
 
@@ -17,15 +18,6 @@ namespace ScrapingFactory.Tests;
 // just the wrong ones).
 public class ChainedParameterDiscoveryEndToEndTests
 {
-    private static ScrapingPlan PlanWith(ApiConfig api) => new()
-    {
-        Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ApiCallStep { Config = api }],
-        OutputFormat = OutputFormat.Csv,
-        Engine = ScrapingEngine.Api,
-    };
-
-    private static string GenerateScript(ApiConfig api) => new PythonApiCodeGenerator().Generate(PlanWith(api));
-
     // "milch" has two valid weeks, "kaese" has one, and an unsubstituted
     // literal "{category}" (what a pre-#217 build would request, since it
     // never substituted anything into DiscoverySource.UrlTemplate) resolves

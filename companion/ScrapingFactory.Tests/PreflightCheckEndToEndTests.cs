@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
 using ScrapingFactory.Compiler.Backends.Python;
@@ -12,43 +11,9 @@ namespace ScrapingFactory.Tests;
 // main extraction accordingly — same "inherently needs two real runs, which
 // PythonScriptVerifier's always-fresh-temp-directory trial can never
 // exercise" reasoning as HardeningBaselineEndToEndTests, which this file's
-// own RunScriptAsync/workDir pattern mirrors directly.
+// own ScriptRunner/workDir pattern mirrors directly.
 public class PreflightCheckEndToEndTests
 {
-    private static async Task<(int ExitCode, string Stderr, string Stdout)> RunScriptAsync(string scriptPath, string workDir)
-    {
-        Exception? lastError = null;
-        foreach (var candidate in new[] { "python3", "python" })
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = candidate,
-                WorkingDirectory = workDir,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            psi.ArgumentList.Add(scriptPath);
-
-            try
-            {
-                using var process = new Process { StartInfo = psi };
-                process.Start();
-                var stderrTask = process.StandardError.ReadToEndAsync();
-                var stdoutTask = process.StandardOutput.ReadToEndAsync();
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                await process.WaitForExitAsync(cts.Token);
-                return (process.ExitCode, await stderrTask, await stdoutTask);
-            }
-            catch (System.ComponentModel.Win32Exception ex)
-            {
-                lastError = ex; // executable not found — try the next candidate
-            }
-        }
-        throw new InvalidOperationException("No Python interpreter found (tried: python3, python).", lastError);
-    }
-
     private static ScrapingPlan FlatPlan(string url, ScrapingEngine engine = ScrapingEngine.Static) => new()
     {
         Steps = [new NavigateStep { Urls = [url] }, new ExtractStep { Name = "Titel", Selector = "h1" }],
@@ -72,7 +37,7 @@ public class PreflightCheckEndToEndTests
             var scriptPath = Path.Combine(workDir, "scraper.py");
             await File.WriteAllTextAsync(scriptPath, script);
 
-            var (exit, stderr, _) = await RunScriptAsync(scriptPath, workDir);
+            var (exit, _, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
 
             Assert.Equal(0, exit);
             Assert.Empty(stderr);
@@ -104,7 +69,7 @@ public class PreflightCheckEndToEndTests
             var outputPath = Path.Combine(workDir, "output.csv");
             await File.WriteAllTextAsync(outputPath, "stale-content-from-a-previous-run");
 
-            var (exit, stderr, stdout) = await RunScriptAsync(scriptPath, workDir);
+            var (exit, stdout, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
 
             Assert.Equal(4, exit);
             Assert.Empty(stderr);
@@ -134,7 +99,7 @@ public class PreflightCheckEndToEndTests
             var statePath = Path.Combine(workDir, "output.csv.preflight-state.json");
             await File.WriteAllTextAsync(statePath, """{"etag": "\"v1\"", "lastModified": null}""");
 
-            var (exit, stderr, _) = await RunScriptAsync(scriptPath, workDir);
+            var (exit, _, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
 
             Assert.Equal(0, exit);
             Assert.Empty(stderr);
@@ -165,7 +130,7 @@ public class PreflightCheckEndToEndTests
             await File.WriteAllTextAsync(scriptPath, script);
             await File.WriteAllTextAsync(Path.Combine(workDir, "output.csv.preflight-state.json"), "{}");
 
-            var (exit, stderr, _) = await RunScriptAsync(scriptPath, workDir);
+            var (exit, _, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
 
             Assert.Equal(0, exit);
             Assert.Empty(stderr);
@@ -192,7 +157,7 @@ public class PreflightCheckEndToEndTests
             var scriptPath = Path.Combine(workDir, "scraper.py");
             await File.WriteAllTextAsync(scriptPath, script);
 
-            var (exit, stderr, _) = await RunScriptAsync(scriptPath, workDir);
+            var (exit, _, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
 
             Assert.Equal(5, exit);
             Assert.Contains("unreachable", stderr);
@@ -223,7 +188,7 @@ public class PreflightCheckEndToEndTests
             await File.WriteAllTextAsync(scriptPath, script);
             await File.WriteAllTextAsync(Path.Combine(workDir, "output.csv.preflight-state.json"), """{"etag": "\"v1\"", "lastModified": null}""");
 
-            var (exit, stderr, stdout) = await RunScriptAsync(scriptPath, workDir);
+            var (exit, stdout, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
 
             Assert.Equal(4, exit);
             Assert.Empty(stderr);

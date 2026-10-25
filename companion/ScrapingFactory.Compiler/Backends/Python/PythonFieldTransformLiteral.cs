@@ -2,26 +2,10 @@ using ScrapingFactory.Compiler.IR;
 
 namespace ScrapingFactory.Compiler.Backends.Python;
 
-// Serializes Issue #84's FieldTransform chain into a Python list-of-dicts
-// literal — the runtime counterpart every generated template's
-// _apply_transforms(value, transforms) helper walks. One canonical
-// serialization used everywhere a field can carry Transforms (flat mode's
-// TRANSFORMS dict in PythonCodeGenerator/PythonPlaywrightCodeGenerator,
-// container mode's PythonGroupTreeLiteral.RenderField, API mode's
-// PythonApiConfigLiteral), same rationale as PythonGroupTreeLiteral/
-// PythonApiConfigLiteral: the shape is built once here in C# rather than
-// re-derived per template.
-//
-// Issue #205: ToIntegerTransform/ToBooleanTransform/ToDateTransform's
-// "onError" is rendered via TransformErrorMode.ToString() ("KeepOriginal"/
-// "UseDefault") the exact same way HardeningCheck.Severity.ToString()
-// already becomes "Warning"/"Error" in PythonHardeningLiteral — both sides
-// (this literal and every template's runtime string comparison) share one
-// PascalCase vocabulary instead of a separate camelCase wire convention.
-// ToDateTransform.SourceFormat is resolved through RangeFormat.Resolve so
-// "unset" always renders as the same explicit default
-// (RangeFormat.DefaultDateFormat) the runtime helper would otherwise have
-// to reimplement its own fallback for.
+// Serializes a FieldTransform chain into a Python list-of-dicts literal, the one serialization every field shape uses
+// (flat TRANSFORMS, the group tree, API fields); the runtime's _apply_transforms walks it. "onError" renders as the
+// PascalCase enum name (the same vocabulary as hardening severity); an unset ToDate SourceFormat renders as the
+// explicit ISO default (RangeFormat.Resolve).
 internal static class PythonFieldTransformLiteral
 {
     public static string Render(IReadOnlyList<FieldTransform>? transforms)

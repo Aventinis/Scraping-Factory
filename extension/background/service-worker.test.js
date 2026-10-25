@@ -86,6 +86,7 @@ test('ELEMENT_SELECTED stores selector in session storage', async () => {
     pendingElementAttributes: null,
     pendingOwnText: null,
     pendingUrl: null,
+    pendingPickId: null,
   });
 });
 
@@ -106,6 +107,7 @@ test('ELEMENT_SELECTED with a framePath stores it alongside the selector', async
     pendingElementAttributes: null,
     pendingOwnText: null,
     pendingUrl: null,
+    pendingPickId: null,
   });
 });
 
@@ -125,6 +127,7 @@ test('ELEMENT_SELECTED with a matchCount stores it alongside the selector', asyn
     pendingElementAttributes: null,
     pendingOwnText: null,
     pendingUrl: null,
+    pendingPickId: null,
   });
 });
 
@@ -144,6 +147,7 @@ test('ELEMENT_SELECTED with rawText/attributes stores them alongside the selecto
     pendingElementAttributes: { 'data-id': '42' },
     pendingOwnText: null,
     pendingUrl: null,
+    pendingPickId: null,
   });
 });
 
@@ -162,6 +166,7 @@ test('ELEMENT_SELECTED with ownText stores it alongside the selector', async () 
     pendingElementAttributes: null,
     pendingOwnText: 'Burrata mit Tomaten',
     pendingUrl: null,
+    pendingPickId: null,
   });
 });
 
@@ -170,7 +175,7 @@ test('ELEMENT_SELECTED with ownText stores it alongside the selector', async () 
 // anywhere in this extension, so it silently goes stale if the same tab
 // navigates to a different page while the panel stays open. The selection's
 // own page (message.url) is persisted alongside the rest of the pending
-// state so session-restore.js can self-correct on a popup reopen.
+// state so session-restore.ts can self-correct on a popup reopen.
 test('ELEMENT_SELECTED with url stores it alongside the selector', async () => {
   capturedListener({ type: 'ELEMENT_SELECTED', selector: 'a.download', url: 'https://example.com/other-page' }, {});
 
@@ -184,6 +189,7 @@ test('ELEMENT_SELECTED with url stores it alongside the selector', async () => {
     pendingElementAttributes: null,
     pendingOwnText: null,
     pendingUrl: 'https://example.com/other-page',
+    pendingPickId: null,
   });
 });
 
@@ -565,4 +571,15 @@ describe('GET_EMBEDDED_JSON', () => {
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(sendResponse).toHaveBeenCalledWith(EMPTY);
   });
+});
+
+// Issue #429: every pick carries an id so the side panel can recognise a leftover of a handled one.
+test('ELEMENT_SELECTED stores the pick id alongside the selector (and null for an older sender)', async () => {
+  capturedListener({ type: 'ELEMENT_SELECTED', selector: 'h2', pickId: 'k3-abc' }, {});
+  await Promise.resolve();
+  expect(chrome.storage.session.set).toHaveBeenCalledWith(expect.objectContaining({ pendingPickId: 'k3-abc' }));
+  chrome.storage.session.set.mockClear();
+  capturedListener({ type: 'ELEMENT_SELECTED', selector: 'h2' }, {});
+  await Promise.resolve();
+  expect(chrome.storage.session.set).toHaveBeenCalledWith(expect.objectContaining({ pendingPickId: null }));
 });

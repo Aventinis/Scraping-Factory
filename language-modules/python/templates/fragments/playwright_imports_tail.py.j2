@@ -1,0 +1,29 @@
+{{~ if pagination.enabled ~}}
+{{~ if pagination.kind == "nextLink" ~}}
+import urllib.parse
+{{~ end ~}}
+{{~ end ~}}
+{{~ if download_enabled ~}}
+import hashlib
+{{~ end ~}}
+{{~ if discovered_urls.enabled || preflight.enabled ~}}
+# Issue #218/#219: both the discovery pass and the preflight check are
+# deliberately plain `requests` calls, never a live Playwright page (both
+# run before any navigation happens) — same "doesn't need the full
+# machinery of the main run" precedent DiscoverySource/BrowserDiscoverySource
+# already established for API mode.
+import requests
+{{~ end ~}}
+{{~ if discovered_urls.enabled ~}}
+from bs4 import BeautifulSoup
+{{~ end ~}}
+{{~ if change_detection.enabled ~}}
+import difflib
+{{~ if change_detection.notify_method == "Email" ~}}
+import smtplib
+from email.mime.text import MIMEText
+{{~ else ~}}
+import json
+import urllib.request
+{{~ end ~}}
+{{~ end ~}}

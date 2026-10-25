@@ -1,5 +1,5 @@
 // Issue #390: real-browser check of API mode's API_CONFIG screen after the
-// api-config-ui.js split — records the POST search of the api-nested-and-post
+// api-config-ui.ts split — records the POST search of the api-nested-and-post
 // fixture, confirms a field plus all its sibling fields, then exercises each
 // extracted area on the way to a real Generate:
 //   - response tree: remove a field row (this used to throw a ReferenceError since

@@ -1,0 +1,20 @@
+        browser = p.chromium.launch({{ if proxy.enabled }}proxy=_next_playwright_proxy(){{ end }})
+{{~ if persistent_session_enabled ~}}
+        _session_exists = os.path.exists(SESSION_STATE_PATH)
+        context = browser.new_context(storage_state=SESSION_STATE_PATH if _session_exists else None{{ if request_headers.enabled }}, **_BROWSER_CONTEXT_OPTIONS{{ end }})
+        page = context.new_page()
+{{~ if request_delay.enabled ~}}
+        _pace_request()
+{{~ end ~}}
+{{ navigate_action }}
+{{~ if has_login_actions ~}}
+        if not _session_exists:
+{{ login_actions }}
+{{~ end ~}}
+{{~ else ~}}
+        page = browser.new_page({{ if request_headers.enabled }}**_BROWSER_CONTEXT_OPTIONS{{ end }})
+{{~ if request_delay.enabled ~}}
+        _pace_request()
+{{~ end ~}}
+{{ actions }}
+{{~ end ~}}

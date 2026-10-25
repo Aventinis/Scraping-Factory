@@ -4,18 +4,12 @@ using ScrapingFactory.Compiler.IR;
 
 namespace ScrapingFactory.Compiler.Backends.Python;
 
-// Serializes a Container-Mode tree into Python source: a nested list-of-dicts
-// literal that both grouped templates (scraper_grouped.py.j2 /
-// playwright_scraper_grouped.py.j2) embed verbatim as the GROUPS constant.
-// Scriban can't recurse across templates, so the tree *structure* is built
-// here in C# rather than in Scriban — only the two DOM-access calls inside
-// each template's extract_group() differ per engine, the tree-of-dicts shape
-// consumed at runtime is identical either way.
+// Serializes the container tree into Python source: a nested list-of-dicts literal embedded as GROUPS by both
+// grouped templates. Scriban cannot recurse across templates, so the structure is built here; only the DOM-access
+// calls in extract_group() differ per engine.
 internal static class PythonGroupTreeLiteral
 {
-    // Issue #213: whether the generated script needs the download helper
-    // (and its own conditional imports — os/sys/hashlib/urljoin) at all —
-    // true iff at least one field anywhere in the tree has Download enabled.
+    // True iff some field has Download enabled (the script then needs the download helper and its imports).
     public static bool AnyDownloadEnabled(IReadOnlyList<ContainerNode> nodes) => nodes.Any(node => node switch
     {
         DataFieldNode field => field.Download,
@@ -23,11 +17,8 @@ internal static class PythonGroupTreeLiteral
         _ => false,
     });
 
-    // Issue #206 follow-up: every field name anywhere in the tree with
-    // HiddenFromOutput set, matched globally by name at write time — the
-    // same "global by name" simplification NullRateCheck/RequiredFieldsCheck
-    // already use for this tree shape (see CLAUDE.md). Used to build the
-    // grouped templates' own HIDDEN_FIELD_NAMES set.
+    // Every hidden field name in the tree, matched globally by name at write time (like NullRateCheck); feeds the
+    // templates' HIDDEN_FIELD_NAMES.
     public static IReadOnlyList<string> CollectHiddenFieldNames(IReadOnlyList<ContainerNode> nodes) => nodes.SelectMany(node => node switch
     {
         DataFieldNode { HiddenFromOutput: true } field => new[] { field.Name },
@@ -58,11 +49,7 @@ internal static class PythonGroupTreeLiteral
         _ => throw new InvalidOperationException($"Unknown container node type: {node.GetType()}"),
     };
 
-    // Presence of the "children" key (even if empty) is what extract_group()
-    // uses at runtime to tell a group from a leaf field — see the grouped
-    // templates. "frame_path" (Issue #42, Phase 3) is omitted entirely when
-    // null, same "absent key = no FramePath" convention as "attribute"
-    // below — extract_group() reads it via node.get("frame_path").
+    // The "children" key (even if empty) tells extract_group() a group from a leaf. "frame_path" is omitted when null.
     private static string RenderGroup(GroupNode group, int indent)
     {
         var children = Render(group.Children, indent);
@@ -82,30 +69,14 @@ internal static class PythonGroupTreeLiteral
         };
         var attributePart = field.Mode == ExtractMode.Attribute ? $""", "attribute": {PythonLiteral.Str(field.Attribute!)}""" : "";
         var framePathPart = FramePathPart(field.FramePath);
-        // Always present (never omitted like attribute/frame_path above) —
-        // Issue #84's transform chain isn't tied to a specific Mode branch,
-        // so extract_group() can just do node.get("transform", []) uniformly.
+        // transform, download, maxDownloadSizeBytes, allowedContentTypes and hiddenFromOutput are always present, so
+        // extract_group() reads them with a plain node.get(...).
         var transformPart = $$""", "transform": {{PythonFieldTransformLiteral.Render(field.Transforms)}}""";
-        // Issue #213: same "always present" convention as transform above —
-        // Download is only ever true under Mode == Attribute (validated
-        // upstream), but extract_group() can still just do
-        // node.get("download", False) uniformly regardless of mode.
         var downloadPart = $$""", "download": {{(field.Download ? "True" : "False")}}""";
-        // Issue #214: same "always present" convention — None/[] when unset
-        // is a harmless, always-safe default for extract_group()'s own
-        // node.get(...) reads.
         var maxSizePart = $$""", "maxDownloadSizeBytes": {{field.MaxDownloadSizeBytes?.ToString() ?? "None"}}""";
         var allowedTypesPart = $$""", "allowedContentTypes": {{(field.AllowedContentTypes is { Count: > 0 } ? PythonLiteral.StrList(field.AllowedContentTypes) : "[]")}}""";
-        // Issue #206 follow-up: always present, same convention as
-        // transform/download above — extract_group() reads it uniformly via
-        // node.get("hiddenFromOutput", False) regardless of whether any
-        // field in the tree actually uses it.
         var hiddenPart = $$""", "hiddenFromOutput": {{(field.HiddenFromOutput ? "True" : "False")}}""";
-        // Selector is "" (never None) when blank — a derived (combineFields/
-        // splitField) field's own selector is never read at runtime anyway
-        // (see extract_group()'s "if selector:" guard), so a plain empty
-        // Python string is the simplest sentinel, consistent with how
-        // SELECTORS is built for flat mode.
+        // Selector is "" (never None) when blank; a derived field's selector is never read.
         return $$"""{"name": {{PythonLiteral.Str(field.Name)}}, "selector": {{PythonLiteral.Str(field.Selector ?? "")}}, "mode": {{PythonLiteral.Str(mode)}}{{attributePart}}{{framePathPart}}{{transformPart}}{{downloadPart}}{{maxSizePart}}{{allowedTypesPart}}{{hiddenPart}}}""";
     }
 

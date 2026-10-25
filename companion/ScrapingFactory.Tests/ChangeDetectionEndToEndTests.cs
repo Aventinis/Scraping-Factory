@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Net;
 using System.Text;
 using ScrapingFactory.Compiler.Backends.Python;
@@ -19,43 +18,6 @@ namespace ScrapingFactory.Tests;
 // subprocess, twice, in one shared directory they control themselves.
 public class ChangeDetectionEndToEndTests
 {
-    private static async Task<(int ExitCode, string Stderr)> RunScriptAsync(
-        string scriptPath, string workDir, IReadOnlyDictionary<string, string> env)
-    {
-        Exception? lastError = null;
-        foreach (var candidate in new[] { "python3", "python" })
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = candidate,
-                WorkingDirectory = workDir,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            psi.ArgumentList.Add(scriptPath);
-            foreach (var (key, value) in env)
-                psi.Environment[key] = value;
-
-            try
-            {
-                using var process = new Process { StartInfo = psi };
-                process.Start();
-                var stderrTask = process.StandardError.ReadToEndAsync();
-                var stdoutTask = process.StandardOutput.ReadToEndAsync();
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                await process.WaitForExitAsync(cts.Token);
-                return (process.ExitCode, await stderrTask);
-            }
-            catch (System.ComponentModel.Win32Exception ex)
-            {
-                lastError = ex; // executable not found — try the next candidate
-            }
-        }
-        throw new InvalidOperationException("No Python interpreter found (tried: python3, python).", lastError);
-    }
-
     [Fact]
     public async Task Webhook_NotifiesOnlyOnceContentActuallyChangesAcrossRuns()
     {
@@ -95,19 +57,19 @@ public class ChangeDetectionEndToEndTests
 
             // Run 1: no previous output.csv yet — establishes the baseline,
             // no notification attempted at all.
-            var (exit1, stderr1) = await RunScriptAsync(scriptPath, workDir, env);
+            var (exit1, stderr1) = await ScriptRunner.RunAsync(scriptPath, workDir, env);
             Assert.Equal(0, exit1);
             Assert.Empty(stderr1);
             Assert.Empty(receivedPayloads);
 
             // Run 2: page content unchanged — still no notification.
-            var (exit2, _) = await RunScriptAsync(scriptPath, workDir, env);
+            var (exit2, _) = await ScriptRunner.RunAsync(scriptPath, workDir, env);
             Assert.Equal(0, exit2);
             Assert.Empty(receivedPayloads);
 
             // Run 3: page content genuinely changes — notification fires.
             currentHtml = "<html><body><h1>V2</h1></body></html>";
-            var (exit3, _) = await RunScriptAsync(scriptPath, workDir, env);
+            var (exit3, _) = await ScriptRunner.RunAsync(scriptPath, workDir, env);
             Assert.Equal(0, exit3);
             var payload = Assert.Single(receivedPayloads);
             Assert.Contains("V1", payload);
@@ -161,13 +123,13 @@ public class ChangeDetectionEndToEndTests
                 ["SF_TEST_TO"] = "watcher@example.com",
             };
 
-            var (exit1, stderr1) = await RunScriptAsync(scriptPath, workDir, env);
+            var (exit1, stderr1) = await ScriptRunner.RunAsync(scriptPath, workDir, env);
             Assert.Equal(0, exit1);
             Assert.Empty(stderr1);
             Assert.Empty(smtpServer.ReceivedMessages);
 
             currentHtml = "<html><body><h1>V2</h1></body></html>";
-            var (exit2, stderr2) = await RunScriptAsync(scriptPath, workDir, env);
+            var (exit2, stderr2) = await ScriptRunner.RunAsync(scriptPath, workDir, env);
             Assert.Equal(0, exit2);
             Assert.Empty(stderr2);
             var message = Assert.Single(smtpServer.ReceivedMessages);
@@ -217,11 +179,11 @@ public class ChangeDetectionEndToEndTests
             // an unreachable target.
             var env = new Dictionary<string, string> { ["SF_TEST_WEBHOOK_URL"] = "http://127.0.0.1:1/nope" };
 
-            var (exit1, _) = await RunScriptAsync(scriptPath, workDir, env);
+            var (exit1, _) = await ScriptRunner.RunAsync(scriptPath, workDir, env);
             Assert.Equal(0, exit1);
 
             currentHtml = "<html><body><h1>V2</h1></body></html>";
-            var (exit2, stderr2) = await RunScriptAsync(scriptPath, workDir, env);
+            var (exit2, stderr2) = await ScriptRunner.RunAsync(scriptPath, workDir, env);
             Assert.Equal(0, exit2);
             Assert.Empty(stderr2);
 

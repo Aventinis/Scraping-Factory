@@ -1,0 +1,20 @@
+SELECTORS = {
+{{- for field in fields }}
+    "{{ field.name }}": "{{ field.selector | string.escape }}",
+{{- end }}
+}
+
+ATTRIBUTES = {
+{{- for field in fields }}{{- if field.attribute }}
+    "{{ field.name }}": "{{ field.attribute }}",
+{{- end }}{{- end }}
+}
+
+# Issue #84: per-field post-processing chain (trim/regex extract/replace/
+# to-number), applied in order after the raw value is read — see
+# _apply_transforms below. Empty list = today's behavior, value unchanged.
+TRANSFORMS = {
+{{- for field in fields }}
+    "{{ field.name }}": {{ field.transforms_literal }},
+{{- end }}
+}

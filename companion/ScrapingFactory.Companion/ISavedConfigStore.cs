@@ -1,14 +1,9 @@
 namespace ScrapingFactory.Companion;
 
-// Issue #276: the storage contract behind the /configs endpoints (saved
-// configurations, Issue #141, and their saved run outputs, Issue #202), so
-// Program.cs's endpoint handlers depend on this instead of on the SQLite
-// implementation (SavedConfigStore) — another backend only has to implement
-// these members and be registered in DI. Deliberately limited to what the
-// handlers call: everything SQLite-specific (the connection string, PRAGMA
-// foreign_keys, the idempotent column migrations, ResolveDbPath) stays inside
-// SavedConfigStore, since a different backend has its own connection and
-// migration story.
+// The storage contract behind the /configs endpoints (saved configurations and their saved run outputs). The endpoint
+// handlers (Endpoints/) depend on this instead of a database; SavedConfigStore (SQLite) and MySqlSavedConfigStore implement
+// it through SqlSavedConfigStoreBase, which holds the queries. Deliberately limited to what the handlers call: connection
+// strings, PRAGMAs, migrations and ResolveDbPath stay inside the implementations.
 //
 // Contract notes an implementation must keep, because the endpoints rely on
 // them: ConfigJson/Content are stored and returned verbatim (never

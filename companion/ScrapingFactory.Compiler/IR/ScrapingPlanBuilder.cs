@@ -1,19 +1,13 @@
 namespace ScrapingFactory.Compiler.IR;
 
-// Translates the wire-facing ScrapingConfig into the canonical Steps-based
-// ScrapingPlan: today's Fields become one NavigateStep followed by one
-// ExtractStep per field. This is the seam where future wire-level features
-// would plug in without changing ICodeGenerator/IScriptVerifier, which only
-// ever see a ScrapingPlan.
+// Translates the wire ScrapingConfig into the canonical ScrapingPlan: a NavigateStep, the browser actions, then
+// one extraction step per mode. The generators and verifiers only ever see the plan.
 public static class ScrapingPlanBuilder
 {
     public static ScrapingPlan Build(ScrapingConfig config)
     {
-        // Issue #83: AdditionalUrls entries are trimmed and blank ones
-        // dropped — a pasted list's stray empty line is a formatting
-        // artifact, not a URL the caller actually meant to add, unlike a
-        // genuinely malformed non-blank entry, which still surfaces as a
-        // real validation error in ScrapingPlanValidator.
+        // Blank AdditionalUrls entries are dropped (a pasted list's stray empty line); a malformed non-blank
+        // one is still a validation error.
         var urls = new List<string> { config.Url };
         if (config.AdditionalUrls is { Count: > 0 } additionalUrls)
         {
@@ -22,41 +16,21 @@ public static class ScrapingPlanBuilder
 
         var steps = new List<ScrapingStep> { new NavigateStep { Urls = urls } };
 
-        // Browser actions run before extraction regardless of mode (Fields/
-        // Groups/Api) — same "runs first, extraction phase after differs"
-        // shape as a login flow already had via WaitFor/Fill/Click before
-        // BrowserActions gave them a wire path.
+        // Browser actions run before extraction, whatever the mode.
         if (config.BrowserActions is { Count: > 0 } actions)
             steps.AddRange(actions.Select(ToStep));
 
-        // Sanitized once here, regardless of mode — see FileNameSanitizer for
-        // why this happens server-side instead of trusting the wire payload.
+        // Sanitized here rather than trusting the wire payload.
         var scriptFileName = FileNameSanitizer.SanitizeBaseName(config.ScriptFileName, "scraper");
         var outputFileBaseName = FileNameSanitizer.SanitizeBaseName(config.OutputFileName, "output");
 
-        // Container-Mode: Groups replaces Fields wholesale, and forces Xml
-        // regardless of what the wire payload set OutputFormat to — the
-        // extension doesn't need to know this any more than it needs to set
-        // Engine=Browser for a login flow (see ScrapingConfig.Groups) —
-        // unless the caller explicitly asked for Json (Issue #86), which
-        // fits a tree just as well as Xml does and is honored instead.
+        // Container mode: Groups replaces Fields; the output defaults to Xml unless Json was asked for.
         if (config.Groups is { Count: > 0 } groups)
         {
-            // Issue #192: an active FLAT-schema OutputBlueprint mapping
-            // flattens the tree into denormalized rows instead of preserving
-            // its nested shape (see OutputBlueprintFlattening), so it needs
-            // the flat-mode output formats (Csv, or Json's flat array)
-            // instead of Xml/tree-Json — the same "explicit override wins"
-            // pattern Issue #86's own Json request already established over
-            // this same forced default. Issue #244's TREE-schema mapping is
-            // the opposite: it produces a real nested structure of its own,
-            // so it keeps the ordinary tree-shape formats (Xml, or tree-
-            // Json) exactly as if no mapping were active at all.
+            // A flat-schema blueprint flattens the tree into rows, so it needs the flat formats (Csv / flat Json);
+            // a tree-schema one builds a nested structure and keeps Xml / tree Json. A table format (Sqlite/Xlsx)
+            // also needs rows: without an explicit blueprint the tree gets an identity mapping over its leaves.
             var isJson = config.OutputFormat == OutputFormat.Json;
-            // Issue #229: a table format (Sqlite/Xlsx) needs rows, so a tree
-            // without an explicit blueprint gets an identity mapping over its
-            // leaf fields — i.e. the tree is flattened exactly like a flat
-            // Output Blueprint over every field would.
             var isTabular = IsTabular(config.OutputFormat);
             var autoBlueprint = isTabular && config.OutputBlueprint is null ? IdentityMapping(ContainerLeafNames(groups)) : null;
             var effectiveBlueprint = autoBlueprint ?? config.OutputBlueprint;
@@ -78,18 +52,9 @@ public static class ScrapingPlanBuilder
             };
         }
 
-        // Issue #182: Blocks replaces Fields/Groups/Api wholesale with N
-        // independent extraction phases sharing this one NavigateStep/set of
-        // browser actions — each block resolves its own shape/output
-        // filename/format exactly like the single-shape branches below do
-        // for the whole plan, just once per block instead of once overall.
-        // ChangeDetection/Hardening are intentionally NOT carried onto the
-        // returned ScrapingPlan here (unlike every other branch) — they live
-        // per-block on PlanExtractionBlock instead, since Program.cs's
-        // /generate handler already rejects them being set on the outer
-        // config when Blocks is set. ExternalConfig is rejected outright
-        // together with Blocks (see ScrapingConfig.Blocks), so it's likewise
-        // left at its default (false) here rather than carried through.
+        // Blocks mode: N extraction phases sharing this navigation; each block resolves its own name, output file
+        // and format. ChangeDetection/Hardening live on the blocks, not on the plan (the outer config may not set
+        // them), and ExternalConfig is rejected together with Blocks.
         if (config.Blocks is { Count: > 0 } blocksConfig)
         {
             var planBlocks = blocksConfig.Select((block, i) =>
@@ -128,29 +93,12 @@ public static class ScrapingPlanBuilder
             };
         }
 
-        // API-Mode: Api replaces Fields/Groups wholesale, and forces
-        // Engine.Api regardless of what the wire payload set — same
-        // "the extension doesn't need to set this itself" pattern as
-        // Container-Mode forcing Xml above. OutputFormat itself depends on
-        // which of Api's two response shapes is set (Issue #54): the flat
-        // ItemsPath/Fields shape still forces Csv exactly as before, but
-        // the tree shape (Groups) forces Xml instead — tree data doesn't
-        // fit CSV's column model, the same reason Container-Mode's own
-        // tree forces Xml above. Either forced default yields to an
-        // explicit Json request (Issue #86), same as Container-Mode.
+        // API mode: forces Engine.Api; the output defaults to Csv (flat shape) or Xml (tree), unless Json was
+        // asked for. The blueprint / table-format rules are the same as for container mode above.
         if (config.Api is { } api)
         {
             var isJson = config.OutputFormat == OutputFormat.Json;
             var apiHasGroups = api.Groups is { Count: > 0 };
-            // Issue #192/#244: same override as Container-Mode above — an
-            // active FLAT-schema OutputBlueprint on the tree shape (Groups)
-            // flattens it into rows at runtime (see scraper_api_grouped.
-            // py.j2's own flatten walker), so it needs the flat formats
-            // regardless of apiHasGroups; a TREE-schema mapping produces a
-            // real nested structure instead, so it keeps the ordinary
-            // tree-shape formats like an unmapped tree response would.
-            // Issue #229: same auto-flatten as Container-Mode above for a
-            // table format on the tree shape.
             var apiTabular = IsTabular(config.OutputFormat);
             var apiAutoBlueprint = apiTabular && apiHasGroups && config.OutputBlueprint is null ? IdentityMapping(ApiLeafNames(api.Groups!)) : null;
             var apiBlueprint = apiAutoBlueprint ?? config.OutputBlueprint;
@@ -212,7 +160,6 @@ public static class ScrapingPlanBuilder
         _ => throw new InvalidOperationException($"Unknown BrowserAction type: {action.GetType().Name}"),
     };
 
-    // Issue #229: see the auto-flatten comments in Build.
     private static bool IsTabular(OutputFormat format) => format is OutputFormat.Sqlite or OutputFormat.Xlsx;
 
     private static OutputBlueprintMapping IdentityMapping(IEnumerable<string> names) => new()
@@ -221,8 +168,7 @@ public static class ScrapingPlanBuilder
         Fields = names.Select(name => new OutputBlueprintFieldMapping { TargetField = name, SourceField = name }).ToList(),
     };
 
-    // Leaf field names in declaration order, without HiddenFromOutput fields
-    // (they stay computed but are never written).
+    // Leaf field names in declaration order, without hidden ones.
     private static List<string> ContainerLeafNames(IEnumerable<ContainerNode> nodes)
     {
         var names = new List<string>();

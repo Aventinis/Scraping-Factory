@@ -1,16 +1,4 @@
-#@include output_append
-def main():
-{{~ if preflight.enabled ~}}
-    preflight_status, preflight_etag, preflight_last_modified = _run_preflight_check(URLS[0])
-    if preflight_status == "unreachable":
-        sys.exit(EXIT_PREFLIGHT_UNREACHABLE)
-    if preflight_status == "unchanged":
-        print("Preflight check: no change detected since the last run — skipping.")
-        sys.exit(EXIT_PREFLIGHT_UNCHANGED)
-{{~ end ~}}
-{{~ if change_detection.enabled ~}}
-    previous_content = _read_previous_output(OUTPUT_PATH)
-{{~ end ~}}
+#@include main_head
     # Issue #83: each URL's own scrape() already wraps its matches in an
     # <Ergebnis> element (see above) — combine every URL's children into one
     # final <Ergebnis>, the same sibling-merging pattern already used for
@@ -36,100 +24,11 @@ def main():
             root.append(el)
         blueprint_rows.extend(page_blueprint_rows)
         blueprint_tree_elements.extend(page_blueprint_tree_elements)
-{{~ if blueprint_mapping_enabled ~}}
-    # Issue #192: BLUEPRINT_MAPPING flattens the tree into rows instead of
-    # writing it out nested — `root` itself (used for hardening/change-
-    # detection below) is unaffected, still the full, unflattened tree.
-    output_fieldnames = [m["target"] for m in BLUEPRINT_MAPPING]
-    output_rows = [{m["target"]: row.get(m["source"], "") for m in BLUEPRINT_MAPPING} for row in blueprint_rows]
-{{~ if append_output ~}}
-    appended_count = len(output_rows)
-{{~ end ~}}
-{{~ if append_output && !output_is_sqlite && !output_is_xlsx ~}}
-    output_fieldnames, output_rows = _append_previous_rows(OUTPUT_PATH, output_fieldnames, output_rows)
-{{~ end ~}}
-{{~ if output_is_json ~}}
-    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(output_rows, f, ensure_ascii=False, indent=2)
-{{~ else if output_is_sqlite ~}}
-    _write_rows_sqlite(OUTPUT_PATH, output_fieldnames, output_rows)
-{{~ else if output_is_xlsx ~}}
-    _write_rows_xlsx(OUTPUT_PATH, output_fieldnames, output_rows)
-{{~ else ~}}
-    with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=output_fieldnames)
-        writer.writeheader()
-        writer.writerows(output_rows)
-{{~ end ~}}
-    count = {{ if append_output }}appended_count{{ else }}len(output_rows){{ end }}
-{{~ else if blueprint_tree_mapping_enabled ~}}
-    # Issue #244: BLUEPRINT_TREE_MAPPING builds a real nested output tree of
-    # its own instead of denormalizing into rows — `root` itself (used for
-    # hardening/change-detection below) is unaffected, still the full,
-    # unmapped source tree.
-    blueprint_tree_root = ET.Element("Ergebnis")
-    for el in blueprint_tree_elements:
-        blueprint_tree_root.append(el)
-{{~ if output_is_json ~}}
-{{~ if append_output ~}}
-    json_tree = _append_previous_json_tree(OUTPUT_PATH, _xml_to_dict(blueprint_tree_root))
-{{~ end ~}}
-    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        json.dump({{ if append_output }}json_tree{{ else }}_xml_to_dict(blueprint_tree_root){{ end }}, f, ensure_ascii=False, indent=2)
-{{~ else ~}}
-    tree = ET.ElementTree({{ if append_output }}_append_previous_xml(OUTPUT_PATH, blueprint_tree_root){{ else }}blueprint_tree_root{{ end }})
-    _strip_illegal_xml_chars(tree.getroot())
-    ET.indent(tree)
-    tree.write(OUTPUT_PATH, encoding="utf-8", xml_declaration=True)
-{{~ end ~}}
-    count = len(blueprint_tree_root.findall(".//*"))
-{{~ else ~}}
+#@include main_grouped_output
     # Issue #206 follow-up: writes a HIDDEN_FIELD_NAMES-stripped copy — count
     # and every use of `root` below (hardening, change detection) still see
     # the full, unstripped tree.
-{{~ if dedup.enabled ~}}
-    # Issue #225: incremental mode writes a copy without the instances seen in
-    # an earlier run; `root` itself (hardening, baseline count, the key
-    # collection for the state file) stays the full tree.
-    output_root = _tree_without_hidden_fields(_dedup_delta_tree(root))
-    written_count = len(output_root.findall(".//*"))
-{{~ else ~}}
-    output_root = _tree_without_hidden_fields(root)
-{{~ end ~}}
-{{~ if output_is_json ~}}
-{{~ if append_output ~}}
-    json_tree = _append_previous_json_tree(OUTPUT_PATH, _xml_to_dict(output_root))
-{{~ end ~}}
-    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        json.dump({{ if append_output }}json_tree{{ else }}_xml_to_dict(output_root){{ end }}, f, ensure_ascii=False, indent=2)
-    count = len(root.findall(".//*"))
-{{~ else ~}}
-    tree = ET.ElementTree({{ if append_output }}_append_previous_xml(OUTPUT_PATH, output_root){{ else }}output_root{{ end }})
-    _strip_illegal_xml_chars(tree.getroot())
-    ET.indent(tree)
-    tree.write(OUTPUT_PATH, encoding="utf-8", xml_declaration=True)
-    count = len(root.findall(".//*"))
-{{~ end ~}}
-{{~ end ~}}
-    print(f"Done — {{ if dedup.enabled }}{written_count}{{ else }}{count}{{ end }} {{ if blueprint_mapping_enabled }}row(s){{ else }}elements{{ end }} {{ if append_output }}appended to{{ else }}written to{{ end }} {OUTPUT_PATH}")
-{{~ if dedup.enabled ~}}
-    _dedup_report()
-{{~ end ~}}
-{{~ if change_detection.enabled ~}}
-    with open(OUTPUT_PATH, "r", encoding="utf-8") as f:
-        new_content = f.read()
-    if previous_content is not None and previous_content != new_content:
-        _notify_change(previous_content, new_content)
-{{~ end ~}}
-{{~ if hardening.enabled ~}}
-    hardening_failed = _run_hardening_checks(root) or _report_required_fields_drops()
-{{~ if hardening.has_baseline ~}}
-    if not hardening_failed:
-        _write_baseline(count)
-{{~ end ~}}
-    if hardening_failed:
-        sys.exit(EXIT_HARDENING_FAILED)
-{{~ end ~}}
+#@include main_grouped_post_checks
 {{~ if preflight.enabled ~}}
     # Only reached if hardening (when enabled) didn't just sys.exit() above —
     # a run that's about to be flagged as hardening-failed must never
@@ -137,10 +36,4 @@ def main():
     # normal" rule BaselineCheck's own write already follows.
     _write_preflight_state(preflight_etag, preflight_last_modified)
 {{~ end ~}}
-{{~ if dedup.enabled ~}}
-    _dedup_save_state(_dedup_collect_keys(root))
-{{~ end ~}}
-{{~ if proxy.enabled ~}}
-    if _PROXY_ENV_MISSING:
-        sys.exit(EXIT_MISSING_ENV_VAR)
-{{~ end ~}}
+#@include main_grouped_save_state

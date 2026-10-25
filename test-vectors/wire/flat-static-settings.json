@@ -1,0 +1,122 @@
+{
+  "version": "1",
+  "url": "https://example.test/list",
+  "fields": [
+    {
+      "name": "Title",
+      "selector": "h2.title",
+      "attribute": null
+    },
+    {
+      "name": "Price",
+      "selector": "span.price",
+      "attribute": null
+    },
+    {
+      "name": "Link",
+      "selector": "a.more",
+      "attribute": "href"
+    }
+  ],
+  "outputFormat": "Csv",
+  "scriptFileName": null,
+  "outputFileName": null,
+  "additionalUrls": [
+    "https://example.test/list?page=2"
+  ],
+  "changeDetection": {
+    "notify": "Email",
+    "email": {
+      "smtpHostEnvVar": "SMTP_HOST",
+      "fromEnvVar": "MAIL_FROM",
+      "toEnvVar": "MAIL_TO",
+      "smtpPortEnvVar": "SMTP_PORT",
+      "smtpUsernameEnvVar": "SMTP_USER",
+      "smtpPasswordEnvVar": "SMTP_PASSWORD"
+    }
+  },
+  "proxy": {
+    "environmentVariableName": "PROXY_LIST"
+  },
+  "requestDelay": {
+    "minMs": 1000,
+    "maxMs": 3000
+  },
+  "respectRobotsDelay": true,
+  "robotsDisallow": {
+    "action": "Skip"
+  },
+  "appendOutput": true,
+  "retry": {
+    "maxAttempts": 4,
+    "delayMs": 1500,
+    "exponential": true,
+    "retryOnStatusCodes": [
+      429,
+      503
+    ]
+  },
+  "deduplication": {
+    "keyFields": [
+      "Title",
+      "Price"
+    ],
+    "incremental": true,
+    "incrementalOutput": "Append",
+    "retention": {
+      "kind": "MaxAge",
+      "value": 30
+    }
+  },
+  "headers": [
+    {
+      "name": "Accept-Language",
+      "value": "de-CH"
+    },
+    {
+      "name": "Authorization",
+      "environmentVariableName": "API_TOKEN"
+    }
+  ],
+  "hardening": [
+    {
+      "kind": "noResult",
+      "severity": "Error"
+    },
+    {
+      "kind": "nullRate",
+      "severity": "Warning",
+      "fieldName": "Price",
+      "threshold": 0.4
+    },
+    {
+      "kind": "baseline",
+      "severity": "Warning",
+      "dropThreshold": 0.25
+    },
+    {
+      "kind": "blocking",
+      "severity": "Warning",
+      "minBodyLength": 1000,
+      "blockPhrases": [
+        "Access Denied",
+        "Please verify you are human"
+      ]
+    },
+    {
+      "kind": "requiredFields",
+      "severity": "Warning",
+      "fieldNames": [
+        "Title"
+      ]
+    }
+  ],
+  "pagination": {
+    "kind": "nextLink",
+    "nextLinkSelector": "a.next",
+    "maxPages": 5
+  },
+  "preflight": true,
+  "skipVerification": true,
+  "externalConfig": true
+}

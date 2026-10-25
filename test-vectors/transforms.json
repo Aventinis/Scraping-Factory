@@ -1,0 +1,887 @@
+{
+ "description": "Issue #388: the extension's live transform preview (applyTransformsPreview, field-transforms.ts) and the generated scripts' _apply_transforms must produce the same value for the same chain. Cases without appliesTo run on both sides; appliesTo [\"js\"] / [\"python\"] limits a case to one side and the note says why. expected null = 'preview unavailable' (JS only).",
+ "cases": [
+  {
+   "name": "no transforms leave the value alone",
+   "value": "  x ",
+   "transforms": [],
+   "expected": "  x "
+  },
+  {
+   "name": "trim strips both ends",
+   "value": " \t a b \n",
+   "transforms": [
+    {
+     "kind": "trim"
+    }
+   ],
+   "expected": "a b"
+  },
+  {
+   "name": "regexExtract keeps group 2",
+   "value": "tel 12-34",
+   "transforms": [
+    {
+     "kind": "regexExtract",
+     "pattern": "(\\d+)-(\\d+)",
+     "group": 2
+    }
+   ],
+   "expected": "34"
+  },
+  {
+   "name": "regexExtract without group keeps the whole match",
+   "value": "tel 12-34",
+   "transforms": [
+    {
+     "kind": "regexExtract",
+     "pattern": "\\d+-\\d+"
+    }
+   ],
+   "expected": "12-34"
+  },
+  {
+   "name": "regexExtract without a match gives empty",
+   "value": "kein Preis",
+   "transforms": [
+    {
+     "kind": "regexExtract",
+     "pattern": "\\d+",
+     "group": 0
+    }
+   ],
+   "expected": ""
+  },
+  {
+   "name": "regexExtract with an out-of-range group gives empty",
+   "value": "a1",
+   "transforms": [
+    {
+     "kind": "regexExtract",
+     "pattern": "a(\\d)",
+     "group": 5
+    }
+   ],
+   "expected": ""
+  },
+  {
+   "name": "regexExtract with a group that did not participate gives empty",
+   "value": "ac",
+   "transforms": [
+    {
+     "kind": "regexExtract",
+     "pattern": "a(b)?c",
+     "group": 1
+    }
+   ],
+   "expected": ""
+  },
+  {
+   "name": "regexExtract anchors",
+   "value": "  hello world",
+   "transforms": [
+    {
+     "kind": "regexExtract",
+     "pattern": "^\\s*(\\w+)",
+     "group": 1
+    }
+   ],
+   "expected": "hello"
+  },
+  {
+   "name": "regexExtract lazy quantifier",
+   "value": "12.99 € netto",
+   "transforms": [
+    {
+     "kind": "regexExtract",
+     "pattern": "(.+?)\\s*€",
+     "group": 1
+    }
+   ],
+   "expected": "12.99"
+  },
+  {
+   "name": "regexExtract with an invalid pattern is unavailable in the preview",
+   "value": "x",
+   "transforms": [
+    {
+     "kind": "regexExtract",
+     "pattern": "(",
+     "group": 0
+    }
+   ],
+   "expected": null,
+   "appliesTo": [
+    "js"
+   ],
+   "note": "The companion rejects such a pattern before generating (FieldTransformValidator); the preview reports 'unavailable'."
+  },
+  {
+   "name": "regexExtract \\w is Unicode-aware in Python only",
+   "value": "Müller",
+   "transforms": [
+    {
+     "kind": "regexExtract",
+     "pattern": "(\\w+)",
+     "group": 1
+    }
+   ],
+   "expected": "Müller",
+   "appliesTo": [
+    "python"
+   ],
+   "note": "Known divergence: JS RegExp without the u flag treats \\w as ASCII-only, so the preview shows 'M'. Avoid \\w/\\d/\\s on non-ASCII text in the pattern helper or accept the preview difference."
+  },
+  {
+   "name": "replace replaces every occurrence",
+   "value": "a-b-c",
+   "transforms": [
+    {
+     "kind": "replace",
+     "find": "-",
+     "replacement": "+"
+    }
+   ],
+   "expected": "a+b+c"
+  },
+  {
+   "name": "replace treats the search text literally",
+   "value": "a.b.c",
+   "transforms": [
+    {
+     "kind": "replace",
+     "find": ".",
+     "replacement": ""
+    }
+   ],
+   "expected": "abc"
+  },
+  {
+   "name": "replace treats $ in the replacement literally",
+   "value": "a.b",
+   "transforms": [
+    {
+     "kind": "replace",
+     "find": ".",
+     "replacement": "$&$&"
+    }
+   ],
+   "expected": "a$&$&b"
+  },
+  {
+   "name": "replace with an empty replacement deletes",
+   "value": "Preis: 5",
+   "transforms": [
+    {
+     "kind": "replace",
+     "find": "Preis: ",
+     "replacement": ""
+    }
+   ],
+   "expected": "5"
+  },
+  {
+   "name": "toNumber decimal comma",
+   "value": "Preis: 12,99 €",
+   "transforms": [
+    {
+     "kind": "toNumber"
+    }
+   ],
+   "expected": "12.99"
+  },
+  {
+   "name": "toNumber thousands dot and decimal comma",
+   "value": "1.234,56",
+   "transforms": [
+    {
+     "kind": "toNumber"
+    }
+   ],
+   "expected": "1234.56"
+  },
+  {
+   "name": "toNumber thousands comma and decimal dot",
+   "value": "1,234.56",
+   "transforms": [
+    {
+     "kind": "toNumber"
+    }
+   ],
+   "expected": "1234.56"
+  },
+  {
+   "name": "toNumber a lone dot with three digits is a decimal",
+   "value": "1.234",
+   "transforms": [
+    {
+     "kind": "toNumber"
+    }
+   ],
+   "expected": "1.234"
+  },
+  {
+   "name": "toNumber drops trailing zeros like float()",
+   "value": "12.90",
+   "transforms": [
+    {
+     "kind": "toNumber"
+    }
+   ],
+   "expected": "12.9"
+  },
+  {
+   "name": "toNumber integers lose the fraction",
+   "value": "100.0",
+   "transforms": [
+    {
+     "kind": "toNumber"
+    }
+   ],
+   "expected": "100"
+  },
+  {
+   "name": "toNumber a repeated separator is thousands",
+   "value": "1.234.567",
+   "transforms": [
+    {
+     "kind": "toNumber"
+    }
+   ],
+   "expected": "1234567"
+  },
+  {
+   "name": "toNumber negative",
+   "value": "-5,5",
+   "transforms": [
+    {
+     "kind": "toNumber"
+    }
+   ],
+   "expected": "-5.5"
+  },
+  {
+   "name": "toNumber without digits gives empty",
+   "value": "kein Preis",
+   "transforms": [
+    {
+     "kind": "toNumber"
+    }
+   ],
+   "expected": ""
+  },
+  {
+   "name": "toNumber huge integer keeps all digits",
+   "value": "1000000000000000000000",
+   "transforms": [
+    {
+     "kind": "toNumber"
+    }
+   ],
+   "expected": "1000000000000000000000"
+  },
+  {
+   "name": "toNumber trailing separator",
+   "value": "5.",
+   "transforms": [
+    {
+     "kind": "toNumber"
+    }
+   ],
+   "expected": "5"
+  },
+  {
+   "name": "toInteger plain",
+   "value": " 42 ",
+   "transforms": [
+    {
+     "kind": "toInteger"
+    }
+   ],
+   "expected": "42"
+  },
+  {
+   "name": "toInteger sign and leading zeros",
+   "value": "+007",
+   "transforms": [
+    {
+     "kind": "toInteger"
+    }
+   ],
+   "expected": "7"
+  },
+  {
+   "name": "toInteger minus zero",
+   "value": "-0",
+   "transforms": [
+    {
+     "kind": "toInteger"
+    }
+   ],
+   "expected": "0"
+  },
+  {
+   "name": "toInteger keeps the original on failure",
+   "value": "12.5",
+   "transforms": [
+    {
+     "kind": "toInteger",
+     "onError": "KeepOriginal"
+    }
+   ],
+   "expected": "12.5"
+  },
+  {
+   "name": "toInteger uses the default on failure",
+   "value": "n/a",
+   "transforms": [
+    {
+     "kind": "toInteger",
+     "onError": "UseDefault",
+     "defaultValue": "0"
+    }
+   ],
+   "expected": "0"
+  },
+  {
+   "name": "toInteger very long number keeps all digits",
+   "value": "12345678901234567890",
+   "transforms": [
+    {
+     "kind": "toInteger"
+    }
+   ],
+   "expected": "12345678901234567890"
+  },
+  {
+   "name": "toBoolean 'Yes'",
+   "value": "Yes",
+   "transforms": [
+    {
+     "kind": "toBoolean"
+    }
+   ],
+   "expected": "True"
+  },
+  {
+   "name": "toBoolean 'N'",
+   "value": " N ",
+   "transforms": [
+    {
+     "kind": "toBoolean"
+    }
+   ],
+   "expected": "False"
+  },
+  {
+   "name": "toBoolean 'TRUE'",
+   "value": "TRUE",
+   "transforms": [
+    {
+     "kind": "toBoolean"
+    }
+   ],
+   "expected": "True"
+  },
+  {
+   "name": "toBoolean '1'",
+   "value": "1",
+   "transforms": [
+    {
+     "kind": "toBoolean"
+    }
+   ],
+   "expected": "True"
+  },
+  {
+   "name": "toBoolean '0'",
+   "value": "0",
+   "transforms": [
+    {
+     "kind": "toBoolean"
+    }
+   ],
+   "expected": "False"
+  },
+  {
+   "name": "toBoolean 'y'",
+   "value": "y",
+   "transforms": [
+    {
+     "kind": "toBoolean"
+    }
+   ],
+   "expected": "True"
+  },
+  {
+   "name": "toBoolean keeps the original when unknown",
+   "value": "maybe",
+   "transforms": [
+    {
+     "kind": "toBoolean"
+    }
+   ],
+   "expected": "maybe"
+  },
+  {
+   "name": "toBoolean uses the default when unknown",
+   "value": "maybe",
+   "transforms": [
+    {
+     "kind": "toBoolean",
+     "onError": "UseDefault",
+     "defaultValue": "False"
+    }
+   ],
+   "expected": "False"
+  },
+  {
+   "name": "toDate default format",
+   "value": "2026-08-28",
+   "transforms": [
+    {
+     "kind": "toDate"
+    }
+   ],
+   "expected": "2026-08-28"
+  },
+  {
+   "name": "toDate dotted day-first",
+   "value": "28.08.2026",
+   "transforms": [
+    {
+     "kind": "toDate",
+     "sourceFormat": "{dd}.{mm}.{yyyy}"
+    }
+   ],
+   "expected": "2026-08-28"
+  },
+  {
+   "name": "toDate single-digit day and month",
+   "value": "1.9.2026",
+   "transforms": [
+    {
+     "kind": "toDate",
+     "sourceFormat": "{dd}.{mm}.{yyyy}"
+    }
+   ],
+   "expected": "2026-09-01"
+  },
+  {
+   "name": "toDate US order",
+   "value": "08/28/2026",
+   "transforms": [
+    {
+     "kind": "toDate",
+     "sourceFormat": "{mm}/{dd}/{yyyy}"
+    }
+   ],
+   "expected": "2026-08-28"
+  },
+  {
+   "name": "toDate a non-existent day fails",
+   "value": "30.02.2026",
+   "transforms": [
+    {
+     "kind": "toDate",
+     "sourceFormat": "{dd}.{mm}.{yyyy}"
+    }
+   ],
+   "expected": "30.02.2026"
+  },
+  {
+   "name": "toDate a month above 12 fails",
+   "value": "2026-13-01",
+   "transforms": [
+    {
+     "kind": "toDate"
+    }
+   ],
+   "expected": "2026-13-01"
+  },
+  {
+   "name": "toDate leap day",
+   "value": "29.02.2024",
+   "transforms": [
+    {
+     "kind": "toDate",
+     "sourceFormat": "{dd}.{mm}.{yyyy}"
+    }
+   ],
+   "expected": "2024-02-29"
+  },
+  {
+   "name": "toDate non-leap Feb 29 fails",
+   "value": "29.02.2026",
+   "transforms": [
+    {
+     "kind": "toDate",
+     "sourceFormat": "{dd}.{mm}.{yyyy}"
+    }
+   ],
+   "expected": "29.02.2026"
+  },
+  {
+   "name": "toDate year is padded to four digits",
+   "value": "05.01.0999",
+   "transforms": [
+    {
+     "kind": "toDate",
+     "sourceFormat": "{dd}.{mm}.{yyyy}"
+    }
+   ],
+   "expected": "0999-01-05"
+  },
+  {
+   "name": "toDate year 0001",
+   "value": "01.01.0001",
+   "transforms": [
+    {
+     "kind": "toDate",
+     "sourceFormat": "{dd}.{mm}.{yyyy}"
+    }
+   ],
+   "expected": "0001-01-01"
+  },
+  {
+   "name": "toDate year 0000 fails",
+   "value": "01.01.0000",
+   "transforms": [
+    {
+     "kind": "toDate",
+     "sourceFormat": "{dd}.{mm}.{yyyy}"
+    }
+   ],
+   "expected": "01.01.0000"
+  },
+  {
+   "name": "toDate extra text around the date fails",
+   "value": "Stand: 28.08.2026",
+   "transforms": [
+    {
+     "kind": "toDate",
+     "sourceFormat": "{dd}.{mm}.{yyyy}"
+    }
+   ],
+   "expected": "Stand: 28.08.2026"
+  },
+  {
+   "name": "toDate uses the default on failure",
+   "value": "gestern",
+   "transforms": [
+    {
+     "kind": "toDate",
+     "onError": "UseDefault",
+     "defaultValue": "1970-01-01"
+    }
+   ],
+   "expected": "1970-01-01"
+  },
+  {
+   "name": "toDate treats format characters literally",
+   "value": "28(08)2026",
+   "transforms": [
+    {
+     "kind": "toDate",
+     "sourceFormat": "{dd}({mm}){yyyy}"
+    }
+   ],
+   "expected": "2026-08-28"
+  },
+  {
+   "name": "toCurrency 1.234,56: 'Preis: 1.234,56 €'",
+   "value": "Preis: 1.234,56 €",
+   "transforms": [
+    {
+     "kind": "toCurrency",
+     "format": "1.234,56"
+    }
+   ],
+   "expected": "1234.56"
+  },
+  {
+   "name": "toCurrency 1.234,56: '€ 1.234'",
+   "value": "€ 1.234",
+   "transforms": [
+    {
+     "kind": "toCurrency",
+     "format": "1.234,56"
+    }
+   ],
+   "expected": "1234"
+  },
+  {
+   "name": "toCurrency 1.234,56: '12,90 €'",
+   "value": "12,90 €",
+   "transforms": [
+    {
+     "kind": "toCurrency",
+     "format": "1.234,56"
+    }
+   ],
+   "expected": "12.90"
+  },
+  {
+   "name": "toCurrency 1.234,56: '-12,99 €'",
+   "value": "-12,99 €",
+   "transforms": [
+    {
+     "kind": "toCurrency",
+     "format": "1.234,56"
+    }
+   ],
+   "expected": "-12.99"
+  },
+  {
+   "name": "toCurrency 1.234,56: '1.234.567,00 EUR'",
+   "value": "1.234.567,00 EUR",
+   "transforms": [
+    {
+     "kind": "toCurrency",
+     "format": "1.234,56"
+    }
+   ],
+   "expected": "1234567.00"
+  },
+  {
+   "name": "toCurrency 1.234,56: 'Preis: 12,99.'",
+   "value": "Preis: 12,99.",
+   "transforms": [
+    {
+     "kind": "toCurrency",
+     "format": "1.234,56"
+    }
+   ],
+   "expected": "12.99"
+  },
+  {
+   "name": "toCurrency 1,234.56: '£51.77'",
+   "value": "£51.77",
+   "transforms": [
+    {
+     "kind": "toCurrency",
+     "format": "1,234.56"
+    }
+   ],
+   "expected": "51.77"
+  },
+  {
+   "name": "toCurrency 1,234.56: '$1,234,567.8'",
+   "value": "$1,234,567.8",
+   "transforms": [
+    {
+     "kind": "toCurrency",
+     "format": "1,234.56"
+    }
+   ],
+   "expected": "1234567.8"
+  },
+  {
+   "name": "toCurrency 1,234.56: '+0005'",
+   "value": "+0005",
+   "transforms": [
+    {
+     "kind": "toCurrency",
+     "format": "1,234.56"
+    }
+   ],
+   "expected": "5"
+  },
+  {
+   "name": "toCurrency 1 234,56: '1 234,56 kr'",
+   "value": "1 234,56 kr",
+   "transforms": [
+    {
+     "kind": "toCurrency",
+     "format": "1 234,56"
+    }
+   ],
+   "expected": "1234.56"
+  },
+  {
+   "name": "toCurrency 1 234,56: '1\\xa0234,56 €'",
+   "value": "1 234,56 €",
+   "transforms": [
+    {
+     "kind": "toCurrency",
+     "format": "1 234,56"
+    }
+   ],
+   "expected": "1234.56"
+  },
+  {
+   "name": "toCurrency 1 234,56: '1\\u202f234,56 €'",
+   "value": "1 234,56 €",
+   "transforms": [
+    {
+     "kind": "toCurrency",
+     "format": "1 234,56"
+    }
+   ],
+   "expected": "1234.56"
+  },
+  {
+   "name": "toCurrency 1'234.56: \"CHF 1'234.50\"",
+   "value": "CHF 1'234.50",
+   "transforms": [
+    {
+     "kind": "toCurrency",
+     "format": "1'234.56"
+    }
+   ],
+   "expected": "1234.50"
+  },
+  {
+   "name": "toCurrency 1'234.56: 'CHF 1’234.50'",
+   "value": "CHF 1’234.50",
+   "transforms": [
+    {
+     "kind": "toCurrency",
+     "format": "1'234.56"
+    }
+   ],
+   "expected": "1234.50"
+  },
+  {
+   "name": "toCurrency 1.234,56: '123456789012345678901234,5'",
+   "value": "123456789012345678901234,5",
+   "transforms": [
+    {
+     "kind": "toCurrency",
+     "format": "1.234,56"
+    }
+   ],
+   "expected": "123456789012345678901234.5"
+  },
+  {
+   "name": "toCurrency 1,234.56: '123456789012345678901234,5' is a strict mismatch",
+   "value": "123456789012345678901234,5",
+   "transforms": [
+    {
+     "kind": "toCurrency",
+     "format": "1,234.56"
+    }
+   ],
+   "expected": "123456789012345678901234,5"
+  },
+  {
+   "name": "toCurrency 1.234,56: '12.99' is a strict mismatch",
+   "value": "12.99",
+   "transforms": [
+    {
+     "kind": "toCurrency",
+     "format": "1.234,56"
+    }
+   ],
+   "expected": "12.99"
+  },
+  {
+   "name": "toCurrency 1,234.56: '1,23,456' is a strict mismatch",
+   "value": "1,23,456",
+   "transforms": [
+    {
+     "kind": "toCurrency",
+     "format": "1,234.56"
+    }
+   ],
+   "expected": "1,23,456"
+  },
+  {
+   "name": "toCurrency 1.234,56: 'kein Preis' is a strict mismatch",
+   "value": "kein Preis",
+   "transforms": [
+    {
+     "kind": "toCurrency",
+     "format": "1.234,56"
+    }
+   ],
+   "expected": "kein Preis"
+  },
+  {
+   "name": "toCurrency 1.234,56: '1,2,3' is a strict mismatch",
+   "value": "1,2,3",
+   "transforms": [
+    {
+     "kind": "toCurrency",
+     "format": "1.234,56"
+    }
+   ],
+   "expected": "1,2,3"
+  },
+  {
+   "name": "toCurrency uses the default on mismatch",
+   "value": "kein Preis",
+   "transforms": [
+    {
+     "kind": "toCurrency",
+     "onError": "UseDefault",
+     "defaultValue": "0"
+    }
+   ],
+   "expected": "0"
+  },
+  {
+   "name": "chain trim then toNumber",
+   "value": "  Preis: 12,90 € ",
+   "transforms": [
+    {
+     "kind": "trim"
+    },
+    {
+     "kind": "toNumber"
+    }
+   ],
+   "expected": "12.9"
+  },
+  {
+   "name": "chain regexExtract then toCurrency",
+   "value": "Statt 29,99 € jetzt 19,99 €",
+   "transforms": [
+    {
+     "kind": "regexExtract",
+     "pattern": "jetzt\\s*(.+)",
+     "group": 1
+    },
+    {
+     "kind": "toCurrency",
+     "format": "1.234,56"
+    }
+   ],
+   "expected": "19.99"
+  },
+  {
+   "name": "chain keeps going after a kept original",
+   "value": "abc",
+   "transforms": [
+    {
+     "kind": "toInteger"
+    },
+    {
+     "kind": "replace",
+     "find": "a",
+     "replacement": "X"
+    }
+   ],
+   "expected": "Xbc"
+  },
+  {
+   "name": "combineFields has no preview",
+   "value": "x",
+   "transforms": [
+    {
+     "kind": "combineFields",
+     "sourceFieldNames": [
+      "A",
+      "B"
+     ],
+     "separator": " "
+    }
+   ],
+   "expected": null,
+   "appliesTo": [
+    "js"
+   ],
+   "note": "Needs sibling values, which only exist at run time; the preview reports 'unavailable'."
+  }
+ ]
+}

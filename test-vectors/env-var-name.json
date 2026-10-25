@@ -1,0 +1,85 @@
+{
+ "description": "Issue #388: what is a valid environment-variable name? The extension's ENV_VAR_NAME_PATTERN (popup/env-var.js) validates the inputs up front; the companion's ScrapingPlanValidator rejects a bad name at /generate. Same rule: letters, digits and underscores, not starting with a digit. The values are used as typed; the extension trims input before it reaches the pattern.",
+ "cases": [
+  {
+   "name": "upper case with underscore",
+   "value": "API_KEY",
+   "valid": true
+  },
+  {
+   "name": "lower case",
+   "value": "api_key",
+   "valid": true
+  },
+  {
+   "name": "leading underscore",
+   "value": "_secret",
+   "valid": true
+  },
+  {
+   "name": "single letter",
+   "value": "A",
+   "valid": true
+  },
+  {
+   "name": "digits after the first character",
+   "value": "PROXY_LIST_2",
+   "valid": true
+  },
+  {
+   "name": "mixed case",
+   "value": "SmtpHost",
+   "valid": true
+  },
+  {
+   "name": "leading digit",
+   "value": "1API",
+   "valid": false
+  },
+  {
+   "name": "hyphen",
+   "value": "API-KEY",
+   "valid": false
+  },
+  {
+   "name": "space",
+   "value": "API KEY",
+   "valid": false
+  },
+  {
+   "name": "dot",
+   "value": "API.KEY",
+   "valid": false
+  },
+  {
+   "name": "empty",
+   "value": "",
+   "valid": false
+  },
+  {
+   "name": "umlaut",
+   "value": "ÄPI",
+   "valid": false
+  },
+  {
+   "name": "dollar sign",
+   "value": "$API",
+   "valid": false
+  },
+  {
+   "name": "equals sign",
+   "value": "A=B",
+   "valid": false
+  },
+  {
+   "name": "only digits",
+   "value": "123",
+   "valid": false
+  },
+  {
+   "name": "curly braces",
+   "value": "{API}",
+   "valid": false
+  }
+ ]
+}

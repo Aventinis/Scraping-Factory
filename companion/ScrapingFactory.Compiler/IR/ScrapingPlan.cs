@@ -1,121 +1,55 @@
 namespace ScrapingFactory.Compiler.IR;
 
-// Canonical IR consumed by code generators/verifiers: a step sequence
-// instead of ScrapingConfig's flat Fields list. Lets future step types
-// (WaitFor, Fill, Click, ...) extend the model without touching the wire
-// format the extension already speaks — see ScrapingPlanBuilder.
+// The canonical IR the code generators and verifiers consume: a step sequence built from ScrapingConfig by
+// ScrapingPlanBuilder, which also carries the mode-independent options through unchanged (null/false = off).
 public sealed class ScrapingPlan
 {
     public List<ScrapingStep> Steps { get; init; } = [];
     public OutputFormat OutputFormat { get; init; } = OutputFormat.Csv;
     public ScrapingEngine Engine { get; init; } = ScrapingEngine.Static;
 
-    // Already sanitized by FileNameSanitizer in ScrapingPlanBuilder — code
-    // generators and PythonScriptVerifier can use these verbatim, no further
-    // escaping/validation needed (see ScrapingConfig.ScriptFileName/
-    // OutputFileName for what these mean).
+    // Already sanitized (FileNameSanitizer); usable verbatim.
     public string ScriptFileName { get; init; } = "scraper";
     public string OutputFileBaseName { get; init; } = "output";
 
-    // Issue #87: mode-independent, carried through unchanged from
-    // ScrapingConfig.ChangeDetection by ScrapingPlanBuilder — see
-    // IR/ChangeDetectionConfig.cs.
     public ChangeDetectionConfig? ChangeDetection { get; init; }
-
-    // Issue #88: mode-independent, carried through unchanged from
-    // ScrapingConfig.Proxy by ScrapingPlanBuilder — see IR/ProxyConfig.cs.
     public ProxyConfig? Proxy { get; init; }
-
-    // Issue #222: mode-independent, carried through unchanged from
-    // ScrapingConfig.RequestDelay by ScrapingPlanBuilder — see
-    // IR/RequestDelayConfig.cs.
     public RequestDelayConfig? RequestDelay { get; init; }
-
-    // Issue #228: carried through unchanged (as a plain bool) from
-    // ScrapingConfig.RespectRobotsDelay by ScrapingPlanBuilder.
     public bool RespectRobotsDelay { get; init; }
-
-    // Issue #333: carried through unchanged from ScrapingConfig.RobotsDisallow
-    // by ScrapingPlanBuilder — see IR/RobotsDisallowConfig.cs.
     public RobotsDisallowConfig? RobotsDisallow { get; init; }
-
-    // Issue #342: carried through unchanged from ScrapingConfig.AppendOutput.
     public bool AppendOutput { get; init; }
 
-    // What the code generators act on: deduplication's incremental "Append"
-    // output is one case of the general append mechanism (the delta it writes
-    // is appended like any other run's result).
+    // What the generators act on: deduplication's incremental "Append" output is one case of appending.
     public bool AppendsOutput =>
         AppendOutput || Deduplication is { Incremental: true, IncrementalOutput: IncrementalOutputMode.Append };
 
-    // Issue #223: mode-independent, carried through unchanged from
-    // ScrapingConfig.Retry by ScrapingPlanBuilder — see IR/RetryConfig.cs.
     public RetryConfig? Retry { get; init; }
 
-    // Issue #226: mode-independent for the DOM shapes, carried through
-    // unchanged from ScrapingConfig.Headers by ScrapingPlanBuilder (never for
-    // an Api plan, which has ApiConfig.Headers of its own).
+    // DOM shapes only; an Api plan has ApiConfig.Headers.
     public List<ApiHeader>? Headers { get; init; }
 
-    // Issue #225: mode-independent, carried through unchanged from
-    // ScrapingConfig.Deduplication by ScrapingPlanBuilder — see
-    // IR/DeduplicationConfig.cs.
     public DeduplicationConfig? Deduplication { get; init; }
-
-    // Issue #129: mode-independent, carried through unchanged from
-    // ScrapingConfig.Hardening by ScrapingPlanBuilder — see
-    // IR/HardeningCheck.cs.
     public List<HardeningCheck>? Hardening { get; init; }
 
-    // Issue #174: mode-independent (Fields/Groups alike, not Api — see
-    // ScrapingConfig.Pagination), carried through unchanged from
-    // ScrapingConfig.Pagination by ScrapingPlanBuilder — see
-    // IR/PaginationConfig.cs.
+    // Fields/Groups only (not Api).
     public PaginationConfig? Pagination { get; init; }
-
-    // Issue #218: mode-independent (Fields/Groups alike, not Api — see
-    // ScrapingConfig.DiscoveredUrls), carried through unchanged from
-    // ScrapingConfig.DiscoveredUrls by ScrapingPlanBuilder — see
-    // IR/DiscoveredUrlsConfig.cs.
     public DiscoveredUrlsConfig? DiscoveredUrls { get; init; }
-
-    // Issue #219: mode-independent (Fields/Groups alike, not Api — see
-    // ScrapingConfig.Preflight), carried through from ScrapingConfig.Preflight
-    // by ScrapingPlanBuilder (null defaults to false here, same as
-    // PersistentSession/ExternalConfig below).
     public bool Preflight { get; init; }
 
-    // Issue #175: Browser-engine only (see ScrapingPlanValidator), carried
-    // through from ScrapingConfig.PersistentSession by ScrapingPlanBuilder
-    // (null defaults to false here, unlike the wire format's nullable bool).
+    // Browser engine only (validated).
     public bool PersistentSession { get; init; }
 
-    // Issue #178: mode-independent, carried through unchanged from
-    // ScrapingConfig.ExternalConfig by ScrapingPlanBuilder (null defaults to
-    // false here, same as PersistentSession above).
     public bool ExternalConfig { get; init; }
 
-    // Issue #191: only carried through by ScrapingPlanBuilder in the flat-
-    // Fields and Api-flat-shape branches — left null (the default) for
-    // Groups/Api-tree/Combined/Blocks, all of which are rejected outright
-    // together with ScrapingConfig.OutputBlueprint before a plan for them is
-    // even built (see Program.cs's /generate handler).
+    // Set for flat Fields and Api-flat, and for container/API tree via flattening; never for Combined/Blocks.
     public OutputBlueprintMapping? OutputBlueprint { get; init; }
 
-    // Issue #229: true when OutputBlueprint was not chosen by the caller but
-    // derived by ScrapingPlanBuilder — an identity mapping over every leaf
-    // field — because a tree-shaped source was asked to be written as a
-    // table (Sqlite/Xlsx). Only used to word validation errors for that case.
+    // True when ScrapingPlanBuilder derived OutputBlueprint (an identity mapping over every leaf) to write a tree
+    // as a table (Sqlite/Xlsx); only used to word validation errors.
     public bool OutputBlueprintAutoGenerated { get; init; }
 
-    // Combined mode (Issue #239): forces a component's already-built,
-    // already-validated plan to a fixed OutputFormat/OutputFileBaseName —
-    // used by Program.cs's /generate handler to make every component write
-    // a predictably-named output.json, mergeable into one combined result,
-    // without re-running ScrapingPlanBuilder/ScrapingPlanValidator against a
-    // second, forced ScrapingConfig. A plain object-initializer copy rather
-    // than a C# `with` expression, since ScrapingPlan (like ScrapingConfig)
-    // is a sealed class, not a record.
+    // Combined mode: copy of an already built and validated plan with a forced format and output name, so every
+    // component writes a predictable output.json. (A sealed class, so no `with` expression.)
     public ScrapingPlan With(OutputFormat outputFormat, string outputFileBaseName) => new()
     {
         Steps = Steps,
@@ -138,12 +72,7 @@ public sealed class ScrapingPlan
         Preflight = Preflight,
         PersistentSession = PersistentSession,
         ExternalConfig = ExternalConfig,
-        // Issue #191: preserved even though Combined mode itself rejects
-        // OutputBlueprint on the *outer* request — a component's own nested
-        // config may still carry one, already resolved/validated by the time
-        // With() runs (see GenerateScript's build->validate->transformPlan
-        // sequence), and it should keep applying to that component's own
-        // output rather than being silently dropped by this copy.
+        // A component's own nested config may carry a blueprint; keep applying it to that component's output.
         OutputBlueprint = OutputBlueprint,
         OutputBlueprintAutoGenerated = OutputBlueprintAutoGenerated,
     };

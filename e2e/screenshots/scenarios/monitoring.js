@@ -7,8 +7,8 @@ module.exports = [
     async run(s) {
       const { popupPage } = s;
       await s.waitForIdle();
-      await s.addFlatField('Dish', 'li.menu-item >> nth=0 >> .item-name');
-      await s.addFlatField('Price', 'li.menu-item >> nth=0 >> .item-price');
+      await s.addFlatField(s.word('Dish'), 'li.menu-item >> nth=0 >> .item-name');
+      await s.addFlatField(s.word('Price'), 'li.menu-item >> nth=0 >> .item-price');
       await popupPage.click('#monitoring-section-toggle');
       await popupPage.click('#btn-hardening-recommended');
       await s.shot('monitoring-recommended', '#hardening-config');

@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Xml.Linq;
 using ScrapingFactory.Compiler.Backends.Python;
 using ScrapingFactory.Compiler.IR;
@@ -11,44 +10,10 @@ namespace ScrapingFactory.Tests;
 // stale file into a clean, dedicated-exit-code failure instead of a raw
 // Python traceback — none of this is exercisable through PythonScriptVerifier
 // alone, since /generate's trial run always starts from an empty temp
-// directory (the bootstrap path only). Same RunScriptAsync pattern as the
+// directory (the bootstrap path only). Same ScriptRunner pattern as the
 // HardeningXEndToEndTests classes, for the same reason.
 public class ExternalConfigEndToEndTests
 {
-    private static async Task<(int ExitCode, string Stderr)> RunScriptAsync(string scriptPath, string workDir)
-    {
-        Exception? lastError = null;
-        foreach (var candidate in new[] { "python3", "python" })
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = candidate,
-                WorkingDirectory = workDir,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            psi.ArgumentList.Add(scriptPath);
-
-            try
-            {
-                using var process = new Process { StartInfo = psi };
-                process.Start();
-                var stderrTask = process.StandardError.ReadToEndAsync();
-                var stdoutTask = process.StandardOutput.ReadToEndAsync();
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                await process.WaitForExitAsync(cts.Token);
-                return (process.ExitCode, await stderrTask);
-            }
-            catch (System.ComponentModel.Win32Exception ex)
-            {
-                lastError = ex; // executable not found — try the next candidate
-            }
-        }
-        throw new InvalidOperationException("No Python interpreter found (tried: python3, python).", lastError);
-    }
-
     private static string ConfigPathFor(string scriptPath) => Path.ChangeExtension(scriptPath, null) + ".config.xml";
 
     [Fact]
@@ -73,7 +38,7 @@ public class ExternalConfigEndToEndTests
             var scriptPath = Path.Combine(workDir, "scraper.py");
             await File.WriteAllTextAsync(scriptPath, script);
 
-            var (exit, stderr) = await RunScriptAsync(scriptPath, workDir);
+            var (exit, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
 
             Assert.Equal(0, exit);
             Assert.Empty(stderr);
@@ -121,7 +86,7 @@ public class ExternalConfigEndToEndTests
                 new XElement("Fields", new XElement("Field", new XAttribute("original", "Titel"), "Name")));
             await File.WriteAllTextAsync(configPath, new XDocument(editedConfig).ToString());
 
-            var (exit, stderr) = await RunScriptAsync(scriptPath, workDir);
+            var (exit, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
 
             Assert.Equal(0, exit);
             Assert.Empty(stderr);
@@ -154,7 +119,7 @@ public class ExternalConfigEndToEndTests
             await File.WriteAllTextAsync(scriptPath, script);
             await File.WriteAllTextAsync(ConfigPathFor(scriptPath), "<ScrapingFactoryConfig><Urls>not closed");
 
-            var (exit, stderr) = await RunScriptAsync(scriptPath, workDir);
+            var (exit, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
 
             Assert.Equal(3, exit);
             Assert.Contains("ERROR", stderr);
@@ -186,7 +151,7 @@ public class ExternalConfigEndToEndTests
             var badConfig = new XElement("ScrapingFactoryConfig", new XElement("Fields", new XElement("Field", "Name")));
             await File.WriteAllTextAsync(ConfigPathFor(scriptPath), new XDocument(badConfig).ToString());
 
-            var (exit, stderr) = await RunScriptAsync(scriptPath, workDir);
+            var (exit, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
 
             Assert.Equal(3, exit);
             Assert.Contains("ERROR", stderr);
@@ -220,7 +185,7 @@ public class ExternalConfigEndToEndTests
                 new XElement("Fields", new XElement("Field", new XAttribute("original", "NoLongerExists"), "Renamed")));
             await File.WriteAllTextAsync(ConfigPathFor(scriptPath), new XDocument(badConfig).ToString());
 
-            var (exit, stderr) = await RunScriptAsync(scriptPath, workDir);
+            var (exit, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
 
             Assert.Equal(3, exit);
             Assert.Contains("ERROR", stderr);
@@ -264,7 +229,7 @@ public class ExternalConfigEndToEndTests
             var scriptPath = Path.Combine(workDir, "scraper.py");
             await File.WriteAllTextAsync(scriptPath, script);
 
-            var (exit, stderr) = await RunScriptAsync(scriptPath, workDir);
+            var (exit, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
 
             Assert.Equal(0, exit);
             Assert.Empty(stderr);
@@ -281,7 +246,7 @@ public class ExternalConfigEndToEndTests
             // as flat mode.
             var editedConfig = new XElement("ScrapingFactoryConfig", new XElement("OutputFileName", "gerichte"));
             await File.WriteAllTextAsync(configPath, new XDocument(editedConfig).ToString());
-            var (exit2, stderr2) = await RunScriptAsync(scriptPath, workDir);
+            var (exit2, stderr2) = await ScriptRunner.RunAsync(scriptPath, workDir);
             Assert.Equal(0, exit2);
             Assert.Empty(stderr2);
             Assert.True(File.Exists(Path.Combine(workDir, "gerichte.xml")));
@@ -323,7 +288,7 @@ public class ExternalConfigEndToEndTests
             var scriptPath = Path.Combine(workDir, "scraper.py");
             await File.WriteAllTextAsync(scriptPath, script);
 
-            var (exit, stderr) = await RunScriptAsync(scriptPath, workDir);
+            var (exit, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
             Assert.Equal(0, exit);
             Assert.Empty(stderr);
 
@@ -342,7 +307,7 @@ public class ExternalConfigEndToEndTests
                         new XElement("Value", "c"), new XElement("Value", "d"), new XElement("Value", "e"))));
             await File.WriteAllTextAsync(configPath, new XDocument(editedConfig).ToString());
 
-            var (exit2, stderr2) = await RunScriptAsync(scriptPath, workDir);
+            var (exit2, stderr2) = await ScriptRunner.RunAsync(scriptPath, workDir);
             Assert.Equal(0, exit2);
             Assert.Empty(stderr2);
 

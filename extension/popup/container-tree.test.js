@@ -1,7 +1,7 @@
 // Issue #213: focused unit coverage for buildFieldNode/serializeGroupTree's
-// new `download` handling. container-tree.js's other pure functions had no
-// dedicated test file before this (only indirect coverage via popup.test.js's
-// own integration-style tests) — this file stays scoped to what this issue
+// new `download` handling. container-tree.ts's other pure functions had no
+// dedicated test file before this (only indirect coverage via container-tree-popup.test.js's
+// and popup.test.js's integration-style tests) — this file stays scoped to what this issue
 // actually touched rather than retroactively covering the whole module.
 const { buildFieldNode, serializeGroupTree, guessUrlAttribute, collectSiblingFieldNames } = require('./container-tree');
 

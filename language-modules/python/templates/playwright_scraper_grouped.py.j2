@@ -11,53 +11,8 @@ import json
 {{~ if blueprint_mapping_enabled && !output_is_json ~}}
 import csv
 {{~ end ~}}
-import re
-from datetime import date
-{{~ if needs_os_import || external_config.enabled || download_enabled ~}}
-import os
-{{~ end ~}}
-import sys
-{{~ if hardening.has_baseline || preflight.enabled ~}}
-import json
-{{~ end ~}}
-{{~ if proxy.enabled ~}}
-import itertools
-{{~ end ~}}
-{{~ if proxy.enabled || hardening.enabled || download_enabled || discovered_urls.enabled ~}}
-import urllib.parse
-{{~ end ~}}
-{{~ if hardening.enabled ~}}
-from urllib.parse import urlsplit
-{{~ end ~}}
-{{~ if pagination.enabled ~}}
-{{~ if pagination.kind == "nextLink" ~}}
-import urllib.parse
-{{~ end ~}}
-{{~ end ~}}
-{{~ if download_enabled ~}}
-import hashlib
-{{~ end ~}}
-{{~ if discovered_urls.enabled || preflight.enabled ~}}
-# Issue #218/#219: both the discovery pass and the preflight check are
-# deliberately plain `requests` calls, never a live Playwright page (both
-# run before any navigation happens) — same "doesn't need the full
-# machinery of the main run" precedent DiscoverySource/BrowserDiscoverySource
-# already established for API mode.
-import requests
-{{~ end ~}}
-{{~ if discovered_urls.enabled ~}}
-from bs4 import BeautifulSoup
-{{~ end ~}}
-{{~ if change_detection.enabled ~}}
-import difflib
-{{~ if change_detection.notify_method == "Email" ~}}
-import smtplib
-from email.mime.text import MIMEText
-{{~ else ~}}
-import json
-import urllib.request
-{{~ end ~}}
-{{~ end ~}}
+#@include playwright_imports_head
+#@include playwright_imports_tail
 import xml.etree.ElementTree as ET
 from playwright.sync_api import sync_playwright
 
@@ -74,30 +29,7 @@ OUTPUT_PATH = "{{ output_filename }}.{{ if blueprint_mapping_enabled }}{{ if out
 
 #@include external_config_grouped
 
-#@include session_constants
-
-#@include pagination_constants
-
-#@include change_detection_constants
-
-#@include require_env_playwright
-#@include request_headers_playwright
-{{~ if text_selector.enabled ~}}
-#@include text_selector_common
-
-#@include text_selector_playwright
-{{~ if discovered_urls.enabled ~}}
-
-#@include text_selector_bs4
-{{~ end ~}}
-{{~ end ~}}
-
-{{~ if proxy.enabled ~}}
-#@include proxy_pool
-
-
-#@include proxy_playwright
-{{~ end ~}}
+#@include playwright_constants_prelude
 
 #@include hardening_tree
 
@@ -195,23 +127,7 @@ def _flatten_group_tree_for_blueprint(page, scope, node, context):
 # reason extract_group()/_flatten_group_tree_for_blueprint already do.
 BLUEPRINT_TREE_MAPPING = {{ blueprint_tree_mapping_literal }}
 
-_BLUEPRINT_GROUP_BY_NAME = {}
-_BLUEPRINT_LEAF_BY_NAME = {}
-_BLUEPRINT_PATH_BY_NAME = {}
-
-
-def _blueprint_index_source_tree(nodes, ancestors):
-    for node in nodes:
-        if "children" in node:
-            _BLUEPRINT_GROUP_BY_NAME.setdefault(node["name"], node)
-            _BLUEPRINT_PATH_BY_NAME.setdefault(node["name"], ancestors)
-            _blueprint_index_source_tree(node["children"], ancestors + [node])
-        else:
-            _BLUEPRINT_PATH_BY_NAME.setdefault(node["name"], ancestors)
-            _BLUEPRINT_LEAF_BY_NAME.setdefault(node["name"], node)
-
-
-_blueprint_index_source_tree(GROUPS, [])
+#@include blueprint_source_index
 
 
 def _blueprint_repeating_chain(name):
@@ -403,26 +319,7 @@ def extract_group(page, scope, node, siblings=None):
 
 def scrape(url):
     with sync_playwright() as p:
-        browser = p.chromium.launch({{ if proxy.enabled }}proxy=_next_playwright_proxy(){{ end }})
-{{~ if persistent_session_enabled ~}}
-        _session_exists = os.path.exists(SESSION_STATE_PATH)
-        context = browser.new_context(storage_state=SESSION_STATE_PATH if _session_exists else None{{ if request_headers.enabled }}, **_BROWSER_CONTEXT_OPTIONS{{ end }})
-        page = context.new_page()
-{{~ if request_delay.enabled ~}}
-        _pace_request()
-{{~ end ~}}
-{{ navigate_action }}
-{{~ if has_login_actions ~}}
-        if not _session_exists:
-{{ login_actions }}
-{{~ end ~}}
-{{~ else ~}}
-        page = browser.new_page({{ if request_headers.enabled }}**_BROWSER_CONTEXT_OPTIONS{{ end }})
-{{~ if request_delay.enabled ~}}
-        _pace_request()
-{{~ end ~}}
-{{ actions }}
-{{~ end ~}}
+#@include playwright_browser_start
 
         # Multiple top-level groups are siblings in GROUPS, but XML needs
         # exactly one root element — wrap them all (across every paginated
@@ -456,41 +353,9 @@ def scrape(url):
             blueprint_tree_elements.extend(_build_blueprint_tree(page, BLUEPRINT_TREE_MAPPING))
 {{~ end ~}}
 
-{{~ if pagination.enabled ~}}
-            if page_number >= PAGINATION_MAX_PAGES:
-                break
-            page_number += 1
-{{~ if pagination.kind == "nextLink" ~}}
-            next_el = page.query_selector(PAGINATION_NEXT_LINK_SELECTOR)
-            next_href = next_el.get_attribute("href") if next_el else None
-            if not next_href:
-                break
-{{~ if robots_check.enabled ~}}
-            if not _robots_gate(urllib.parse.urljoin(page.url, next_href)):
-                break
-{{~ end ~}}
-{{~ if request_delay.enabled ~}}
-            _pace_request()
-{{~ end ~}}
-            _goto_checked(page, urllib.parse.urljoin(page.url, next_href))
-{{~ else ~}}
-{{~ if robots_check.enabled ~}}
-            if not _robots_gate(PAGINATION_URL_TEMPLATE.format(url=url, page=page_number)):
-                break
-{{~ end ~}}
-{{~ if request_delay.enabled ~}}
-            _pace_request()
-{{~ end ~}}
-            _goto_checked(page, PAGINATION_URL_TEMPLATE.format(url=url, page=page_number))
-{{~ end ~}}
-{{~ else ~}}
-            break
-{{~ end ~}}
+#@include playwright_paginate
 
-{{~ if persistent_session_enabled ~}}
-        context.storage_state(path=SESSION_STATE_PATH)
-{{~ end ~}}
-        browser.close()
+#@include playwright_browser_end
         return root, blueprint_rows, blueprint_tree_elements
 
 

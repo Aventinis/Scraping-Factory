@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using ScrapingFactory.Compiler.Backends.Python;
 using ScrapingFactory.Compiler.IR;
 using Xunit;
@@ -17,43 +16,6 @@ namespace ScrapingFactory.Tests;
 // of succeeding, making this a strong (not just incidental) signal.
 public class PersistentSessionEndToEndTests
 {
-    private static async Task<(int ExitCode, string Stderr)> RunScriptAsync(
-        string scriptPath, string workDir, IReadOnlyDictionary<string, string> env)
-    {
-        Exception? lastError = null;
-        foreach (var candidate in new[] { "python3", "python" })
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = candidate,
-                WorkingDirectory = workDir,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            psi.ArgumentList.Add(scriptPath);
-            foreach (var (key, value) in env)
-                psi.Environment[key] = value;
-
-            try
-            {
-                using var process = new Process { StartInfo = psi };
-                process.Start();
-                var stderrTask = process.StandardError.ReadToEndAsync();
-                var stdoutTask = process.StandardOutput.ReadToEndAsync();
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                await process.WaitForExitAsync(cts.Token);
-                return (process.ExitCode, await stderrTask);
-            }
-            catch (System.ComponentModel.Win32Exception ex)
-            {
-                lastError = ex; // executable not found — try the next candidate
-            }
-        }
-        throw new InvalidOperationException("No Python interpreter found (tried: python3, python).", lastError);
-    }
-
     // Serves a login form when no session cookie is present, and the "real"
     // protected content once one is — the login form's submit button sets
     // the cookie via document.cookie (rather than a Set-Cookie response
@@ -105,7 +67,7 @@ public class PersistentSessionEndToEndTests
             await File.WriteAllTextAsync(scriptPath, script);
             var env = new Dictionary<string, string> { ["SF_TEST_USERNAME"] = "user", ["SF_TEST_PASSWORD"] = "pass" };
 
-            var (exit, stderr) = await RunScriptAsync(scriptPath, workDir, env);
+            var (exit, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir, env);
 
             Assert.Equal(0, exit);
             Assert.Empty(stderr);
@@ -134,7 +96,7 @@ public class PersistentSessionEndToEndTests
 
             // First run establishes the session (credentials provided).
             var firstRunEnv = new Dictionary<string, string> { ["SF_TEST_USERNAME"] = "user", ["SF_TEST_PASSWORD"] = "pass" };
-            var (firstExit, _) = await RunScriptAsync(scriptPath, workDir, firstRunEnv);
+            var (firstExit, _) = await ScriptRunner.RunAsync(scriptPath, workDir, firstRunEnv);
             Assert.Equal(0, firstExit);
             var sessionStatePath = Path.Combine(workDir, "output.csv.session-state.json");
             Assert.True(File.Exists(sessionStatePath));
@@ -142,7 +104,7 @@ public class PersistentSessionEndToEndTests
             // Second run: deliberately NO credential env vars. If the skip
             // logic were broken and the Fill steps ran anyway, _require_env
             // would exit 78 immediately instead of succeeding.
-            var (secondExit, secondStderr) = await RunScriptAsync(scriptPath, workDir, new Dictionary<string, string>());
+            var (secondExit, secondStderr) = await ScriptRunner.RunAsync(scriptPath, workDir, new Dictionary<string, string>());
 
             Assert.Equal(0, secondExit);
             Assert.Empty(secondStderr);

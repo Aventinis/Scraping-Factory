@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Xml.Linq;
 using ScrapingFactory.Compiler.Backends.Python;
 using ScrapingFactory.Compiler.IR;
@@ -19,48 +18,11 @@ public class RequestHeadersEndToEndTests : IDisposable
 
     public void Dispose() => Directory.Delete(_workDir, recursive: true);
 
-    private static async Task<(int ExitCode, string Stdout, string Stderr)> RunScriptAsync(
-        string scriptPath, string workDir, IReadOnlyDictionary<string, string>? env)
-    {
-        Exception? lastError = null;
-        foreach (var candidate in new[] { "python3", "python" })
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = candidate,
-                WorkingDirectory = workDir,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            psi.ArgumentList.Add(scriptPath);
-            foreach (var (name, value) in env ?? new Dictionary<string, string>())
-                psi.Environment[name] = value;
-
-            try
-            {
-                using var process = new Process { StartInfo = psi };
-                process.Start();
-                var stderrTask = process.StandardError.ReadToEndAsync();
-                var stdoutTask = process.StandardOutput.ReadToEndAsync();
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
-                await process.WaitForExitAsync(cts.Token);
-                return (process.ExitCode, await stdoutTask, await stderrTask);
-            }
-            catch (System.ComponentModel.Win32Exception ex)
-            {
-                lastError = ex; // executable not found — try the next candidate
-            }
-        }
-        throw new InvalidOperationException("No Python interpreter found (tried: python3, python).", lastError);
-    }
-
     private async Task<(int Exit, string Stderr)> RunAsync(string script, IReadOnlyDictionary<string, string>? env = null)
     {
         var scriptPath = Path.Combine(_workDir, "scraper.py");
         await File.WriteAllTextAsync(scriptPath, script);
-        var (exit, _, stderr) = await RunScriptAsync(scriptPath, _workDir, env);
+        var (exit, _, stderr) = await ScriptRunner.RunAsync(scriptPath, _workDir, env, timeout: TimeSpan.FromSeconds(90));
         return (exit, stderr);
     }
 

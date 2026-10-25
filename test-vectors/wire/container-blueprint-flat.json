@@ -1,0 +1,79 @@
+{
+  "version": "1",
+  "url": "https://example.test/menu",
+  "groups": [
+    {
+      "name": "Category",
+      "selector": "section.category",
+      "repeating": true,
+      "children": [
+        {
+          "name": "Heading",
+          "selector": "h2",
+          "mode": "Text"
+        },
+        {
+          "name": "Dish",
+          "selector": "li.dish",
+          "repeating": true,
+          "children": [
+            {
+              "name": "Name",
+              "selector": "h3",
+              "mode": "Text"
+            },
+            {
+              "name": "Price",
+              "selector": ".price",
+              "mode": "Text",
+              "transforms": [
+                {
+                  "kind": "trim"
+                },
+                {
+                  "kind": "toNumber"
+                }
+              ]
+            },
+            {
+              "name": "Label",
+              "selector": "h3",
+              "mode": "OwnText"
+            },
+            {
+              "name": "Vegan",
+              "selector": ".vegan",
+              "mode": "Exists"
+            },
+            {
+              "name": "Link",
+              "selector": "a",
+              "mode": "Attribute",
+              "attribute": "href"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "scriptFileName": null,
+  "outputFileName": null,
+  "outputBlueprint": {
+    "blueprintId": 2,
+    "schemaKind": "Flat",
+    "fields": [
+      {
+        "targetField": "category",
+        "sourceField": "Heading"
+      },
+      {
+        "targetField": "dish",
+        "sourceField": "Name"
+      },
+      {
+        "targetField": "price",
+        "sourceField": "Price"
+      }
+    ]
+  }
+}

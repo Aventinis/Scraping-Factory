@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using ScrapingFactory.Compiler.Backends.Python;
 using ScrapingFactory.Compiler.IR;
 using Xunit;
@@ -18,43 +17,6 @@ namespace ScrapingFactory.Tests;
 // a fake proxy is disproportionate for this scope.
 public class ProxyEndToEndTests
 {
-    private static async Task<(int ExitCode, string Stderr)> RunScriptAsync(
-        string scriptPath, string workDir, IReadOnlyDictionary<string, string> env)
-    {
-        Exception? lastError = null;
-        foreach (var candidate in new[] { "python3", "python" })
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = candidate,
-                WorkingDirectory = workDir,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            psi.ArgumentList.Add(scriptPath);
-            foreach (var (key, value) in env)
-                psi.Environment[key] = value;
-
-            try
-            {
-                using var process = new Process { StartInfo = psi };
-                process.Start();
-                var stderrTask = process.StandardError.ReadToEndAsync();
-                var stdoutTask = process.StandardOutput.ReadToEndAsync();
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                await process.WaitForExitAsync(cts.Token);
-                return (process.ExitCode, await stderrTask);
-            }
-            catch (System.ComponentModel.Win32Exception ex)
-            {
-                lastError = ex; // executable not found — try the next candidate
-            }
-        }
-        throw new InvalidOperationException("No Python interpreter found (tried: python3, python).", lastError);
-    }
-
     [Fact]
     public async Task Static_RequestActuallyRoutesThroughConfiguredProxy()
     {
@@ -79,7 +41,7 @@ public class ProxyEndToEndTests
             await File.WriteAllTextAsync(scriptPath, script);
             var env = new Dictionary<string, string> { ["SF_TEST_PROXIES"] = proxyServer.BaseUrl };
 
-            var (exit, stderr) = await RunScriptAsync(scriptPath, workDir, env);
+            var (exit, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir, env);
             Assert.Equal(0, exit);
             Assert.Empty(stderr);
 
@@ -129,7 +91,7 @@ public class ProxyEndToEndTests
                 ["SF_TEST_PROXIES"] = $"{proxyServer1.BaseUrl},{proxyServer2.BaseUrl}",
             };
 
-            var (exit, stderr) = await RunScriptAsync(scriptPath, workDir, env);
+            var (exit, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir, env);
             Assert.Equal(0, exit);
             Assert.Empty(stderr);
 
@@ -176,7 +138,7 @@ public class ProxyEndToEndTests
             var scriptPath = Path.Combine(workDir, "scraper.py");
             await File.WriteAllTextAsync(scriptPath, script);
 
-            var (exit, stderr) = await RunScriptAsync(scriptPath, workDir, new Dictionary<string, string>());
+            var (exit, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir, new Dictionary<string, string>());
             Assert.Equal(78, exit);
             Assert.Contains("SF_TEST_PROXIES_UNSET", stderr);
             Assert.Contains("Warning", stderr);

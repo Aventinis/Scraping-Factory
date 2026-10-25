@@ -1,0 +1,9 @@
+def scrape():
+{{~ if has_bootstrap ~}}
+    _BOOTSTRAP_VALUES.update(_run_bootstrap())
+    headers = _build_headers(_BOOTSTRAP_VALUES)
+    combos = _resolve_parameter_combos(headers, _BOOTSTRAP_VALUES)
+{{~ else ~}}
+    headers = _build_headers()
+    combos = _resolve_parameter_combos(headers)
+{{~ end ~}}

@@ -42,7 +42,7 @@
 
     <!-- Token/auth bootstrap (Issue #220): one extra request the generated
          script sends at the start of every run to fetch a fresh token,
-         rendered by api-bootstrap-ui.js's renderApiBootstrapSection. -->
+         rendered by api-bootstrap-ui.ts's renderApiBootstrapSection. -->
     <!-- Issue #404: rarely needed, so under a remembered "Advanced" whose
          one-line summary says when it applies; opened by itself once the
          option is on. The longer explanation is the "?" popover. -->
@@ -62,7 +62,7 @@
 
     <!-- Cursor/token-based pagination (Issue #224): follow a "next page"
          cursor the API returns in its own response, rendered by
-         api-cursor-pagination-ui.js's renderApiCursorPaginationSection.
+         api-cursor-pagination-ui.ts's renderApiCursorPaginationSection.
          Hidden for an embedded-JSON source (a page load has no cursor). -->
     <details class="advanced-disclosure" id="api-cursor-advanced" data-advanced="api-cursor">
       <summary data-i18n="apiCursor.advancedSummary"></summary>
@@ -80,7 +80,7 @@
 
     <!-- Link-header pagination (Issue #321): follow the rel="next" URL the
          API names in its `Link` response header, rendered by
-         api-link-pagination-ui.js's renderApiLinkPaginationSection. Hidden
+         api-link-pagination-ui.ts's renderApiLinkPaginationSection. Hidden
          for an embedded-JSON source; exclusive with the cursor section. -->
     <details class="advanced-disclosure" id="api-link-advanced" data-advanced="api-link">
       <summary data-i18n="apiLink.advancedSummary"></summary>

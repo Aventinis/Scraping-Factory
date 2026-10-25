@@ -1,5 +1,5 @@
 // Regression test: the "Remove" button on an API response-tree row. The handler
-// called removeApiTreeNode without it being imported into api-config-ui.js (it
+// called removeApiTreeNode without it being imported into api-config-ui.ts (it
 // only worked while every module shared one global scope; since the esbuild
 // bundling of Issue #389 — and under Jest — it was a ReferenceError).
 const { renderApiTree, wireApiConfigEvents } = require('./api-config-ui');

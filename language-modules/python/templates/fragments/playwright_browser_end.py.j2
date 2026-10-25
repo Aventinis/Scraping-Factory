@@ -1,0 +1,4 @@
+{{~ if persistent_session_enabled ~}}
+        context.storage_state(path=SESSION_STATE_PATH)
+{{~ end ~}}
+        browser.close()

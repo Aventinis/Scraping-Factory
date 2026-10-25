@@ -3,6 +3,7 @@ using System.Net;
 using ScrapingFactory.Compiler.Backends.Python;
 using ScrapingFactory.Compiler.IR;
 using Xunit;
+using static ScrapingFactory.Tests.ApiScriptPlans;
 
 namespace ScrapingFactory.Tests;
 
@@ -12,16 +13,7 @@ namespace ScrapingFactory.Tests;
 // overload) instead of canned HTML.
 public class PythonApiScriptVerifierTests
 {
-    private static ScrapingPlan PlanWith(ApiConfig api) => new()
-    {
-        Steps = [new NavigateStep { Urls = ["https://example.com"] }, new ApiCallStep { Config = api }],
-        OutputFormat = OutputFormat.Csv,
-        Engine = ScrapingEngine.Api,
-    };
-
-    private static string GenerateScript(ApiConfig api) => new PythonApiCodeGenerator().Generate(PlanWith(api));
-
-    // Issue #86: same shape as PlanWith/GenerateScript above, just with
+    // Issue #86: same shape as ApiScriptPlans.PlanWith/GenerateScript, just with
     // OutputFormat.Json instead of the hardcoded Csv — used for both the
     // flat and tree API shapes, which self-describe via the written
     // output.json's own root JsonNode type (see PythonScriptVerifier).

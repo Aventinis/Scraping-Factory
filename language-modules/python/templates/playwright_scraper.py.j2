@@ -9,56 +9,11 @@ import json
 {{~ else ~}}
 import csv
 {{~ end ~}}
-import re
-from datetime import date
-{{~ if needs_os_import || external_config.enabled || download_enabled ~}}
-import os
-{{~ end ~}}
-import sys
-{{~ if hardening.has_baseline || preflight.enabled ~}}
-import json
-{{~ end ~}}
-{{~ if proxy.enabled ~}}
-import itertools
-{{~ end ~}}
-{{~ if proxy.enabled || hardening.enabled || download_enabled || discovered_urls.enabled ~}}
-import urllib.parse
-{{~ end ~}}
-{{~ if hardening.enabled ~}}
-from urllib.parse import urlsplit
-{{~ end ~}}
+#@include playwright_imports_head
 {{~ if external_config.enabled ~}}
 import xml.etree.ElementTree as ET
 {{~ end ~}}
-{{~ if pagination.enabled ~}}
-{{~ if pagination.kind == "nextLink" ~}}
-import urllib.parse
-{{~ end ~}}
-{{~ end ~}}
-{{~ if download_enabled ~}}
-import hashlib
-{{~ end ~}}
-{{~ if discovered_urls.enabled || preflight.enabled ~}}
-# Issue #218/#219: both the discovery pass and the preflight check are
-# deliberately plain `requests` calls, never a live Playwright page (both
-# run before any navigation happens) — same "doesn't need the full
-# machinery of the main run" precedent DiscoverySource/BrowserDiscoverySource
-# already established for API mode.
-import requests
-{{~ end ~}}
-{{~ if discovered_urls.enabled ~}}
-from bs4 import BeautifulSoup
-{{~ end ~}}
-{{~ if change_detection.enabled ~}}
-import difflib
-{{~ if change_detection.notify_method == "Email" ~}}
-import smtplib
-from email.mime.text import MIMEText
-{{~ else ~}}
-import json
-import urllib.request
-{{~ end ~}}
-{{~ end ~}}
+#@include playwright_imports_tail
 from playwright.sync_api import sync_playwright
 
 # Issue #83: one or more start URLs — the same extraction runs against each,
@@ -72,72 +27,14 @@ OUTPUT_PATH = "{{ output_filename }}.{{ if output_is_json }}json{{ else if outpu
 
 #@include external_config_flat
 
-#@include session_constants
-
-#@include pagination_constants
-
-#@include change_detection_constants
-
-#@include require_env_playwright
-#@include request_headers_playwright
-{{~ if text_selector.enabled ~}}
-#@include text_selector_common
-
-#@include text_selector_playwright
-{{~ if discovered_urls.enabled ~}}
-
-#@include text_selector_bs4
-{{~ end ~}}
-{{~ end ~}}
-
-{{~ if proxy.enabled ~}}
-#@include proxy_pool
-
-
-#@include proxy_playwright
-{{~ end ~}}
+#@include playwright_constants_prelude
 
 #@include hardening_flat
 
-SELECTORS = {
-{{- for field in fields }}
-    "{{ field.name }}": "{{ field.selector | string.escape }}",
-{{- end }}
-}
-
-ATTRIBUTES = {
-{{- for field in fields }}{{- if field.attribute }}
-    "{{ field.name }}": "{{ field.attribute }}",
-{{- end }}{{- end }}
-}
-
-# Issue #84: per-field post-processing chain (trim/regex extract/replace/
-# to-number), applied in order after the raw value is read — see
-# _apply_transforms below. Empty list = today's behavior, value unchanged.
-TRANSFORMS = {
-{{- for field in fields }}
-    "{{ field.name }}": {{ field.transforms_literal }},
-{{- end }}
-}
+#@include flat_field_selectors
 
 # Issue #213/#214: same "always present" convention as TRANSFORMS above.
-DOWNLOAD = {
-{{- for field in fields }}
-    "{{ field.name }}": {{ if field.download }}True{{ else }}False{{ end }},
-{{- end }}
-}
-
-MAX_DOWNLOAD_SIZE = {
-{{- for field in fields }}
-    "{{ field.name }}": {{ if field.max_download_size_bytes }}{{ field.max_download_size_bytes }}{{ else }}None{{ end }},
-{{- end }}
-}
-
-ALLOWED_CONTENT_TYPES = {
-{{- for field in fields }}
-    "{{ field.name }}": [{{ for t in field.allowed_content_types }}"{{ t }}"{{ if !for.last }}, {{ end }}{{ end }}],
-{{- end }}
-}
+#@include flat_field_download_constants
 
 # Issue #206 follow-up — see scraper.py.j2's own identical HIDDEN_FIELD_NAMES
 # doc comment.
@@ -214,26 +111,7 @@ def _extract_page_rows(page):
 
 def scrape(url):
     with sync_playwright() as p:
-        browser = p.chromium.launch({{ if proxy.enabled }}proxy=_next_playwright_proxy(){{ end }})
-{{~ if persistent_session_enabled ~}}
-        _session_exists = os.path.exists(SESSION_STATE_PATH)
-        context = browser.new_context(storage_state=SESSION_STATE_PATH if _session_exists else None{{ if request_headers.enabled }}, **_BROWSER_CONTEXT_OPTIONS{{ end }})
-        page = context.new_page()
-{{~ if request_delay.enabled ~}}
-        _pace_request()
-{{~ end ~}}
-{{ navigate_action }}
-{{~ if has_login_actions ~}}
-        if not _session_exists:
-{{ login_actions }}
-{{~ end ~}}
-{{~ else ~}}
-        page = browser.new_page({{ if request_headers.enabled }}**_BROWSER_CONTEXT_OPTIONS{{ end }})
-{{~ if request_delay.enabled ~}}
-        _pace_request()
-{{~ end ~}}
-{{ actions }}
-{{~ end ~}}
+#@include playwright_browser_start
 
         rows = []
         page_number = 1
@@ -252,41 +130,9 @@ def scrape(url):
                 break
             rows.extend(page_rows)
 
-{{~ if pagination.enabled ~}}
-            if page_number >= PAGINATION_MAX_PAGES:
-                break
-            page_number += 1
-{{~ if pagination.kind == "nextLink" ~}}
-            next_el = page.query_selector(PAGINATION_NEXT_LINK_SELECTOR)
-            next_href = next_el.get_attribute("href") if next_el else None
-            if not next_href:
-                break
-{{~ if robots_check.enabled ~}}
-            if not _robots_gate(urllib.parse.urljoin(page.url, next_href)):
-                break
-{{~ end ~}}
-{{~ if request_delay.enabled ~}}
-            _pace_request()
-{{~ end ~}}
-            _goto_checked(page, urllib.parse.urljoin(page.url, next_href))
-{{~ else ~}}
-{{~ if robots_check.enabled ~}}
-            if not _robots_gate(PAGINATION_URL_TEMPLATE.format(url=url, page=page_number)):
-                break
-{{~ end ~}}
-{{~ if request_delay.enabled ~}}
-            _pace_request()
-{{~ end ~}}
-            _goto_checked(page, PAGINATION_URL_TEMPLATE.format(url=url, page=page_number))
-{{~ end ~}}
-{{~ else ~}}
-            break
-{{~ end ~}}
+#@include playwright_paginate
 
-{{~ if persistent_session_enabled ~}}
-        context.storage_state(path=SESSION_STATE_PATH)
-{{~ end ~}}
-        browser.close()
+#@include playwright_browser_end
         return rows
 
 

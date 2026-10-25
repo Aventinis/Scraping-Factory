@@ -1,16 +1,4 @@
-#@include output_append
-def main():
-{{~ if preflight.enabled ~}}
-    preflight_status, preflight_etag, preflight_last_modified = _run_preflight_check(URLS[0])
-    if preflight_status == "unreachable":
-        sys.exit(EXIT_PREFLIGHT_UNREACHABLE)
-    if preflight_status == "unchanged":
-        print("Preflight check: no change detected since the last run — skipping.")
-        sys.exit(EXIT_PREFLIGHT_UNCHANGED)
-{{~ end ~}}
-{{~ if change_detection.enabled ~}}
-    previous_content = _read_previous_output(OUTPUT_PATH)
-{{~ end ~}}
+#@include main_head
 {{~ if discovered_urls.enabled ~}}
     all_urls = list(URLS)
     for discovered_url in _discover_additional_urls():
@@ -58,25 +46,7 @@ def main():
             for row in written_data
         ]
         output_fieldnames = [FIELD_OUTPUT_NAMES.get(name, name) for name in SELECTORS.keys() if name not in HIDDEN_FIELD_NAMES]
-{{~ if append_output ~}}
-    appended_count = len(output_rows)
-{{~ end ~}}
-{{~ if append_output && !output_is_sqlite && !output_is_xlsx ~}}
-    output_fieldnames, output_rows = _append_previous_rows(OUTPUT_PATH, output_fieldnames, output_rows)
-{{~ end ~}}
-{{~ if output_is_json ~}}
-    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(output_rows, f, ensure_ascii=False, indent=2)
-{{~ else if output_is_sqlite ~}}
-    _write_rows_sqlite(OUTPUT_PATH, output_fieldnames, output_rows)
-{{~ else if output_is_xlsx ~}}
-    _write_rows_xlsx(OUTPUT_PATH, output_fieldnames, output_rows)
-{{~ else ~}}
-    with open(OUTPUT_PATH, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=output_fieldnames)
-        writer.writeheader()
-        writer.writerows(output_rows)
-{{~ end ~}}
+#@include main_write_rows
     print(f"Done — {{ if append_output }}{appended_count}{{ else if dedup.enabled }}{len(output_rows)}{{ else }}{len(data)}{{ end }} rows {{ if append_output }}appended to{{ else }}written to{{ end }} {OUTPUT_PATH}")
 {{~ if change_detection.enabled ~}}
     with open(OUTPUT_PATH, "r", encoding="utf-8") as f:

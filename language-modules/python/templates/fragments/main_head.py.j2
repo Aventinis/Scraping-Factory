@@ -1,0 +1,13 @@
+#@include output_append
+def main():
+{{~ if preflight.enabled ~}}
+    preflight_status, preflight_etag, preflight_last_modified = _run_preflight_check(URLS[0])
+    if preflight_status == "unreachable":
+        sys.exit(EXIT_PREFLIGHT_UNREACHABLE)
+    if preflight_status == "unchanged":
+        print("Preflight check: no change detected since the last run — skipping.")
+        sys.exit(EXIT_PREFLIGHT_UNCHANGED)
+{{~ end ~}}
+{{~ if change_detection.enabled ~}}
+    previous_content = _read_previous_output(OUTPUT_PATH)
+{{~ end ~}}

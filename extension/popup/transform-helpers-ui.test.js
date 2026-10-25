@@ -1,5 +1,5 @@
 // Issue #400: the regex "Pattern helper" panel and the date-format hint in the
-// transform editor (transform-helpers-ui.js, wired through field-transforms-ui.js).
+// transform editor (transform-helpers-ui.ts, wired through field-transforms-ui.ts).
 Object.defineProperty(window.navigator, 'language', { value: 'en-US', configurable: true });
 
 let renderTransformList;

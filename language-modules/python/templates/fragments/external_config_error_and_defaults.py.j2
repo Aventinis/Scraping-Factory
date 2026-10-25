@@ -1,0 +1,11 @@
+def _external_config_error(message):
+    print(f"ERROR: The external config file '{EXTERNAL_CONFIG_PATH}' {message}", file=sys.stderr)
+    sys.exit(EXIT_EXTERNAL_CONFIG_INVALID)
+
+
+def _write_default_external_config():
+    root = ET.Element("ScrapingFactoryConfig")
+    ET.SubElement(root, "OutputFileName").text = "{{ output_filename }}"
+    urls_el = ET.SubElement(root, "Urls")
+    for u in URLS:
+        ET.SubElement(urls_el, "Url").text = u

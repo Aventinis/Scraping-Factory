@@ -1,4 +1,4 @@
-// Issue #399: the "Recommended checks" preset (hardening-presets.js).
+// Issue #399: the "Recommended checks" preset (hardening-presets.ts).
 const { applyRecommendedHardening } = require('./hardening-presets');
 const { buildHardeningConfig } = require('./scraping-config-builder');
 

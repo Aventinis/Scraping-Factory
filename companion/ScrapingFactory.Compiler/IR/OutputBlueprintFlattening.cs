@@ -1,74 +1,35 @@
 namespace ScrapingFactory.Compiler.IR;
 
-// Issue #192: extends #191's flat Output Blueprint mapping to container
-// mode by *flattening* the source tree into denormalized rows instead of
-// renaming tags in place — one row per instance of the single repeating
-// group every mapped field's own ancestor chain shares, with any
-// higher-level mapped field (outside that repeating group, e.g. a category
-// name sitting next to a repeating list of items) copied into every row
-// generated beneath it, so no value is ever silently lost the way writing
-// it only once would. See CLAUDE.md's Output Blueprints section for the
-// full worked example this resolves (the "Speise-Art" case).
+// A blueprint mapping on a container tree flattens it into denormalized rows: one row per instance of the single
+// repeating group all mapped fields share, a higher-level mapped field (a category name above a repeating list)
+// is copied into every row beneath it. Worked example: docs/design-notes/compiler.md (Output Blueprints).
 //
-// Deliberately container-mode only: this walk relies on GroupNode.Repeating
-// being an explicit, config-time-known flag. API mode's own tree shape
-// (ApiGroup) has no such flag at all — whether a node is repeating is only
-// ever known once the real JSON response is resolved at script run time
-// (Architecture Decision #6) — so the equivalent ambiguity check for that
-// shape has no static, generate-time counterpart; it happens in the
-// generated Python script itself instead (see scraper_api_grouped.py.j2's
-// own runtime mirror of ResolveChain below), surfacing as a normal 422
-// trial-run verification failure rather than a 400 here.
+// Container mode only: it needs GroupNode.Repeating to be known at configuration time. For API trees
+// repeating-ness exists only at run time, so scraper_api_grouped.py.j2 mirrors ResolveChain there and a conflict
+// surfaces as a 422 trial-run failure instead of a 400.
 //
-// Issue #244: ResolveContainerTreeRowScopes below extends this same
-// mechanism to a tree-shaped Output Blueprint target schema — instead of
-// resolving ONE row scope for the whole (flat) mapping, it resolves one row
-// scope PER TARGET GROUP NODE, recursively, each still via ResolveChain
-// (unchanged) but scoped to only the leaf fields mapped directly beneath
-// that target group (not any of its own nested target groups, which get
-// their own independent resolution). This is what actually lets two
-// independent/sibling source repeating groups — the exact case the flat
-// mapping above refuses — coexist in one mapping, as long as the target
-// schema places them under two different target group branches: the tree's
-// own nesting is the disambiguation, per Issue #244's own resolution of that
-// open question.
+// ResolveContainerTreeRowScopes does the same per target group of a tree-shaped blueprint, which is what allows
+// two independent repeating source groups when the target puts them under different branches.
 public static class OutputBlueprintFlattening
 {
     public sealed class Result
     {
-        // Name of the single repeating GroupNode every mapped field's own
-        // deepest repeating ancestor chain agrees on — null when no mapped
-        // field has ANY repeating ancestor at all, meaning the whole
-        // mapping resolves to exactly one row (nothing repeats).
+        // The repeating group all mapped fields agree on; null = nothing repeats, one row.
         public string? RowGroupName { get; init; }
 
-        // Full root-to-row chain of repeating GroupNode names RowGroupName
-        // is the last entry of — [] when RowGroupName is null. Exposed (in
-        // addition to RowGroupName) so ResolveContainerTreeRowScopes can
-        // both validate a nested target group's own chain extends its
-        // parent's, and pass the resolved chain down as that parent's own
-        // ancestor context for further recursion.
+        // Root-to-row chain of repeating group names ending in RowGroupName ([] when null); lets a nested target
+        // group be checked against its parent's chain.
         public List<string> RowGroupChain { get; init; } = [];
 
-        // Non-null when the mapped fields don't all sit on one single
-        // root-to-row ancestor chain (e.g. two unrelated/sibling repeating
-        // groups both referenced by the same mapping) — there is no single
-        // row layout that would include every mapped field without either a
-        // cross-product or dropping data, so this is surfaced as a hard
-        // error rather than guessed at.
+        // Set when the mapped fields do not sit on one ancestor chain (two sibling repeating groups): no single
+        // row layout fits without a cross product or dropped data.
         public string? Error { get; init; }
     }
 
     public static Result ResolveContainerRowScope(IReadOnlyList<ContainerNode> roots, IReadOnlyCollection<string> mappedSourceFields) =>
         ResolveChain(CollectSourceFieldChains(roots, mappedSourceFields));
 
-    // Issue #244: resolves a row scope per target GROUP node of a tree-
-    // shaped mapping, recursively — success/failure only (no per-group
-    // result is needed by any caller; the actual nested-output construction
-    // happens at runtime in the generated Python script, exactly like the
-    // flat case's own ResolveContainerRowScope is a validation-only,
-    // generate-time pre-check of what _flatten_group_tree_for_blueprint
-    // already computes independently at runtime).
+    // A row scope per target group, recursively. Validation only: the nested output is built at run time.
     public static Result ResolveContainerTreeRowScopes(IReadOnlyList<ContainerNode> sourceRoots, IReadOnlyList<OutputBlueprintTreeMappingNode> targetNodes) =>
         ResolveTargetGroupScope(sourceRoots, targetNodes, ancestorContext: []);
 
@@ -78,14 +39,8 @@ public static class OutputBlueprintFlattening
         var directSourceFields = CollectDirectTargetSourceFields(targetChildren);
         var chains = CollectSourceFieldChains(sourceRoots, directSourceFields);
 
-        // Every chain must either broadcast (empty — a page-level field with
-        // no repeating ancestor at all) or actually be reachable from
-        // wherever the enclosing target group already scoped things to —
-        // i.e. have ancestorContext as a literal prefix. A field whose own
-        // chain diverges from ancestorContext before reaching its depth (or
-        // never reaches it at all) is nested in the wrong place in the
-        // target tree relative to what it actually resolves to in the
-        // source tree.
+        // A chain must be empty (a page-level field that broadcasts) or start with the enclosing group's chain;
+        // anything else is nested in the wrong place of the target tree.
         foreach (var chain in chains)
         {
             if (chain.Count == 0) continue;
@@ -106,11 +61,7 @@ public static class OutputBlueprintFlattening
         if (ownScope.Error is not null)
             return ownScope;
 
-        // This target group's own resolved chain (falls back to the
-        // ancestor context unchanged when none of its direct fields add any
-        // further nesting — e.g. a target group holding only nested target
-        // groups of its own) becomes the ancestor context every nested
-        // target group child is resolved against in turn.
+        // Becomes the context for nested target groups (unchanged if this group's fields add no nesting).
         var ownChain = ownScope.RowGroupChain.Count > 0 ? ownScope.RowGroupChain : ancestorContext;
 
         foreach (var child in targetChildren)
@@ -124,10 +75,7 @@ public static class OutputBlueprintFlattening
         return ownScope;
     }
 
-    // Leaf SourceFields mapped directly under this level of the target
-    // tree — deliberately NOT descending into a nested
-    // OutputBlueprintTreeMappingGroup's own children, which get their own,
-    // independent row-scope resolution one level down.
+    // Leaves directly under this level only; nested target groups are resolved on their own.
     private static List<string> CollectDirectTargetSourceFields(IReadOnlyList<OutputBlueprintTreeMappingNode> nodes) =>
         nodes.OfType<OutputBlueprintTreeMappingField>().Select(field => field.SourceField).ToList();
 
@@ -158,24 +106,14 @@ public static class OutputBlueprintFlattening
         return chains;
     }
 
-    // Shared by ResolveContainerRowScope/ResolveContainerTreeRowScopes above
-    // and, structurally mirrored (not shared code — different language),
-    // scraper_api_grouped.py.j2's own runtime version for API mode's tree
-    // shape.
     private static Result ResolveChain(List<List<string>> chains)
     {
-        // A field with no repeating ancestor at all contributes an empty
-        // chain — it simply broadcasts into whatever the row scope ends up
-        // being (or the whole mapping is one single row, if every field's
-        // chain is empty).
+        // An empty chain broadcasts into whatever the row scope is.
         var nonEmpty = chains.Where(chain => chain.Count > 0).ToList();
         if (nonEmpty.Count == 0)
             return new Result { RowGroupName = null };
 
-        // The winning row-scope chain is whichever reaches deepest; every
-        // other mapped field's own chain must be an exact prefix of it —
-        // i.e. sit on the very same root-to-row path — for the mapping to
-        // have one unambiguous row granularity.
+        // The deepest chain wins; every other chain must be a prefix of it.
         var winner = nonEmpty.OrderByDescending(chain => chain.Count).First();
         foreach (var chain in nonEmpty)
         {

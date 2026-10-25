@@ -2,19 +2,9 @@ using ScrapingFactory.Compiler.IR;
 
 namespace ScrapingFactory.Compiler.Backends.Python;
 
-// Issue #129: builds the single Scriban context object every one of the six
-// templates renders `hardening.*` from — mirrors PythonProxyLiteral/
-// PythonChangeDetectionLiteral's own BuildContext shape exactly.
-// checks_literal is a Python list-of-dicts literal (e.g.
-// [{"kind": "noResult", "severity": "Error"}]) or "[]" when no checks are
-// configured; the runtime side (_run_hardening_checks in the templates)
-// dispatches on each dict's "kind" — "noResult", "nullRate" (Issue #130),
-// and "baseline" (Issue #131; see HardeningCheck's own doc comment for the
-// two still-planned kinds). has_baseline additionally gates the templates'
-// own sidecar-file read/write helpers and their `import json` — the only
-// kind so far needing on-disk state between runs, so it's the only one
-// that needs its own top-level context flag rather than just living inside
-// checks_literal.
+// Builds the `hardening.*` Scriban context: checks_literal is a Python list-of-dicts (or "[]") that the templates'
+// _run_hardening_checks dispatches on by "kind". has_baseline additionally gates the sidecar-file helpers and
+// `import json`, since baseline is the only kind that keeps state between runs.
 internal static class PythonHardeningLiteral
 {
     public static object BuildContext(List<HardeningCheck>? checks)
@@ -37,31 +27,13 @@ internal static class PythonHardeningLiteral
     private static string RenderCheck(HardeningCheck check) => check switch
     {
         NoResultCheck => $$"""{"kind": {{PythonLiteral.Str("noResult")}}, "severity": {{PythonLiteral.Str(check.Severity.ToString())}}}""",
-        // Issue #130: "field" is matched against a flat row's dict key or,
-        // in container/API-tree mode, an element's tag name anywhere in the
-        // output tree (see NullRateCheck's own doc comment on the "global
-        // per field name" scoping decision). "threshold" is a plain 0.0-1.0
-        // fraction, not a percentage — PythonLiteral.Num already renders the
-        // shortest round-trippable form (0.3 -> "0.3", not "0.30" or
-        // scientific notation).
+        // "field" is matched by dict key (flat) or tag name anywhere in the tree; "threshold" is a 0.0-1.0 fraction.
         NullRateCheck nullRate => $$"""{"kind": {{PythonLiteral.Str("nullRate")}}, "severity": {{PythonLiteral.Str(check.Severity.ToString())}}, "field": {{PythonLiteral.Str(nullRate.FieldName)}}, "threshold": {{PythonLiteral.Num(nullRate.Threshold)}}}""",
-        // Issue #131: "dropThreshold" is a plain 0.0-1.0 fraction of the
-        // *previous* run's own result count (read from the sidecar file at
-        // runtime, see the templates' _read_baseline) — there's no baseline
-        // value to render here at all, since it doesn't exist yet at
-        // generation time.
+        // "dropThreshold" is a fraction of the previous run's count, which is read from the sidecar at run time.
         BaselineCheck baseline => $$"""{"kind": {{PythonLiteral.Str("baseline")}}, "severity": {{PythonLiteral.Str(check.Severity.ToString())}}, "dropThreshold": {{PythonLiteral.Num(baseline.DropThreshold)}}}""",
-        // Issue #132: "minBodyLength" is an unquoted int literal or "None"
-        // when the signal is disabled — PythonLiteral has no dedicated
-        // int-or-None helper since this is the only nullable-int field
-        // across every literal builder so far. "blockPhrases" reuses
-        // PythonLiteral.StrList, which already renders an empty list as
-        // "[]" for a null/empty BlockPhrases.
+        // "minBodyLength" is an int literal or "None" (signal off); "blockPhrases" renders an empty list as "[]".
         BlockingCheck blocking => $$"""{"kind": {{PythonLiteral.Str("blocking")}}, "severity": {{PythonLiteral.Str(check.Severity.ToString())}}, "minBodyLength": {{(blocking.MinBodyLength is { } min ? min.ToString() : "None")}}, "blockPhrases": {{PythonLiteral.StrList(blocking.BlockPhrases ?? [])}}}""",
-        // Issue #133: "fieldNames" is a plain list of strings — unlike
-        // BlockingCheck's optional signals, this is the one thing the check
-        // configures at all, so it's never empty (ScrapingPlanValidator
-        // rejects an empty list before this ever runs).
+        // "fieldNames" is never empty (the validator rejects that).
         RequiredFieldsCheck requiredFields => $$"""{"kind": {{PythonLiteral.Str("requiredFields")}}, "severity": {{PythonLiteral.Str(check.Severity.ToString())}}, "fieldNames": {{PythonLiteral.StrList(requiredFields.FieldNames)}}}""",
         _ => throw new InvalidOperationException($"Unknown HardeningCheck type: {check.GetType()}"),
     };

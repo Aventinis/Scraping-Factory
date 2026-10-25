@@ -7,7 +7,7 @@
      section (Issue-driven follow-up): these are personal preferences about
      how every future scrape should behave, not properties of the scrape
      currently being configured, so they persist via chrome.storage.local
-     (shared/global-settings.js) instead of the per-scrape _state. -->
+     (shared/global-settings.ts) instead of the per-scrape _state. -->
 <div id="settings-preferences-section">
   <p class="row-label" data-i18n="settings.preferencesTitle"></p>
   <div class="output-settings-row">
@@ -75,7 +75,7 @@
 
 <!-- Issue #279: reusable transform-chain presets — built-ins (read-only)
      plus the user's own, saved from any field's transform editor via "Save
-     as preset"; renamed/deleted here. Rendered by transform-presets-ui.js. -->
+     as preset"; renamed/deleted here. Rendered by transform-presets-ui.ts. -->
 <details class="advanced-disclosure settings-card" data-advanced="settings-presets">
   <summary><span data-i18n="transformPresets.settingsTitle"></span></summary>
   <div id="settings-transform-presets-section" class="advanced-disclosure-body">
@@ -104,7 +104,7 @@
   <summary data-i18n="settings.connectionTitle"></summary>
   <div class="advanced-disclosure-body">
 <!-- Issue #352: self-service account on a companion that requires login —
-     sign in / register / sign out / change password (account-ui.js). The
+     sign in / register / sign out / change password (account-ui.ts). The
      token the companion hands out is stored as the access key below. -->
 <div id="settings-account-section" class="hidden">
   <p class="row-label" data-help-anchor><span data-i18n="settings.account.title"></span><span class="help-host" data-help="help.account.overview" data-doc="accounts"></span></p>
@@ -203,7 +203,7 @@
 
 <!-- Issue #278: access key for a shared companion with per-user
      authentication — a device preference (chrome.storage.local via
-     shared/companion-config.js), sent as a Bearer header with every request. -->
+     shared/companion-config.ts), sent as a Bearer header with every request. -->
 <div id="settings-access-key-section">
   <p class="row-label" data-help-anchor><span data-i18n="settings.accessKeyTitle"></span><span class="help-host" data-help="help.accessKey.overview" data-doc="accessKey"></span></p>
   <div class="output-settings-row">
@@ -217,8 +217,8 @@
   <p id="access-key-status" class="preview-summary hidden"></p>
 </div>
 
-<!-- Issue #352: development builds only — account-ui.js removes this whole
-     section when the extension is a release build (shared/build-config.js),
+<!-- Issue #352: development builds only — account-ui.ts removes this whole
+     section when the extension is a release build (shared/build-config.ts),
      so an ordinary user's extension cannot switch any of it on. -->
 <div id="settings-developer-section">
   <p class="row-label" data-help-anchor><span data-i18n="settings.developer.title"></span><span class="help-host" data-help="help.developer.overview" data-doc="accessKey"></span></p>

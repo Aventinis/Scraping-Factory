@@ -205,7 +205,8 @@ def _parse_url_parts(url):
     return f"{parsed.scheme}://{parsed.netloc}", path_segments, query_params
 
 
-# Issue #216: runtime port of findUrlTemplateMatches (popup/api-config.js) —
+# Issue #216: runtime port of findUrlTemplateMatches (popup/api-config.js), both
+# pinned to test-vectors/url-template.json —
 # matches one captured request URL against UrlTemplate itself (not a
 # separate pattern, see BrowserDiscoverySource's own doc comment): origin
 # and path-segment count must match exactly, every literal path segment/
@@ -395,7 +396,7 @@ def _resolve_browser_discovery(source, headers, target_name, combo):
     seen = set()
     for url in captured_urls:
         value = _match_url_against_template(url, URL_TEMPLATE, target_name)
-        if value is not None and value not in seen:
+        if value and value not in seen:
             seen.add(value)
             discovered.append(value)
     return discovered

@@ -27,7 +27,7 @@ module.exports = [
 
       // Root container: one repeating group per menu entry.
       await popupPage.click('#btn-add-root-container');
-      await popupPage.fill('#input-container-name', 'Dish');
+      await popupPage.fill('#input-container-name', s.word('Dish'));
       await popupPage.check('#radio-container-repeating');
       await s.shot('modes-container-new');
       await popupPage.click('#btn-container-confirm');
@@ -38,7 +38,7 @@ module.exports = [
       await s.waitForIdle();
 
       // Two fields inside it, picked relative to the first instance.
-      for (const [name, selector] of [['Name', '.item-name'], ['Price', '.item-price']]) {
+      for (const [name, selector] of [[s.word('Name'), '.item-name'], [s.word('Price'), '.item-price']]) {
         await popupPage.locator('.btn-add-subfield').first().click();
         await popupPage.waitForSelector('#screen-selecting:not(.hidden)');
         await fixturePage.waitForTimeout(500); // content script arms its click handler
@@ -68,12 +68,12 @@ module.exports = [
       await popupPage.click('#btn-api-search');
       await fixturePage.click('#result-search .product-title >> nth=0');
       await popupPage.waitForSelector('.api-candidate-field-name', { state: 'visible' });
-      await popupPage.fill('.api-candidate-field-name', 'Title');
+      await popupPage.fill('.api-candidate-field-name', s.word('Title'));
       await popupPage.click('.api-candidate-confirm');
       await popupPage.waitForSelector('#screen-api-config:not(.hidden)');
       await popupPage.locator('#api-tree-root .btn-add-api-subgroup').first().click();
       await popupPage.waitForSelector('#modal-api-group-new:not(.hidden)');
-      await popupPage.fill('#input-api-group-name', 'Subcategory');
+      await popupPage.fill('#input-api-group-name', s.word('Subcategory'));
       await popupPage.click('#modal-api-group-new .json-path-open');
       await popupPage.waitForSelector('#api-group-path-picker .json-path-pick');
       await s.shot('modes-api-path-picker', '#modal-api-group-new .modal-inner');

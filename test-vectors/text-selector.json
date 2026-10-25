@@ -1,0 +1,140 @@
+{
+ "description": "Issue #388: splitting a trailing :contains(\"text\") filter off a selector. Four implementations share these cases: the popup's splitTextFilter (selector-text-filter.ts), the content script's splitTextFilter, the companion's SelectorTextFilter.Split/Validate and the generated scripts' _split_text_filter. Valid cases: all four return the same base and (unescaped) text. invalid:true: the companion rejects the selector (Split throws, Validate returns a message); with splitUnchanged:true the lenient JS/Python splitters also return the selector unchanged and no text; without it their behavior is not specified (the companion refuses such a selector before any script exists).",
+ "cases": [
+  {
+   "name": "double quotes",
+   "selector": ".btn:contains(\"Add to cart\")",
+   "base": ".btn",
+   "text": "Add to cart"
+  },
+  {
+   "name": "single quotes",
+   "selector": ".card .btn:contains('Merken')",
+   "base": ".card .btn",
+   "text": "Merken"
+  },
+  {
+   "name": "whitespace around the text and at the end",
+   "selector": "a:contains(  \"x\"  )   ",
+   "base": "a",
+   "text": "x"
+  },
+  {
+   "name": "a bare filter selects from everything",
+   "selector": ":contains(\"only\")",
+   "base": "*",
+   "text": "only"
+  },
+  {
+   "name": "escaped double quotes",
+   "selector": ".a > .b:contains(\"say \\\"hi\\\"\")",
+   "base": ".a > .b",
+   "text": "say \"hi\""
+  },
+  {
+   "name": "escaped single quote",
+   "selector": ".b:contains('it\\'s')",
+   "base": ".b",
+   "text": "it's"
+  },
+  {
+   "name": "the marker is case-insensitive",
+   "selector": "A:CONTAINS(\"x\")",
+   "base": "A",
+   "text": "x"
+  },
+  {
+   "name": "no filter at all",
+   "selector": "div",
+   "base": "div",
+   "text": null
+  },
+  {
+   "name": "an attribute selector without a filter",
+   "selector": ".a .b[data-x=\"1\"]",
+   "base": ".a .b[data-x=\"1\"]",
+   "text": null
+  },
+  {
+   "name": "the other quote type inside the text",
+   "selector": "a:contains('say \"hi\"')",
+   "base": "a",
+   "text": "say \"hi\""
+  },
+  {
+   "name": "a closing parenthesis inside the text",
+   "selector": "a:contains(\"a)b\")",
+   "base": "a",
+   "text": "a)b"
+  },
+  {
+   "name": "a backslash escapes itself",
+   "selector": "a:contains(\"back\\\\slash\")",
+   "base": "a",
+   "text": "back\\slash"
+  },
+  {
+   "name": "another :contains( inside the text",
+   "selector": "a:contains(\":contains(x)\")",
+   "base": "a",
+   "text": ":contains(x)"
+  },
+  {
+   "name": "non-ASCII text",
+   "selector": "button:contains(\"Größe wählen\")",
+   "base": "button",
+   "text": "Größe wählen"
+  },
+  {
+   "name": "whitespace between the base and the filter",
+   "selector": "ul li   :contains(\"x\")",
+   "base": "ul li",
+   "text": "x"
+  },
+  {
+   "name": "a pseudo-class before the filter",
+   "selector": "a:not(.disabled):contains(\"Next\")",
+   "base": "a:not(.disabled)",
+   "text": "Next"
+  },
+  {
+   "name": "unquoted text",
+   "selector": "a:contains(x)",
+   "invalid": true,
+   "splitUnchanged": true
+  },
+  {
+   "name": "unclosed quote",
+   "selector": "a:contains(\"x\"",
+   "invalid": true,
+   "splitUnchanged": true
+  },
+  {
+   "name": "something after the filter",
+   "selector": "a:contains(\"x\") b",
+   "invalid": true,
+   "splitUnchanged": true
+  },
+  {
+   "name": "unclosed parenthesis",
+   "selector": "a:contains(",
+   "invalid": true,
+   "splitUnchanged": true
+  },
+  {
+   "name": "empty text",
+   "selector": "a:contains(\"\")",
+   "invalid": true
+  },
+  {
+   "name": "blank text",
+   "selector": "a:contains(\"   \")",
+   "invalid": true
+  },
+  {
+   "name": "two filters",
+   "selector": "a:contains(\"x\"):contains(\"y\")",
+   "invalid": true
+  }
+ ]
+}

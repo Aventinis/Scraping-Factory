@@ -3,30 +3,15 @@ using ScrapingFactory.Compiler.IR;
 
 namespace ScrapingFactory.Compiler.Backends;
 
-// Looks up code generators/verifiers without any compile-time reference to a
-// concrete backend type (e.g. PythonCodeGenerator) outside of Backends/Python
-// itself. Discovery is a reflection scan of this assembly — sufficient as
-// long as every language module ships in-process; splitting modules into
-// separately loaded plugin assemblies is a later concern.
-//
-// Code generators are keyed by (LanguageId, Engine): the same language can
-// have multiple backends (e.g. Python via requests+BeautifulSoup for the
-// Static engine, Python via Playwright for the Browser engine). Verifiers
-// only need LanguageId — they just run whatever script the language's
-// generators produce, regardless of which engine generated it.
+// Finds code generators and verifiers without a compile-time reference to a backend type, by scanning this assembly.
+// Generators are keyed by (LanguageId, Engine); verifiers only by LanguageId (they run whatever the generators produce).
 public sealed class LanguageModuleRegistry
 {
     private readonly Dictionary<(string LanguageId, ScrapingEngine Engine), ICodeGenerator> _codeGenerators;
     private readonly Dictionary<string, IScriptVerifier> _scriptVerifiers;
 
-    // ctorOverrides lets a caller (Program.cs, driven by appsettings.json's
-    // "Companion" section) reach into an otherwise-opaque, reflectively
-    // discovered backend's own optional constructor parameters by name —
-    // e.g. PythonScriptVerifier's (pythonExecutable, timeout) — without this
-    // registry needing any compile-time knowledge of which backends exist or
-    // which parameters they expose. A key with no matching parameter on a
-    // given type is simply ignored; a parameter with no matching key keeps
-    // its normal C# default.
+    // ctorOverrides reaches optional constructor parameters of discovered backends by name (e.g. PythonScriptVerifier's
+    // pythonExecutable, timeout) from configuration; unmatched keys are ignored, unmatched parameters keep their default.
     public LanguageModuleRegistry(IReadOnlyDictionary<string, object?>? ctorOverrides = null)
         : this(Assembly.GetExecutingAssembly(), ctorOverrides)
     {
@@ -62,11 +47,7 @@ public sealed class LanguageModuleRegistry
             if (type is not { IsClass: true, IsAbstract: false } || !typeof(T).IsAssignableFrom(type))
                 continue;
 
-            // Accept any constructor that can be invoked with zero
-            // arguments (all-optional included, e.g. PythonScriptVerifier's
-            // (pythonExecutable = null, timeout = null)) so backends aren't
-            // forced into a plain parameterless constructor just to be
-            // discoverable.
+            // Accepts any constructor callable with zero arguments (all-optional included).
             var ctor = type.GetConstructors().FirstOrDefault(c => c.GetParameters().All(p => p.IsOptional));
             if (ctor is null)
                 continue;

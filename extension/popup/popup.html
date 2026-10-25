@@ -9,12 +9,12 @@
 
   <!-- Language selector: rendered outside every .screen section so switching
        language is always possible, regardless of app state (checking,
-       error, idle, …). See popup.js's applyStaticTranslations/setLanguage. -->
+       error, idle, …). See popup.ts's applyStaticTranslations/setLanguage. -->
   <div id="lang-switcher">
     <!-- Theme toggle (Issue #140): cycles system -> light -> dark -> system
          on click (SFTheme.cycleTheme); the icon shown always reflects the
          *current* state, same as the language <select>'s own value does —
-         see popup.js's renderThemeToggle. -->
+         see popup.ts's renderThemeToggle. -->
     <button id="theme-toggle" type="button" data-i18n-title="theme.toggleTitle"></button>
     <!-- Global Settings tab: cross-session preferences (Output as JSON,
          trial-run data preview, full output-file download, editable XML
@@ -53,7 +53,7 @@
     <p data-i18n="error.title"></p>
     <!-- Issue #406: first run (no companion has ever answered) shows the long
          explanation, afterwards only the one-line hint — see
-         companion-guidance-ui.js. The install/start texts are set by script
+         companion-guidance-ui.ts. The install/start texts are set by script
          (they carry the installer name and the program path for this OS). -->
     <div id="error-guidance-long" class="error-guidance hidden">
       <p class="error-intro"><span data-i18n="error.intro"></span> <a class="learn-more" data-doc="companionUnreachable" href="#" data-i18n="common.learnMore"></a></p>
@@ -177,8 +177,8 @@
          list ({ script, blocks: [{name, preview, outputFile}] }), not the
          single preview/outputFile every other mode returns — shown here
          instead of the data-preview-panel/btn-download-output above.
-         Per-block preview tables are a deliberately deferred follow-up (see
-         CLAUDE.md); this only ever offers the download. -->
+         Per-block preview tables are a deliberately deferred follow-up; this
+         only offers the download. -->
     <div id="blocks-output-panel" class="data-preview-panel hidden">
       <p class="data-preview-title" data-i18n="done.blocksOutputTitle"></p>
       <ul id="blocks-output-list"></ul>
@@ -192,7 +192,7 @@
       <span id="error-toast-message"></span>
       <!-- Issue #401: a recognised failure shows a plain-language title + hint and
            keeps the original text behind "Details" (copyable); such a toast stays
-           until closed (see showErrorToast in toast.js). -->
+           until closed (see showErrorToast in toast.ts). -->
       <p id="error-toast-hint" class="toast-hint hidden"></p>
       <details id="error-toast-details" class="toast-details hidden">
         <summary data-i18n="errors.detailsLabel"></summary>

@@ -1,5 +1,5 @@
 // Issue #406: pure logic of the companion-unreachable guidance
-// (companion-guidance.js).
+// (companion-guidance.ts).
 const guidance = require('./companion-guidance');
 
 const {

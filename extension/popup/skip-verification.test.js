@@ -15,11 +15,16 @@ const blocks = [
 ];
 
 // Positional tail: ... requestHeaders, respectRobotsDelay, skipVerification
-const build = (mode, skip, extra = {}) => buildScrapingConfig(
-  'https://example.com', mode, extra.fields ?? fields, extra.groups ?? [], extra.apiConfig ?? null, null, null, 'Static', [], false, false,
-  [], null, null, null, null, false, false, false, extra.combined ?? null, extra.blocks ?? null, null, [], {}, 'Flat', [], {},
-  null, false, null, null, null, null, false, skip,
-);
+const build = (mode, skip, extra = {}) => buildScrapingConfig({
+  url: 'https://example.com',
+  mode,
+  fields: extra.fields ?? fields,
+  groups: extra.groups ?? [],
+  apiConfig: extra.apiConfig ?? null,
+  combinedComponents: extra.combined ?? null,
+  blocks: extra.blocks ?? null,
+  skipVerification: skip,
+});
 
 describe('buildScrapingConfig', () => {
   test.each([
@@ -30,10 +35,7 @@ describe('buildScrapingConfig', () => {
   });
 
   test('is part of the exported configuration (the literal /generate body)', () => {
-    const exported = buildConfigExport(
-      'https://example.com', 'flat', fields, [], {}, null, null, null, 'Static', [], false, false,
-      [], null, null, null, null, false, false, false, null, null, null, [], {}, 'Flat', [], {}, null, false, null, null, null, null, false, true,
-    );
+    const exported = buildConfigExport({ url: 'https://example.com', mode: 'flat', fields, skipVerification: true });
     expect(exported.config.skipVerification).toBe(true);
   });
 });

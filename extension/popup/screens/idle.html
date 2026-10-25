@@ -128,7 +128,7 @@
            separate, capturable network request ever happens) — needs no
            recording toggle at all, so it's always available. Feeds the same
            #api-candidates-panel/-list below; the resulting candidate is
-           dispatched by shape (candidate.scriptSelector) in popup.js. -->
+           dispatched by shape (candidate.scriptSelector) in popup.ts. -->
       <div class="actions" style="margin-top: 6px;">
         <button id="btn-embedded-json-search" class="btn-secondary" type="button" data-i18n="idle.apiEmbeddedJsonSearchBtn" data-i18n-title="idle.apiEmbeddedJsonSearchTitle"></button>
       </div>
@@ -168,7 +168,7 @@
          navigation/browser actions, each writing its own output file. A
          block is built one at a time using the exact same #fields-list/
          #group-tree-root editors flat/container mode already have (see
-         blocks-config-ui.js) — _state.fields/_state.groups double as "the
+         blocks-config-ui.ts) — _state.fields/_state.groups double as "the
          block currently being edited" while mode is 'blocks' — then
          snapshotted into the list below via "+ Add block", starting the
          next block fresh. -->
@@ -261,7 +261,7 @@
           <div id="proxy-config" class="hidden">
             <!-- Issue #397: the shared "What is an environment variable?" line + popover
                  (help.envVar.what) and the shared inline name validation (data-env-var,
-                 see env-var-ui.js) — same on every input that takes a variable name. -->
+                 see env-var-ui.ts) — same on every input that takes a variable name. -->
             <p class="env-var-note" data-help-anchor><span data-i18n="envVar.whatLabel"></span><span class="help-host" data-help="help.envVar.what" data-doc="envVars"></span></p>
             <div class="output-settings-row">
               <label for="input-proxy-env-var" data-i18n="idle.proxyEnvVarLabel"></label>
@@ -563,7 +563,7 @@
            auto-expands it once, on the first render after a popup (re)open
            if either change detection or any hardening check is already
            configured (see _state.monitoringSectionOpen/
-           computeInitialMonitoringSectionOpen in popup.js) — a returning
+           computeInitialMonitoringSectionOpen in popup.ts) — a returning
            user isn't forced to re-expand it just to see their own
            settings. Reuses the shared chevron+.collapsed convention
            (Issue #139) already used by the group/api/DOM tree views,
@@ -637,10 +637,7 @@
                cron-scheduled re-run, weeks after generation) and either
                warns (script still exits 0) or fails the run (script exits
                a distinct non-zero code) per check, independently
-               configurable. This is the first of five planned checks (see
-               CLAUDE.md) — one row per check, built so each of the other
-               four can add its own row below without restructuring
-               #hardening-config. -->
+               configurable. One row per check. -->
           <div id="hardening-config">
             <!-- Issue #399: what "checks" are, what happens when one fails (Warn me /
                  Stop the run — one shared popover instead of exit-code tooltips), and a
@@ -727,7 +724,7 @@
                 <button id="btn-hardening-blocking-error" class="mode-btn" type="button" data-i18n="idle.hardeningSeverityError"></button>
               </div>
               <!-- Issue #399: the two rarely needed signals, tucked away (state remembered
-                   per section, see advanced-disclosure-ui.js) -->
+                   per section, see advanced-disclosure-ui.ts) -->
               <details class="advanced-disclosure" data-advanced="hardening-blocking">
                 <summary data-i18n="idle.hardeningBlockingAdvanced"></summary>
                 <div class="advanced-disclosure-body">
@@ -821,7 +818,7 @@
          page's hostname (fetchSavedConfigs/SavedConfigStore.ListByUrl).
          "Laden" restores everything buildScrapingConfig captures except
          `url` itself, which always stays whatever the live browser tab
-         shows (see config-import.js's applyConfigToState doc comment). -->
+         shows (see config-import.ts's applyConfigToState doc comment). -->
     <div id="saved-configs-section">
       <p class="row-label" data-help-anchor><span data-i18n="idle.savedConfigsTitle"></span><span class="help-host" data-help="help.savedConfigs.panel" data-doc="savedConfigs"></span></p>
       <div id="saved-configs-list"></div>

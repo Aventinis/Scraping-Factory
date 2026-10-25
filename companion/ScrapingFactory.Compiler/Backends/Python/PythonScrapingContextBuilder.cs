@@ -2,37 +2,12 @@ using ScrapingFactory.Compiler.IR;
 
 namespace ScrapingFactory.Compiler.Backends.Python;
 
-// Shared Scriban-context construction for the parts of PythonCodeGenerator
-// (Static engine) and PythonPlaywrightCodeGenerator (Browser engine) that
-// used to build IDENTICAL sets of context keys from the same ScrapingPlan/
-// step data, by hand, in two separate files. Unlike the Python templates
-// themselves — which genuinely can't share code at all, since Scriban has
-// no cross-template includes/recursion (see this project's own repeated
-// doc comments on that constraint, e.g. scraper_grouped.py.j2's) — these
-// two C# classes have no such technical limitation, so keeping the same
-// key set in sync by hand across two files was a pure, avoidable
-// duplication risk: Issue #213's own `download_enabled` key had to be added
-// to both files separately, and a future key could just as easily be added
-// to only one by mistake.
-//
-// Every method here returns a plain Dictionary<string, object?> rather than
-// an anonymous type, specifically so each engine's own Generate() can merge
-// in its own additional, engine-specific keys (actions/navigate_action/...
-// for the Browser engine, which has no equivalent in Static at all) before
-// calling Render() — a sealed anonymous type can't be extended after the
-// fact, a Dictionary can. Scriban binds a Dictionary the same way it binds
-// an anonymous object or POCO, including when nested as another object's
-// own property (e.g. `config.urls` for the Static engine's flat template,
-// which expects everything namespaced under `config`, unlike every other
-// template here, which reads its own keys at the top level) — confirmed
-// directly against the Scriban package this project already depends on
-// before this class existed, since a silently-wrong assumption here would
-// mean every generated script quietly renders as blank/broken.
+// Builds the Scriban context keys that PythonCodeGenerator (Static) and PythonPlaywrightCodeGenerator (Browser)
+// need identically, once, so a new key cannot be added to only one engine (PythonCodeGeneratorParityTests checks
+// it). Each method returns a Dictionary, not an anonymous type, so an engine can add its own keys before Render().
 internal static class PythonScrapingContextBuilder
 {
-    // Shared by both engines' Container-Mode (ExtractGroupStep) branch —
-    // every key both PythonCodeGenerator/PythonPlaywrightCodeGenerator used
-    // to build separately for scraper_grouped.py.j2/playwright_scraper_grouped.py.j2.
+    // Container mode (scraper_grouped / playwright_scraper_grouped).
     public static Dictionary<string, object?> BuildGroupModeContext(ScrapingPlan plan, ExtractGroupStep groupStep)
     {
         var navigate = plan.Steps.OfType<NavigateStep>().Single();
@@ -46,14 +21,9 @@ internal static class PythonScrapingContextBuilder
             ["output_is_json"] = plan.OutputFormat == OutputFormat.Json,
             ["output_is_sqlite"] = plan.OutputFormat == OutputFormat.Sqlite,
             ["output_is_xlsx"] = plan.OutputFormat == OutputFormat.Xlsx,
-            // Issue #213: gates the download helper's own conditional
-            // imports (os/sys/hashlib/urljoin) — see
-            // PythonGroupTreeLiteral.AnyDownloadEnabled's own doc comment.
+            // Gates the download helper's conditional imports (PythonGroupTreeLiteral.AnyDownloadEnabled).
             ["download_enabled"] = PythonGroupTreeLiteral.AnyDownloadEnabled(groupStep.Roots),
-            // Issue #206 follow-up: a Python list literal of every field
-            // name anywhere in the tree with HiddenFromOutput set — the
-            // grouped templates turn this into a set and strip matching
-            // elements from the built tree right before writing output.
+            // Every hidden field name in the tree; the templates strip those elements right before writing.
             ["hidden_field_names_literal"] = PythonLiteral.StrList(PythonGroupTreeLiteral.CollectHiddenFieldNames(groupStep.Roots)),
             ["change_detection"] = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection),
             ["proxy"] = PythonProxyLiteral.BuildContext(plan.Proxy),
@@ -69,9 +39,7 @@ internal static class PythonScrapingContextBuilder
             ["discovered_urls"] = PythonDiscoveredUrlsLiteral.BuildContext(plan.DiscoveredUrls),
             ["preflight"] = PythonPreflightLiteral.BuildContext(plan.Preflight),
             ["external_config"] = PythonExternalConfigLiteral.BuildContext(plan.ExternalConfig),
-            // Issue #192/#244: both always rendered, only one ever non-empty
-            // for a given plan — see PythonOutputBlueprintLiteral.RenderTree's
-            // own doc comment on why.
+            // Both rendered, only one is ever non-empty (see PythonOutputBlueprintLiteral.RenderTree).
             ["blueprint_mapping_enabled"] = plan.OutputBlueprint?.SchemaKind == OutputBlueprintSchemaKind.Flat,
             ["blueprint_mapping_literal"] = PythonOutputBlueprintLiteral.Render(plan.OutputBlueprint),
             ["blueprint_tree_mapping_enabled"] = plan.OutputBlueprint?.SchemaKind == OutputBlueprintSchemaKind.Tree,
@@ -79,16 +47,8 @@ internal static class PythonScrapingContextBuilder
         };
     }
 
-    // Shared by both engines' flat-Fields (a plain ExtractStep list, no
-    // Groups/Blocks) branch, consumed by scraper.py.j2/playwright_scraper.py.j2.
-    // Always includes frame_path per field, even though the Static engine's
-    // own template never reads it (a harmless unused key) — FramePath only
-    // ever makes sense for the Browser engine's iframe-scoped extraction,
-    // but sharing one field-mapping here is what keeps the two engines'
-    // own per-field shape from quietly drifting apart the way they
-    // previously could (Playwright's own version carried frame_path,
-    // Static's plain one didn't, with no single place enforcing they stay
-    // otherwise identical).
+    // Flat Fields (scraper.py.j2 / playwright_scraper.py.j2). frame_path is always included, though only the Browser
+    // engine reads it, so the two engines' per-field shape cannot drift apart.
     public static Dictionary<string, object?> BuildFlatModeContext(ScrapingPlan plan)
     {
         var navigate = plan.Steps.OfType<NavigateStep>().Single();
@@ -101,15 +61,10 @@ internal static class PythonScrapingContextBuilder
                 ["attribute"] = step.Attribute,
                 ["frame_path"] = step.FramePath,
                 ["transforms_literal"] = PythonFieldTransformLiteral.Render(step.Transforms),
-                // Issue #214: same always-present convention Container-Mode's
-                // PythonGroupTreeLiteral.RenderField already uses for these
-                // three keys — a plain bool/int?/List<string>? here, since
-                // (unlike the group tree) this dict is bound through Scriban
-                // rather than pre-rendered to a Python literal string.
+                // Same always-present convention as PythonGroupTreeLiteral.RenderField, as plain values (bound through Scriban).
                 ["download"] = step.Download,
                 ["max_download_size_bytes"] = step.MaxDownloadSizeBytes,
                 ["allowed_content_types"] = step.AllowedContentTypes ?? new List<string>(),
-                // Issue #206 follow-up: see ScrapingField.HiddenFromOutput.
                 ["hidden_from_output"] = step.HiddenFromOutput,
             })
             .ToList();
@@ -123,10 +78,7 @@ internal static class PythonScrapingContextBuilder
             ["output_is_json"] = plan.OutputFormat == OutputFormat.Json,
             ["output_is_sqlite"] = plan.OutputFormat == OutputFormat.Sqlite,
             ["output_is_xlsx"] = plan.OutputFormat == OutputFormat.Xlsx,
-            // Issue #214: gates the download helper's own conditional
-            // imports (os/sys/hashlib/urljoin) — see PythonGroupTreeLiteral.
-            // AnyDownloadEnabled's own doc comment for the Container-Mode
-            // equivalent this mirrors.
+            // Gates the download helper's conditional imports.
             ["download_enabled"] = extractSteps.Any(step => step.Download),
             ["change_detection"] = PythonChangeDetectionLiteral.BuildContext(plan.ChangeDetection),
             ["proxy"] = PythonProxyLiteral.BuildContext(plan.Proxy),
@@ -146,12 +98,8 @@ internal static class PythonScrapingContextBuilder
         };
     }
 
-    // Shared by both engines' Blocks (ExtractionBlockStep) branch, consumed
-    // by scraper_blocks.py.j2/playwright_scraper_blocks.py.j2. Each engine
-    // still separately computes change_detection_any as a plain bool where
-    // it needs it standalone (Playwright's own needs_os_import folds it in)
-    // — a single trivial LINQ .Any() call recomputed twice isn't the kind
-    // of multi-line, drift-prone duplication this class exists to remove.
+    // Blocks mode (scraper_blocks / playwright_scraper_blocks). Each engine still computes change_detection_any itself
+    // where it needs it standalone.
     public static Dictionary<string, object?> BuildBlocksContext(ScrapingPlan plan, ExtractionBlockStep blockStep)
     {
         var navigate = plan.Steps.OfType<NavigateStep>().Single();

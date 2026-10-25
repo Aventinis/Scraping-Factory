@@ -31,17 +31,15 @@ describe('buildRequestDelayConfig', () => {
 
   test('buildScrapingConfig only sends requestDelay when it is on and complete', () => {
     const fields = [{ name: 'Titel', selector: 'h1' }];
-    const args = (requestDelay) => ['https://example.com', 'flat', fields, [], null, null, null, 'Static', [], false, false,
-      [], null, null, null, null, false, false, false, null, null, null, [], {}, 'Flat', [], {}, null, false, requestDelay];
-    expect(buildScrapingConfig(...args(draft('1', '2'))).requestDelay).toEqual({ minMs: 1000, maxMs: 2000 });
-    expect(buildScrapingConfig(...args(draft('1', '2', false)))).not.toHaveProperty('requestDelay');
-    expect(buildScrapingConfig(...args(undefined))).not.toHaveProperty('requestDelay');
+    const config = (requestDelay) => buildScrapingConfig({ url: 'https://example.com', mode: 'flat', fields, requestDelay });
+    expect(config(draft('1', '2')).requestDelay).toEqual({ minMs: 1000, maxMs: 2000 });
+    expect(config(draft('1', '2', false))).not.toHaveProperty('requestDelay');
+    expect(config(undefined)).not.toHaveProperty('requestDelay');
   });
 
   test('applies to API and container mode too', () => {
     const groups = [{ kind: 'group', name: 'G', selector: '.g', repeating: true, children: [{ kind: 'field', name: 'F', selector: '.f', mode: 'text', transforms: [] }] }];
-    const containerConfig = buildScrapingConfig('https://example.com', 'container', [], groups, null, null, null, 'Static', [], false, false,
-      [], null, null, null, null, false, false, false, null, null, null, [], {}, 'Flat', [], {}, null, false, draft('2'));
+    const containerConfig = buildScrapingConfig({ url: 'https://example.com', mode: 'container', groups, requestDelay: draft('2') });
     expect(containerConfig.requestDelay).toEqual({ minMs: 2000, maxMs: 2000 });
   });
 });

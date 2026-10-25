@@ -1,0 +1,72 @@
+{
+  "version": "1",
+  "url": "https://example.test/list",
+  "api": {
+    "urlTemplate": "https://example.test/api/items",
+    "groups": [
+      {
+        "name": "Category",
+        "path": "categories",
+        "children": [
+          {
+            "name": "Name",
+            "path": "name"
+          },
+          {
+            "name": "Product",
+            "path": "products",
+            "children": [
+              {
+                "name": "Title",
+                "path": "title",
+                "transforms": [
+                  {
+                    "kind": "trim"
+                  }
+                ]
+              },
+              {
+                "name": "Price",
+                "path": "price",
+                "transforms": [
+                  {
+                    "kind": "toCurrency",
+                    "format": "1,234.56",
+                    "onError": "KeepOriginal",
+                    "defaultValue": ""
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "parameters": []
+  },
+  "scriptFileName": null,
+  "outputFileName": null,
+  "outputFormat": "Json",
+  "requestDelay": {
+    "minMs": 500,
+    "maxMs": 500
+  },
+  "retry": {
+    "maxAttempts": 3,
+    "delayMs": 2000,
+    "exponential": true
+  },
+  "hardening": [
+    {
+      "kind": "noResult",
+      "severity": "Warning"
+    },
+    {
+      "kind": "requiredFields",
+      "severity": "Error",
+      "fieldNames": [
+        "Title"
+      ]
+    }
+  ]
+}

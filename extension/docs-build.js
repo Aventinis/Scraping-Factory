@@ -1,16 +1,17 @@
-// Issue #354 Part B: turns docs/user/*.md into HTML pages that ship inside the
-// extension (dist/docs/), so "Learn more" in the side panel works offline —
-// the extension stays free of external services.
+// Turns docs/user/*.md into HTML pages that ship inside the extension (dist/docs/), so "Learn more" works offline with no external service.
 //
 //   buildDocs({ docsDir, outdir })   writes <outdir>/docs/*.html, docs.css and images/
-//   slugify(heading)                 GitHub's heading-to-anchor rule (the one the
-//                                    markdown links and popup/docs-links.js use)
+//   slugify(heading)                 GitHub's heading-to-anchor rule (also used by the links and popup/docs-links.js)
 //
-// Plain files only: the pages carry no script (an MV3 extension page may not
-// run inline script), just a linked stylesheet. A link in a page that points
-// at a missing page, anchor or image fails the build instead of shipping a dead
-// "Learn more". A link that leaves docs/user/ (the developer docs the README
-// mentions) is rendered as plain text — those files are not part of the bundle.
+// English (docs/user/*.md) is the source; docs/user/de/*.md is the German translation with the same file names and heading structure. Both are
+// built (docs/<page>.html, docs/de/<page>.html) and link to their twin. docs/anchors.json maps each English heading anchor to the German one by
+// heading POSITION, which is how "Learn more" finds the German heading while its key table stays English.
+//
+// Plain files only (an MV3 page may not run inline script). A link to a missing page, anchor or image fails the build; a link that leaves
+// docs/user/ is rendered as plain text (not part of the bundle).
+/** @typedef {typeof import('marked', { with: { 'resolution-mode': 'import' } }).Marked} MarkedClass */
+
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
@@ -23,6 +24,7 @@ const PAGE_ORDER = [
 
 // GitHub's heading-to-anchor rule: lower-case, drop punctuation except
 // hyphens, spaces become hyphens.
+/** @param {string} heading */
 function slugify(heading) {
   return heading
     .toLowerCase()
@@ -32,18 +34,26 @@ function slugify(heading) {
     .replace(/\s/g, '-');
 }
 
-/** The pages of `docsDir` in navigation order: [{ name, file }]. */
+/**
+ * The pages of `docsDir` in navigation order.
+ * @param {string} docsDir
+ * @returns {Array<{ name: string, file: string }>}
+ */
 function listDocPages(docsDir) {
   const names = fs.readdirSync(docsDir).filter((f) => f.endsWith('.md')).map((f) => f.slice(0, -3));
+  /** @param {string} n */
   const rank = (n) => (PAGE_ORDER.includes(n) ? PAGE_ORDER.indexOf(n) : PAGE_ORDER.length);
   names.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
   return names.map((name) => ({ name, file: path.join(docsDir, `${name}.md`) }));
 }
 
-/** Every heading anchor of a markdown source, with GitHub's "-1" suffix for repeats. */
-function anchorsOf(markdown) {
-  const seen = new Map();
-  const anchors = new Set();
+/**
+ * Every heading anchor of a markdown source, in order, with GitHub's "-1" suffix for repeats.
+ * @param {string} markdown
+ */
+function anchorListOf(markdown) {
+  const seen = /** @type {Map<string, number>} */ (new Map());
+  const anchors = /** @type {string[]} */ ([]);
   let inFence = false;
   for (const line of markdown.split('\n')) {
     if (line.startsWith('```')) inFence = !inFence;
@@ -52,33 +62,129 @@ function anchorsOf(markdown) {
     const base = slugify(m[1]);
     const n = seen.get(base) || 0;
     seen.set(base, n + 1);
-    anchors.add(n === 0 ? base : `${base}-${n}`);
+    anchors.push(n === 0 ? base : `${base}-${n}`);
   }
   return anchors;
 }
 
+/**
+ * Every heading anchor of a markdown source (a Set; see anchorListOf for the order).
+ * @param {string} markdown
+ */
+function anchorsOf(markdown) {
+  return new Set(anchorListOf(markdown));
+}
+
+/**
+ * The heading levels in order, e.g. [1, 2, 2, 3]: what an English page and its translation must share.
+ * @param {string} markdown
+ */
+function headingStructureOf(markdown) {
+  const levels = /** @type {number[]} */ ([]);
+  let inFence = false;
+  for (const line of markdown.split('\n')) {
+    if (line.startsWith('```')) inFence = !inFence;
+    const m = !inFence && line.match(/^(#{1,6})\s+/);
+    if (m) levels.push(m[1].length);
+  }
+  return levels;
+}
+
+const SOURCE_MARKER = /^<!--\s*source:\s*([0-9a-f]{12})\s*-->\s*\n?/;
+
+/**
+ * A short hash of an English page, stamped into its German translation to see when it went stale.
+ * @param {string} englishMarkdown
+ */
+function sourceHash(englishMarkdown) {
+  return crypto.createHash('sha256').update(englishMarkdown.replace(/\r\n/g, '\n')).digest('hex').slice(0, 12);
+}
+
+/**
+ * The hash stamped at the top of a German page, or null.
+ * @param {string} germanMarkdown
+ */
+function stampedHash(germanMarkdown) {
+  const m = germanMarkdown.match(SOURCE_MARKER);
+  return m ? m[1] : null;
+}
+
+/**
+ * Writes (or replaces) the source marker of a German page for its current English source.
+ * @param {string} docsDir
+ * @param {string} name
+ */
+function stampTranslation(docsDir, name) {
+  const en = fs.readFileSync(path.join(docsDir, `${name}.md`), 'utf8');
+  const dePath = path.join(docsDir, 'de', `${name}.md`);
+  const de = fs.readFileSync(dePath, 'utf8').replace(SOURCE_MARKER, '');
+  fs.writeFileSync(dePath, `<!-- source: ${sourceHash(en)} -->\n${de}`);
+}
+
+/**
+ * Problems between the English pages and their German translations: a page with no
+ * translation (`missing`), a translation whose source changed since it was stamped
+ * (`stale`) or that carries no stamp (`unstamped`), and one whose heading structure
+ * differs (`structure`, which breaks the anchor mapping).
+ * @param {string} docsDir
+ * @returns {{ missing: string[], stale: string[], unstamped: string[], structure: string[] }}
+ */
+function translationStatus(docsDir) {
+  const result = { missing: /** @type {string[]} */ ([]), stale: /** @type {string[]} */ ([]), unstamped: /** @type {string[]} */ ([]), structure: /** @type {string[]} */ ([]) };
+  for (const { name, file } of listDocPages(docsDir)) {
+    const dePath = path.join(docsDir, 'de', `${name}.md`);
+    if (!fs.existsSync(dePath)) { result.missing.push(name); continue; }
+    const en = fs.readFileSync(file, 'utf8');
+    const de = fs.readFileSync(dePath, 'utf8');
+    const stamp = stampedHash(de);
+    if (!stamp) result.unstamped.push(name);
+    else if (stamp !== sourceHash(en)) result.stale.push(name);
+    if (JSON.stringify(headingStructureOf(en)) !== JSON.stringify(headingStructureOf(de))) result.structure.push(name);
+  }
+  return result;
+}
+
+// Not popup/dom.ts's escapeHtml: this script runs under plain Node, which cannot load a .ts file.
+/** @param {unknown} s */
 const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+/**
+ * @param {string} markdown
+ * @param {string} fallback
+ */
 function titleOf(markdown, fallback) {
-  const m = markdown.match(/^#\s+(.+)$/m);
+  const m = markdown.replace(SOURCE_MARKER, '').match(/^#\s+(.+)$/m);
   return m ? m[1].replace(/[`*_]/g, '') : fallback;
 }
 
-function pageHtml({ title, body, pages, current }) {
+const UI = {
+  en: { lang: 'en', nav: 'Documentation', switchLabel: 'Deutsch', switchTitle: 'Diese Seite auf Deutsch' },
+  de: { lang: 'de', nav: 'Dokumentation', switchLabel: 'English', switchTitle: 'This page in English' },
+};
+
+/**
+ * @param {{ title: string, body: string, pages: Array<{ name: string, title: string }>, current: string, lang: 'en' | 'de', otherLanguageHref: string | null }} options
+ */
+function pageHtml({ title, body, pages, current, lang, otherLanguageHref }) {
+  const ui = UI[lang];
   const nav = pages.map((p) =>
     `<li><a href="${p.name}.html"${p.name === current ? ' aria-current="page"' : ''}>${escapeHtml(p.title)}</a></li>`).join('\n');
+  const switcher = otherLanguageHref
+    ? `<p class="docs-lang"><a href="${otherLanguageHref}" hreflang="${lang === 'en' ? 'de' : 'en'}" title="${ui.switchTitle}">${ui.switchLabel}</a></p>\n`
+    : '';
+  const css = lang === 'en' ? 'docs.css' : '../docs.css';
   return `<!doctype html>
-<html lang="en">
+<html lang="${ui.lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)} — Scraping Factory</title>
-<link rel="stylesheet" href="docs.css">
+<link rel="stylesheet" href="${css}">
 </head>
 <body>
-<nav class="docs-nav" aria-label="Documentation">
+<nav class="docs-nav" aria-label="${ui.nav}">
 <p class="docs-nav-title">Scraping Factory</p>
-<ul>
+${switcher}<ul>
 ${nav}
 </ul>
 </nav>
@@ -90,29 +196,26 @@ ${body}
 `;
 }
 
-// marked ships as an ES module only, hence the dynamic import (works on every Node
-// the build supports, and from this CommonJS file).
-async function buildDocs({ docsDir: docsDirArg, outdir }) {
-  let Marked;
-  try {
-    ({ Marked } = await import('marked'));
-  } catch (err) {
-    if (err && err.code === 'ERR_MODULE_NOT_FOUND') {
-      throw new Error('The documentation build needs the "marked" package, which is not installed. Run `npm install` in extension/ and build again.');
-    }
-    throw err;
-  }
-  const docsDir = path.resolve(docsDirArg);
-  const pages = listDocPages(docsDir).map((p) => {
+// Parses every page of one language tree and returns it with the problems found
+// (a link to a missing page/anchor/image). `langDir` holds the .md files, its `images/` the pictures.
+/**
+ * @param {MarkedClass} Marked
+ * @param {string} langDir
+ * @param {string[]} problems
+ * @param {string} label
+ * @param {{ dir: string, prefix: string }} twin
+ */
+function parseTree(Marked, langDir, problems, label, twin) {
+  const pages = listDocPages(langDir).map((p) => {
     const markdown = fs.readFileSync(p.file, 'utf8');
-    return { ...p, markdown, title: titleOf(markdown, p.name), anchors: anchorsOf(markdown) };
+    return { ...p, markdown, title: titleOf(markdown, p.name), anchors: anchorsOf(markdown), body: '' };
   });
   const byName = new Map(pages.map((p) => [p.name, p]));
-  const imagesDir = path.join(docsDir, 'images');
-  const problems = [];
+  const imagesDir = path.join(langDir, 'images');
 
   for (const page of pages) {
-    const seen = new Map();
+    const seen = /** @type {Map<string, number>} */ (new Map());
+    const where = `${label}${page.name}.md`;
     const marked = new Marked();
     marked.use({
       renderer: {
@@ -131,23 +234,33 @@ async function buildDocs({ docsDir: docsDirArg, outdir }) {
           }
           const [rel, anchor] = href.split('#');
           if (!rel) {
-            if (anchor && !page.anchors.has(anchor)) problems.push(`${page.name}.md: "#${anchor}" — no heading with that anchor`);
+            if (anchor && !page.anchors.has(anchor)) problems.push(`${where}: "#${anchor}" — no heading with that anchor`);
             return `<a href="#${escapeHtml(anchor || '')}">${inner}</a>`;
           }
-          const resolved = path.resolve(docsDir, rel);
-          if (path.dirname(resolved) !== docsDir || !resolved.endsWith('.md')) {
-            // Outside docs/user/ (CLAUDE.md, ARCHITECTURE.md): not shipped, show the text only.
+          const resolved = path.resolve(langDir, rel);
+          // A link to the other language's page of the same tree pair (README ↔ de/README).
+          if (twin && path.dirname(resolved) === twin.dir && resolved.endsWith('.md')) {
+            if (!fs.existsSync(resolved)) { problems.push(`${where}: "${href}" does not exist`); return inner; }
+            if (anchor && !anchorsOf(fs.readFileSync(resolved, 'utf8')).has(anchor)) problems.push(`${where}: "${href}" — no heading with that anchor`);
+            return `<a href="${twin.prefix}${path.basename(resolved, '.md')}.html${anchor ? `#${escapeHtml(anchor)}` : ''}">${inner}</a>`;
+          }
+          if (path.dirname(resolved) !== langDir || !resolved.endsWith('.md')) {
+            // Outside the docs tree (CLAUDE.md, ARCHITECTURE.md): not shipped, show the text only.
             return inner;
           }
           const target = byName.get(path.basename(resolved, '.md'));
-          if (!target) { problems.push(`${page.name}.md: "${href}" does not exist`); return inner; }
-          if (anchor && !target.anchors.has(anchor)) problems.push(`${page.name}.md: "${href}" — no heading with that anchor`);
+          if (!target) { problems.push(`${where}: "${href}" does not exist`); return inner; }
+          if (anchor && !target.anchors.has(anchor)) problems.push(`${where}: "${href}" — no heading with that anchor`);
           return `<a href="${target.name}.html${anchor ? `#${escapeHtml(anchor)}` : ''}">${inner}</a>`;
         },
         image({ href, title, text }) {
-          const resolved = path.resolve(docsDir, href);
+          const resolved = path.resolve(langDir, href);
           if (!resolved.startsWith(imagesDir + path.sep) || !fs.existsSync(resolved)) {
-            problems.push(`${page.name}.md: image "${href}" does not exist under images/`);
+            // The screenshot generator builds the extension before it has made the images (a new
+            // language has none yet), so it may let a missing image pass.
+            const message = `${where}: image "${href}" does not exist under ${label}images/`;
+            if (process.env.SF_DOCS_ALLOW_MISSING_IMAGES === '1') console.warn(message);
+            else problems.push(message);
           }
           return `<img src="${escapeHtml(href)}" alt="${escapeHtml(text)}"${title ? ` title="${escapeHtml(title)}"` : ''} loading="lazy">`;
         },
@@ -155,24 +268,91 @@ async function buildDocs({ docsDir: docsDirArg, outdir }) {
     });
     page.body = marked.parse(page.markdown, { async: false });
   }
+  return { pages, imagesDir };
+}
+
+// marked ships as an ES module only, hence the dynamic import (works on every Node
+// the build supports, and from this CommonJS file).
+/**
+ * @param {{ docsDir: string, outdir: string }} options
+ * @returns {Promise<Array<{ name: string, title: string, german: boolean }>>}
+ */
+async function buildDocs({ docsDir: docsDirArg, outdir }) {
+  /** @type {MarkedClass} */
+  let Marked;
+  try {
+    ({ Marked } = await import('marked'));
+  } catch (err) {
+    if (err && /** @type {NodeJS.ErrnoException} */ (err).code === 'ERR_MODULE_NOT_FOUND') {
+      throw new Error('The documentation build needs the "marked" package, which is not installed. Run `npm install` in extension/ and build again.');
+    }
+    throw err;
+  }
+  const docsDir = path.resolve(docsDirArg);
+  const deDir = path.join(docsDir, 'de');
+  const problems = /** @type {string[]} */ ([]);
+
+  const en = parseTree(Marked, docsDir, problems, 'docs/user/', { dir: deDir, prefix: 'de/' });
+  const de = fs.existsSync(deDir) ? parseTree(Marked, deDir, problems, 'docs/user/de/', { dir: docsDir, prefix: '../' }) : { pages: [], imagesDir: null };
   if (problems.length) throw new Error(`docs/user/ has broken links:\n${problems.join('\n')}`);
 
   const out = path.join(outdir, 'docs');
   fs.mkdirSync(out, { recursive: true });
-  for (const page of pages) {
-    fs.writeFileSync(path.join(out, `${page.name}.html`), pageHtml({ title: page.title, body: page.body, pages, current: page.name }));
+  const dePageNames = new Set(de.pages.map((p) => p.name));
+  for (const page of en.pages) {
+    fs.writeFileSync(path.join(out, `${page.name}.html`), pageHtml({
+      title: page.title, body: page.body, pages: en.pages, current: page.name, lang: 'en',
+      otherLanguageHref: dePageNames.has(page.name) ? `de/${page.name}.html` : null,
+    }));
+  }
+  if (de.pages.length) fs.mkdirSync(path.join(out, 'de'), { recursive: true });
+  const enByName = new Map(en.pages.map((p) => [p.name, p]));
+  for (const page of de.pages) {
+    fs.writeFileSync(path.join(out, 'de', `${page.name}.html`), pageHtml({
+      title: page.title, body: page.body, pages: de.pages, current: page.name, lang: 'de',
+      otherLanguageHref: enByName.has(page.name) ? `../${page.name}.html` : null,
+    }));
   }
   fs.copyFileSync(path.join(__dirname, 'docs-template/docs.css'), path.join(out, 'docs.css'));
-  if (fs.existsSync(imagesDir)) fs.cpSync(imagesDir, path.join(out, 'images'), { recursive: true });
-  return pages.map((p) => ({ name: p.name, title: p.title }));
+  if (fs.existsSync(en.imagesDir)) fs.cpSync(en.imagesDir, path.join(out, 'images'), { recursive: true });
+  if (de.imagesDir && fs.existsSync(de.imagesDir)) fs.cpSync(de.imagesDir, path.join(out, 'de', 'images'), { recursive: true });
+
+  // English anchor → German anchor, by heading position, for every page whose structure matches.
+  const anchors = { de: /** @type {Record<string, Record<string, string>>} */ ({}) };
+  for (const page of de.pages) {
+    const source = enByName.get(page.name);
+    if (!source) continue;
+    const same = JSON.stringify(headingStructureOf(source.markdown)) === JSON.stringify(headingStructureOf(page.markdown));
+    if (!same) {
+      console.warn(`docs/user/de/${page.name}.md: the heading structure differs from the English page — its headings are not mapped, "Learn more" opens the page without an anchor.`);
+      anchors.de[page.name] = {};
+      continue;
+    }
+    const englishAnchors = anchorListOf(source.markdown);
+    const germanAnchors = anchorListOf(page.markdown);
+    anchors.de[page.name] = Object.fromEntries(englishAnchors.map((a, i) => [a, germanAnchors[i]]));
+  }
+  fs.writeFileSync(path.join(out, 'anchors.json'), JSON.stringify(anchors, null, 2));
+  return en.pages.map((p) => ({ name: p.name, title: p.title, german: dePageNames.has(p.name) }));
 }
 
-module.exports = { buildDocs, slugify, anchorsOf, listDocPages, PAGE_ORDER };
+module.exports = {
+  buildDocs, slugify, anchorsOf, anchorListOf, headingStructureOf, listDocPages, PAGE_ORDER,
+  sourceHash, stampedHash, stampTranslation, translationStatus,
+};
 
-// node docs-build.js <docsDir> <outdir>  — what the tests (Jest cannot load an ES
-// module from node_modules) and ad-hoc runs use.
+// node docs-build.js <docsDir> <outdir>         what the tests (Jest cannot load an ES module
+//                                               from node_modules) and ad-hoc runs use
+// node docs-build.js --stamp <page> [<docsDir>] stamps docs/user/de/<page>.md with the hash of
+//                                               its current English source (after translating)
 if (require.main === module) {
-  buildDocs({ docsDir: process.argv[2], outdir: process.argv[3] })
-    .then((pages) => console.log(pages.map((p) => p.name).join(',')))
-    .catch((err) => { console.error(err.message); process.exit(1); });
+  if (process.argv[2] === '--stamp') {
+    const docsDir = path.resolve(process.argv[4] || path.join(__dirname, '..', 'docs', 'user'));
+    stampTranslation(docsDir, process.argv[3]);
+    console.log(`Stamped docs/user/de/${process.argv[3]}.md`);
+  } else {
+    buildDocs({ docsDir: process.argv[2], outdir: process.argv[3] })
+      .then((pages) => console.log(pages.map((p) => p.name).join(',')))
+      .catch((err) => { console.error(err.message); process.exit(1); });
+  }
 }

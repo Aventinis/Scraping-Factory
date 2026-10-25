@@ -1,0 +1,41 @@
+{
+  "version": "1",
+  "url": "https://example.test/list",
+  "groups": [
+    {
+      "name": "Dish",
+      "selector": "li.dish",
+      "repeating": true,
+      "children": [
+        {
+          "name": "First",
+          "selector": ".first",
+          "mode": "Text",
+          "hiddenFromOutput": true
+        },
+        {
+          "name": "Price",
+          "selector": ".price",
+          "mode": "Text"
+        },
+        {
+          "name": "Combined",
+          "selector": null,
+          "mode": "Text",
+          "transforms": [
+            {
+              "kind": "combineFields",
+              "sourceFieldNames": [
+                "First",
+                "Price"
+              ],
+              "separator": ": "
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "scriptFileName": null,
+  "outputFileName": null
+}

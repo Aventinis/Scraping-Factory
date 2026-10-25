@@ -47,3 +47,5 @@ img { max-width: 100%; height: auto; border: 1px solid var(--border); border-rad
   .docs-nav { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--border); }
   .docs-main { padding: 16px; }
 }
+.docs-lang { margin: 0 0 10px; font-size: 13px; }
+.docs-lang a { padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; text-decoration: none; }

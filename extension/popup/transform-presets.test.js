@@ -1,5 +1,5 @@
 // Issue #279: reusable transform-chain presets — pure logic
-// (transform-presets.js) plus the wired-up popup: applying/saving a preset
+// (transform-presets.ts) plus the wired-up popup: applying/saving a preset
 // from the flat field modal's transform editor and managing presets on the
 // Settings screen.
 const {
@@ -8,7 +8,7 @@ const {
 
 const SAVED = [{ id: 7, name: 'Semikolon weg', savedAt: '2026-10-04T00:00:00Z', transforms: [{ kind: 'trim' }, { kind: 'replace', find: ';', replacement: '' }] }];
 
-describe('transform-presets.js', () => {
+describe('transform-presets.ts', () => {
   test('built-ins come first, followed by the saved presets, with non-colliding ids', () => {
     const presets = allTransformPresets(SAVED, key => `T(${key})`);
     expect(presets.map(p => [p.id, p.name, p.builtin])).toEqual([

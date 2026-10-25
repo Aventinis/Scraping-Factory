@@ -1,0 +1,71 @@
+{
+  "version": "1",
+  "url": "https://example.test/list",
+  "api": {
+    "urlTemplate": "https://example.test/api/search",
+    "method": "POST",
+    "itemsPath": "items",
+    "fields": [
+      {
+        "name": "Name",
+        "path": "name"
+      },
+      {
+        "name": "Price",
+        "path": "price"
+      }
+    ],
+    "parameters": [
+      {
+        "name": "week",
+        "source": {
+          "kind": "range",
+          "type": "Number",
+          "from": "1",
+          "to": "2"
+        }
+      }
+    ],
+    "body": {
+      "properties": {
+        "query": {
+          "kind": "String",
+          "stringValue": "{ items { name } }"
+        },
+        "variables": {
+          "properties": {
+            "week": {
+              "parameterName": "week",
+              "coerceTo": "Number"
+            },
+            "limit": {
+              "kind": "Number",
+              "numberValue": 50
+            },
+            "active": {
+              "kind": "Boolean",
+              "boolValue": true
+            },
+            "cursor": {
+              "kind": "Null"
+            },
+            "tags": {
+              "items": [
+                {
+                  "kind": "String",
+                  "stringValue": "a"
+                },
+                {
+                  "kind": "String",
+                  "stringValue": "b"
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "scriptFileName": null,
+  "outputFileName": null
+}

@@ -28,34 +28,7 @@ import json
 {{~ if hardening.enabled ~}}
 from urllib.parse import urlsplit
 {{~ end ~}}
-{{~ if (pagination.enabled && pagination.kind == "nextLink") || download_enabled || discovered_urls.enabled ~}}
-from urllib.parse import urljoin
-{{~ end ~}}
-{{~ if download_enabled ~}}
-import hashlib
-{{~ end ~}}
-{{~ if change_detection.enabled ~}}
-import difflib
-{{~ if change_detection.notify_method == "Email" ~}}
-import smtplib
-from email.mime.text import MIMEText
-{{~ else ~}}
-import json
-import urllib.request
-{{~ end ~}}
-{{~ end ~}}
-
-# Issue #83: one or more start URLs — the same extraction runs against each,
-# and results are combined into a single output file.
-URLS = [{{ for u in urls }}"{{ u }}"{{ if !for.last }}, {{ end }}{{ end }}]
-#@include discovered_urls_constants
-
-#@include request_headers_static
-{{~ if text_selector.enabled ~}}
-#@include text_selector_common
-
-#@include text_selector_bs4
-{{~ end ~}}
+#@include static_imports_and_constants
 
 # Issue #192: an active FLAT-schema Output Blueprint mapping flattens this
 # mode's normally-nested output into denormalized rows (see BLUEPRINT_MAPPING
@@ -234,23 +207,7 @@ BLUEPRINT_TREE_MAPPING = {{ blueprint_tree_mapping_literal }}
 # node dict. First occurrence wins for a duplicate name, the same "global by
 # name" simplification NullRateCheck/RequiredFieldsCheck/BLUEPRINT_MAPPING
 # above already established for this tree shape.
-_BLUEPRINT_GROUP_BY_NAME = {}
-_BLUEPRINT_LEAF_BY_NAME = {}
-_BLUEPRINT_PATH_BY_NAME = {}
-
-
-def _blueprint_index_source_tree(nodes, ancestors):
-    for node in nodes:
-        if "children" in node:
-            _BLUEPRINT_GROUP_BY_NAME.setdefault(node["name"], node)
-            _BLUEPRINT_PATH_BY_NAME.setdefault(node["name"], ancestors)
-            _blueprint_index_source_tree(node["children"], ancestors + [node])
-        else:
-            _BLUEPRINT_PATH_BY_NAME.setdefault(node["name"], ancestors)
-            _BLUEPRINT_LEAF_BY_NAME.setdefault(node["name"], node)
-
-
-_blueprint_index_source_tree(GROUPS, [])
+#@include blueprint_source_index
 
 
 # The chain of REPEATING ancestor names only (mirrors the companion's own
@@ -475,19 +432,7 @@ def scrape(url):
     page_number = 1
     page_url = url
     while page_url:
-{{~ if robots_check.enabled ~}}
-        if page_number > 1 and not _robots_gate(page_url):
-            break
-{{~ end ~}}
-{{~ if request_delay.enabled ~}}
-        _pace_request()
-{{~ end ~}}
-{{~ if retry.enabled ~}}
-        response = _checked_request("Request", page_url, lambda: _send_with_retry(lambda _u=page_url: requests.get(_u, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10), page_url))
-{{~ else ~}}
-        response = _checked_request("Request", page_url, lambda: requests.get(page_url, headers=HEADERS, {{ if proxy.enabled }}proxies=_proxies_for_requests(), {{ end }}timeout=10))
-{{~ end ~}}
-        _require_ok("Request", page_url, response)
+#@include static_fetch_request
 {{~ if hardening.enabled ~}}
         _BLOCKING_RESPONSES.append({"url": page_url, "final_url": response.url, "length": len(response.content), "text": response.text})
 {{~ end ~}}
@@ -513,20 +458,7 @@ def scrape(url):
         blueprint_tree_elements.extend(_build_blueprint_tree(soup, BLUEPRINT_TREE_MAPPING))
 {{~ end ~}}
 
-{{~ if pagination.enabled ~}}
-        if page_number >= PAGINATION_MAX_PAGES:
-            break
-        page_number += 1
-{{~ if pagination.kind == "nextLink" ~}}
-        next_tag = soup.select_one(PAGINATION_NEXT_LINK_SELECTOR)
-        next_href = next_tag.get("href") if next_tag else None
-        page_url = urljoin(page_url, next_href) if next_href else None
-{{~ else ~}}
-        page_url = PAGINATION_URL_TEMPLATE.format(url=url, page=page_number)
-{{~ end ~}}
-{{~ else ~}}
-        page_url = None
-{{~ end ~}}
+#@include static_paginate
     return root, blueprint_rows, blueprint_tree_elements
 
 

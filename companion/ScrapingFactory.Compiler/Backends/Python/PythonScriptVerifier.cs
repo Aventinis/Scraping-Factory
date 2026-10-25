@@ -11,50 +11,24 @@ using ScrapingFactory.Compiler.IR;
 
 namespace ScrapingFactory.Compiler.Backends.Python;
 
-// Proves a generated script actually works before it's handed to the user:
-// writes it to a throwaway directory, runs it for real (network fetch,
-// parsing, CSV export — everything), and checks it exited cleanly and
-// produced at least one data row. This subsumes any static selector check —
-// running the real script also catches network failures, encoding issues,
-// and BeautifulSoup-vs-CSS-selector quirks a simulated check would miss.
+// Proves a generated script works before it is handed out: writes it to a throwaway directory, runs it for real
+// and checks it exited cleanly with at least one data row. Running the real script also catches network, encoding
+// and selector-compatibility problems a simulated check would miss.
 public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSpan? timeout = null) : IScriptVerifier
 {
-    // One shared timeout for every script this verifier runs, regardless of
-    // which engine generated it: comfortably covers the Static engine's own
-    // `requests.get(url, timeout=10)` plus interpreter/CSV overhead, and the
-    // slower Browser engine (Chromium launch + page load + optional
-    // WaitForStep). Avoids needing a per-engine verifier just for timing.
+    // One timeout for every engine: enough for a requests fetch and for a Chromium launch plus page load.
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(45);
     private static readonly string[] DefaultCandidates = ["python3", "python"];
 
-    // A generated script exits with this code (instead of the default 1
-    // from an unhandled exception) when a required environment variable
-    // (a FillStep credential, or Proxy's env var) was missing at runtime —
-    // see EXIT_MISSING_ENV_VAR in the Python shell templates. Proxy's own
-    // missing-var case is a soft warning that still produces real data, so
-    // this exit code alone must not immediately fail verification the way
-    // any other nonzero code does — whether the run is ultimately treated
-    // as a success still comes down to the same "did it produce data"
-    // check every other exit code goes through.
+    // EXIT_MISSING_ENV_VAR in the templates: a missing credential or proxy variable. Compatible with success, since
+    // the proxy case still produces data; the "did it produce data" check decides.
     private const int MissingEnvVarExitCode = 78;
 
-    // Issue #129: a generated script exits with this code (see
-    // EXIT_HARDENING_FAILED in the Python shell templates) when a
-    // configured hardening check fails at Error severity — always emitted
-    // *after* the output file has already been written (unlike a FillStep's
-    // early exit, there's no "nothing to verify yet" case to short-circuit
-    // for), so this exit code alone must not immediately fail verification
-    // either: whether the run is ultimately a success still comes down to
-    // the same "did it produce data" check every other exit code goes
-    // through — which, for the one check implemented so far (NoResult),
-    // already agrees with the hardening check's own verdict by construction.
+    // EXIT_HARDENING_FAILED in the templates, emitted after the output was written, so the "did it produce data"
+    // check decides here as well.
     private const int HardeningFailedExitCode = 2;
 
-    // Issue #122: how many rows/top-level XML elements a trial-run preview
-    // ever carries, regardless of how much data the script actually
-    // produced — a preview is a sanity check, not a full export, and this
-    // keeps the /generate response small even for a script that legitimately
-    // scrapes thousands of rows.
+    // Rows / top-level elements a preview carries: a sanity check, not an export.
     private const int PreviewSampleCap = 50;
 
     private readonly TimeSpan _timeout = timeout ?? DefaultTimeout;
@@ -74,13 +48,8 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
             if (!run.RanCleanly)
                 return new ScriptVerificationResult { Success = false, Error = run.Error };
 
-            // A FillStep with a missing credential exits before writing any
-            // output at all (it can't meaningfully continue) — in that case,
-            // surface its own clean stderr message instead of falling
-            // through to the generic "did not produce X" below. Proxy's own
-            // missing-var case still writes real output (see the doc comment
-            // on MissingEnvVarExitCode above), so this only short-circuits
-            // when there's genuinely nothing to verify.
+            // A FillStep with a missing credential exits before writing anything: surface its own clean message. The
+            // proxy case still writes output, so it only short-circuits when there is nothing to verify.
             if (run.ExitCode == MissingEnvVarExitCode &&
                 !File.Exists(Path.Combine(workDir, ExpectedFileName(outputFormat, outputFileBaseName))))
             {
@@ -105,12 +74,8 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
         }
     }
 
-    // Issue #182: runs the script exactly once (same subprocess as
-    // VerifyAsync), then checks every block's own output file instead of
-    // one — a single block failing (no data, missing file, parse error)
-    // fails the whole call, prefixed with which block it was, since a
-    // partially-successful multi-output run isn't a state the caller (or
-    // the /generate response envelope) has any use for.
+    // One run, then every block's output file is checked; one failing block fails the whole call, prefixed with
+    // its name.
     public async Task<ScriptVerificationResult> VerifyBlocksAsync(
         string script, IReadOnlyList<BlockOutputSpec> blocks,
         TimeSpan extraTimeout = default, IReadOnlyDictionary<string, string>? extraEnvironmentVariables = null,
@@ -173,31 +138,17 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
         _ => $"{baseName}.csv",
     };
 
-    // Issue #222/#223: see RunScriptAsync — the exact lines the templates'
-    // _pace_request ("Pausing ...") and _send_with_retry ("Retrying in ...")
-    // print right before waiting, and the most total extension one trial
-    // run may add to its deadline (the same 10 minutes Program.cs's
-    // VerificationTimeoutCap allows for an estimated extra timeout).
+    // The exact lines the templates print before a pause (_pace_request) or a retry (_send_with_retry); see RunScriptAsync.
     private static readonly Regex PauseAnnouncementPattern = new(@"^Pausing (\d+(?:\.\d+)?) s before the next request \(request delay\)");
     private static readonly Regex RetryAnnouncementPattern = new(@"^Retrying in (\d+(?:\.\d+)?) s \(attempt \d+ of \d+\)");
 
-    // Issue #223: a retry isn't just the announced wait — the retried
-    // request itself may again take up to its own timeout (10 s for
-    // requests, 30 s for a Playwright navigation), time a run without
-    // retries would never have spent. Granted per announced retry, on top
-    // of the wait.
+    // Granted per announced retry on top of its wait: the retried request itself may take up to its own timeout.
     private static readonly TimeSpan RetryAttemptAllowance = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan MaxRequestDelayExtension = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(200);
 
-    // Shared by VerifyAsync/VerifyBlocksAsync: writes the script, spawns it,
-    // and waits — everything before "now check the output file(s)", which is
-    // the one part that genuinely differs between the two callers (one file
-    // vs. N). RanCleanly false means Error is already the full, final
-    // ScriptVerificationResult.Error the caller should return as-is;
-    // RanCleanly true hands back the raw ExitCode/Stderr so each caller can
-    // still apply its own MissingEnvVarExitCode short-circuit before
-    // deciding the run is genuinely usable.
+    // Shared by VerifyAsync / VerifyBlocksAsync: writes the script, runs it and waits. RanCleanly == false means
+    // Error is final; otherwise the caller gets ExitCode/Stderr and applies its own MissingEnvVarExitCode rule.
     private async Task<(bool RanCleanly, string? Error, int ExitCode, string Stderr)> RunScriptAsync(
         string script, string workDir, TimeSpan extraTimeout,
         IReadOnlyDictionary<string, string>? extraEnvironmentVariables, CancellationToken ct)
@@ -220,17 +171,10 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
             process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderrBuilder.AppendLine(e.Data); };
             process.BeginErrorReadLine();
 
-            // Issue #222: a script with a request delay announces every pause
-            // on stdout right before sleeping ("Pausing 2.30 s before the next
-            // request (request delay)..."). Each announced pause extends this
-            // run's deadline by exactly that long, so pure waiting never counts
-            // against the timeout — however many requests the run turns out
-            // to make — while a genuinely stuck script still times out as
-            // before. The extension itself is capped (MaxRequestDelayExtension)
-            // so one trial run can't tie up the companion indefinitely.
-            // Issue #223: a retry announcement extends the deadline the same
-            // way — by its wait plus RetryAttemptAllowance for the retried
-            // request itself — and counts toward the same cap.
+            // A script announces every pause / retry wait on stdout right before sleeping; each announcement extends
+            // this run's deadline by exactly that wait (retries plus RetryAttemptAllowance), so pure waiting never
+            // counts against the timeout while a stuck script still times out. The total extension is capped
+            // (MaxRequestDelayExtension).
             long announcedPauseMs = 0;
             process.OutputDataReceived += (_, e) =>
             {
@@ -287,14 +231,9 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
         }
     }
 
-    // A generated script that stops deliberately (a failed API request, a
-    // failed auth bootstrap, a broken external config file, ...) prints one
-    // or more self-explanatory "ERROR: ..." lines to stderr and exits with
-    // its own dedicated code — those lines are what the user should see,
-    // not a "Script exited with an error (exit code N)" wrapper around the
-    // raw stderr. Anything that looks like an uncaught crash (a Python
-    // traceback) or has no such line keeps the generic, full-detail message,
-    // since there the raw stderr is the only clue to what went wrong.
+    // A script that stops deliberately prints self-explanatory "ERROR: ..." lines to stderr and exits with its own
+    // code: those lines are the error, not a wrapper around raw stderr. A Python traceback or no such line keeps
+    // the full message, since raw stderr is then the only clue.
     private static string? CleanScriptError(string stderr)
     {
         if (stderr.Contains("Traceback (most recent call last)", StringComparison.Ordinal))
@@ -307,12 +246,7 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
         return errorLines.Count == 0 ? null : Truncate(string.Join("\n", errorLines));
     }
 
-    // CSV output check, factored out of VerifyAsync so VerifyBlocksAsync can
-    // call it once per block — "at least one data row" (Also covers
-    // API-Mode's 0-combinations edge case: a DiscoverySource resolving to no
-    // values at runtime, despite ScrapingPlanValidator requiring at least
-    // one parameter with a non-empty static list/range at config time —
-    // treated identically to any other 0-row result, not a special case).
+    // "At least one data row" (also covers a DiscoverySource that resolves to no values at run time).
     private static async Task<ScriptVerificationResult> VerifyCsvOutput(
         string workDir, string outputFileBaseName, bool includePreview, bool includeOutputFile, CancellationToken ct)
     {
@@ -346,11 +280,8 @@ public sealed class PythonScriptVerifier(string? pythonExecutable = null, TimeSp
         };
     }
 
-    // Issue #229: the same "at least one data row" check for the binary table
-    // formats. The file is read back by a tiny Python helper (sqlite3 from the
-    // stdlib; openpyxl for .xlsx, which the script itself needed anyway) so
-    // the companion needs no extra .NET dependency for it. The raw bytes are
-    // returned base64-encoded for the download (OutputFileEncoding).
+    // The same check for the binary table formats, read back by a tiny Python helper (sqlite3 / openpyxl, which the
+    // script needed anyway) so the companion needs no .NET dependency. The bytes are returned base64-encoded.
     private const string ReadTableScript = """
 import json, sys
 path, fmt, cap = sys.argv[1], sys.argv[2], int(sys.argv[3])
@@ -434,11 +365,7 @@ print(json.dumps({"columns": columns, "count": len(rows), "rows": [[text(v) for 
         }
     }
 
-    // XML analog of the CSV "at least one data row" check above: output.xml
-    // must exist, parse as valid XML, and its root must have at least one
-    // descendant element. Parse failures (e.g. an invalid XML tag name from
-    // a Container-Mode Name the user typed) bubble up to VerifyAsync's outer
-    // catch, same as any other unexpected exception during verification.
+    // output.xml must exist, parse, and have at least one descendant element.
     private static ScriptVerificationResult VerifyXmlOutput(
         string workDir, string outputFileBaseName, bool includePreview, bool includeOutputFile = false)
     {
@@ -472,13 +399,8 @@ print(json.dumps({"columns": columns, "count": len(rows), "rows": [[text(v) for 
         };
     }
 
-    // Json analog of the CSV/XML "at least one data row" checks above
-    // (Issue #86): output.json must exist and parse as valid JSON. Json is
-    // used for two structurally different shapes — a flat array of records
-    // (Fields/API-flat, the Csv analog) or a nested object mirroring the
-    // group/API tree (Groups/API-tree, the Xml analog) — which of the two
-    // it is self-describes via the root's JsonNode type, so (unlike Csv vs.
-    // Xml) no separate code path needs to be selected by the caller.
+    // output.json must exist and parse. A flat array of records and a nested object are told apart by the root's
+    // JSON type.
     private static ScriptVerificationResult VerifyJsonOutput(
         string workDir, string outputFileBaseName, bool includePreview, bool includeOutputFile = false)
     {
@@ -511,13 +433,8 @@ print(json.dumps({"columns": columns, "count": len(rows), "rows": [[text(v) for 
             };
         }
 
-        // Same "at least one" role as XDocument's Descendants().Count() for
-        // Xml, but not numerically equivalent to it: counts every object
-        // property and array item recursively (excluding the root itself),
-        // which — unlike an XML element per tag — folds a leaf field
-        // straight into its parent's dict, so a JSON tree's count for the
-        // same data will generally differ from the XML count. Only the
-        // "greater than zero" outcome is actually load-bearing.
+        // Counts every object property and array item recursively (not equal to the XML element count; only
+        // "greater than zero" matters).
         var elementCount = CountJsonNodes(root);
         if (elementCount == 0)
         {
@@ -545,11 +462,7 @@ print(json.dumps({"columns": columns, "count": len(rows), "rows": [[text(v) for 
         _ => 0,
     };
 
-    // Json preview, flat shape: an array of uniform record objects — the
-    // same Columns/Rows table BuildCsvPreview already produces, just read
-    // from JsonNode instead of a raw CSV line. Every value the generator's
-    // own templates ever write here is a plain string (record values,
-    // parameter columns alike), so GetValue<string>() is safe.
+    // Same Columns/Rows table as the CSV preview; the templates write plain strings, so GetValue<string>() is safe.
     private static ScriptPreviewData BuildJsonFlatPreview(JsonArray array)
     {
         var sampleRecords = array.Take(PreviewSampleCap).OfType<JsonObject>().ToList();
@@ -574,13 +487,8 @@ print(json.dumps({"columns": columns, "count": len(rows), "rows": [[text(v) for 
         };
     }
 
-    // Json preview, tree shape: mirrors BuildXmlPreview's own "cap only the
-    // top-level repeating structure, not the whole tree" approach — a
-    // top-level property whose value is an array (a repeating root group,
-    // or several same-named root-level matches) is capped at
-    // PreviewSampleCap items; any other top-level property is left as-is.
-    // Re-parses instead of mutating the caller's own root (JsonArray.RemoveAt
-    // needs an already-owned array to mutate in place).
+    // Caps only the top-level repeating structure (a top-level array property at PreviewSampleCap items). Re-parses
+    // rather than mutating the caller's root.
     private static ScriptPreviewData BuildJsonTreePreview(JsonNode root, int elementCount)
     {
         var truncated = false;
@@ -634,14 +542,8 @@ print(json.dumps({"columns": columns, "count": len(rows), "rows": [[text(v) for 
         };
     }
 
-    // Xml preview (Phase A — see PLAN-trial-run-data-preview.md): a
-    // pretty-printed fragment containing only the first PreviewSampleCap
-    // top-level elements, reusing the XDocument VerifyXmlOutput already
-    // parsed for the element-count check above. "Truncated" compares
-    // top-level elements (what was actually capped here) rather than
-    // elementCount (every descendant at every nesting level, the metric
-    // RowCount/TotalCount mirrors) — the two only coincide for a flat,
-    // one-level tree.
+    // A pretty-printed fragment with the first PreviewSampleCap top-level elements. Truncated compares top-level
+    // elements, not elementCount (all descendants).
     private static ScriptPreviewData BuildXmlPreview(XDocument document, int elementCount)
     {
         var rootElements = document.Root!.Elements().ToList();
@@ -656,12 +558,7 @@ print(json.dumps({"columns": columns, "count": len(rows), "rows": [[text(v) for 
         };
     }
 
-    // Splits one CSV line into its fields, matching Python's csv.DictWriter
-    // default ("excel") dialect the code generator always writes with:
-    // comma-separated, "..."-quoted fields may themselves contain commas/
-    // newlines, "" inside a quoted field is an escaped literal quote. Only
-    // used to build a human-readable preview sample — the row-count check
-    // above never needs field-level parsing, only line counting.
+    // Splits a CSV line like csv.DictWriter's default dialect writes it; only needed for the preview sample.
     private static List<string> ParseCsvLine(string line)
     {
         var fields = new List<string>();

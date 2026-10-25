@@ -1,0 +1,24 @@
+{
+  "version": "1",
+  "url": "https://example.test/list",
+  "api": {
+    "urlTemplate": "https://example.test/api/items",
+    "itemsPath": "items",
+    "fields": [
+      {
+        "name": "Name",
+        "path": "name"
+      },
+      {
+        "name": "Price",
+        "path": "price"
+      }
+    ],
+    "parameters": [],
+    "linkHeaderPagination": {
+      "maxPages": 12
+    }
+  },
+  "scriptFileName": null,
+  "outputFileName": null
+}

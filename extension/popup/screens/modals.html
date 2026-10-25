@@ -8,7 +8,7 @@
            (mode select + attribute picker + download checkbox + safety
            net) — hidden entirely in Blocks mode, which reuses this same
            modal for its own flat draft shape but doesn't support Download
-           yet (see flat-mode-ui.js's renderFlatFieldModal). -->
+           yet (see flat-mode-ui.ts's renderFlatFieldModal). -->
       <div id="field-name-mode-section">
         <label for="select-field-name-mode"><span data-i18n="modals.fieldExtended.typeLabel"></span><span class="help-host" data-help="help.fieldType.flat"></span></label>
         <select id="select-field-name-mode">
@@ -37,7 +37,7 @@
       </div>
       <!-- Issue #227: optional text the element must contain — for a button
            that only its label tells apart from its siblings. Left empty, the
-           pick's selector is used as is; see selector-text-filter-ui.js. -->
+           pick's selector is used as is; see selector-text-filter-ui.ts. -->
       <div class="text-filter-row">
         <label for="input-field-name-text-filter" data-help-anchor><span data-i18n="modals.textFilter.label"></span><span class="help-host" data-help="help.textFilter.overview" data-doc="textFilter"></span></label>
         <input id="input-field-name-text-filter" type="text" data-i18n-placeholder="modals.textFilter.placeholder" autocomplete="off" />
@@ -50,7 +50,7 @@
         <label data-help-anchor><span data-i18n="transforms.sectionLabel"></span><span class="help-host" data-help="help.transforms.overview" data-doc="transforms"></span></label>
         <ul id="field-transform-list" class="field-transform-list"></ul>
         <button type="button" id="btn-field-transform-add" class="btn-secondary btn-tiny" data-i18n="transforms.addBtn"></button>
-        <!-- Issue #279: "Apply preset…" / "Save as preset", see transform-presets-ui.js -->
+        <!-- Issue #279: "Apply preset…" / "Save as preset", see transform-presets-ui.ts -->
         <div class="transform-preset-controls" data-preset-target="flat"></div>
         <!-- Issue #143: live preview of the chain's output against the picked element's raw value -->
         <p id="field-transform-preview" class="transform-preview hidden"></p>
@@ -145,9 +145,8 @@
         <label for="select-field-attribute" data-i18n="modals.fieldExtended.attributeLabel"></label>
         <!-- Issue #213 follow-up: a picker of the clicked element's own
              actual attributes (populateAttributeSelect in
-             container-tree-ui.js, "name: value preview" options), not a
-             free-text field — per CLAUDE.md's "no programming knowledge"
-             target audience, typing a raw HTML attribute name blind
+             container-tree-ui.ts, "name: value preview" options), not a
+             free-text field: typing a raw HTML attribute name blind
              defeats the point of a visual tool. Pre-selected via
              guessUrlAttribute's own heuristic when one option looks like a
              resource URL; every attribute stays pickable regardless. -->
@@ -177,7 +176,7 @@
       </div>
       <!-- Issue #227: optional text the element must contain — for a button
            that only its label tells apart from its siblings. Left empty, the
-           pick's selector is used as is; see selector-text-filter-ui.js. -->
+           pick's selector is used as is; see selector-text-filter-ui.ts. -->
       <div class="text-filter-row">
         <label for="input-field-text-filter" data-help-anchor><span data-i18n="modals.textFilter.label"></span><span class="help-host" data-help="help.textFilter.overview" data-doc="textFilter"></span></label>
         <input id="input-field-text-filter" type="text" data-i18n-placeholder="modals.textFilter.placeholder" autocomplete="off" />
@@ -192,7 +191,7 @@
         <label data-help-anchor><span data-i18n="transforms.sectionLabel"></span><span class="help-host" data-help="help.transforms.overview" data-doc="transforms"></span></label>
         <ul id="field-extended-transform-list" class="field-transform-list"></ul>
         <button type="button" id="btn-field-extended-transform-add" class="btn-secondary btn-tiny" data-i18n="transforms.addBtn"></button>
-        <!-- Issue #279: "Apply preset…" / "Save as preset", see transform-presets-ui.js -->
+        <!-- Issue #279: "Apply preset…" / "Save as preset", see transform-presets-ui.ts -->
         <div class="transform-preset-controls" data-preset-target="container"></div>
         <!-- Issue #143: live preview of the chain's output against the picked element's raw value -->
         <p id="field-extended-transform-preview" class="transform-preview hidden"></p>
@@ -244,7 +243,7 @@
 
   <!-- Modal: API-mode field transforms (Issue #84 follow-up) — reuses the
        exact same transform-chain editor as modal-field-name/-extended
-       (field-transforms.js/field-transforms-ui.js), opened via the
+       (field-transforms.ts/field-transforms-ui.js), opened via the
        "Transformieren" button next to each field in the API_CONFIG tree. -->
   <div id="modal-api-field-transforms" class="modal hidden">
     <div class="modal-inner">
@@ -252,7 +251,7 @@
         <label data-help-anchor><span data-i18n="transforms.sectionLabel"></span><span class="help-host" data-help="help.transforms.overview" data-doc="transforms"></span></label>
         <ul id="api-field-transform-list" class="field-transform-list"></ul>
         <button type="button" id="btn-api-field-transforms-add" class="btn-secondary btn-tiny" data-i18n="transforms.addBtn"></button>
-        <!-- Issue #279: "Apply preset…" / "Save as preset", see transform-presets-ui.js -->
+        <!-- Issue #279: "Apply preset…" / "Save as preset", see transform-presets-ui.ts -->
         <div class="transform-preset-controls" data-preset-target="api"></div>
         <!-- Issue #147: live preview against the field's captured sample value -->
         <p id="api-field-transform-preview" class="transform-preview hidden"></p>
@@ -267,7 +266,7 @@
   <!-- Modal: dedicated "Felder kombinieren" creation flow (Issue #206
        follow-up) — replaces the original combineFields transform-kind UI.
        No click-based selection: the checkbox list is populated from
-       whichever mode/scope opened it (combine-split-fields-ui.js), shared
+       whichever mode/scope opened it (combine-split-fields-ui.ts), shared
        across flat/container/API mode. -->
   <div id="modal-combine-field" class="modal hidden">
     <div class="modal-inner">
@@ -316,8 +315,8 @@
   <!-- Modal: create/edit one Output Blueprint's own name + ordered target
        field-name list — opened from modal-manage-blueprints' own "+ New"
        button or a row's "Edit" button (blueprintEditingId distinguishes the
-       two, see output-blueprints-ui.js). Field-name rows reuse the same
-       add/remove/move-with-adjacent-sibling shape field-transforms-ui.js's
+       two, see output-blueprints-ui.ts). Field-name rows reuse the same
+       add/remove/move-with-adjacent-sibling shape field-transforms-ui.ts's
        transform rows already established. -->
   <div id="modal-blueprint-edit" class="modal hidden">
     <div class="modal-inner">
@@ -342,13 +341,13 @@
            CSV header row/plain newline/comma-separated list) is
            auto-detected from the pasted content, no format picker. Shared
            between both schema kinds (importBlueprintFieldNamesFromSample in
-           output-blueprints-ui.js dispatches on blueprintEditDraft.schemaKind
+           output-blueprints-ui.ts dispatches on blueprintEditDraft.schemaKind
            to replace either fieldNames or tree), so it sits above both
            schema-specific sections below rather than inside either one. Only
            shown while CREATING a new blueprint (blueprintEditingId is null)
            — a deliberate first-version scope decision, not yet wired for
            merging newly-seen fields into an already-existing blueprint (see
-           CLAUDE.md's Output Blueprints section).
+           docs/design-notes/extension.md, Output Blueprints).
 
            Issue #252: a file input lets the sample be picked from disk
            instead of opened and pasted in by hand — it only reads the file

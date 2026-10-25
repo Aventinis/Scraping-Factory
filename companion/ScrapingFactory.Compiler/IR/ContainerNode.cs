@@ -1,9 +1,7 @@
 namespace ScrapingFactory.Compiler.IR;
 
-// Container-Mode's tree shape, parallel to the flat ScrapingField: a
-// GroupNode scopes its children to matches of its own selector (either
-// exactly one, or N repeated instances), DataFieldNode is the leaf that
-// actually extracts a value from within that scope. See ExtractGroupStep.
+// Container mode's tree: a GroupNode scopes its children to matches of its selector, a DataFieldNode extracts a
+// value within that scope. See ExtractGroupStep.
 public abstract class ContainerNode
 {
     public required string Name { get; init; }
@@ -11,83 +9,44 @@ public abstract class ContainerNode
 
 public sealed class GroupNode : ContainerNode
 {
-    // Relative to the parent scope (document for a root node, the matched
-    // element for a nested one) — same relative-selector convention the
-    // codegen's extract_group() walks at runtime.
+    // Relative to the parent scope (the document for a root node, the matched element for a nested one).
     public required string Selector { get; init; }
 
-    // false = exactly one match expected ("Einzelnes Element"), true = the
-    // selector may match N times, one <Name> element per match
-    // ("Wiederholend"). Chosen explicitly by the user, never inferred from
-    // match count.
+    // false = exactly one match expected, true = N matches, one element per match. Chosen by the user, never
+    // inferred from the match count.
     public required bool Repeating { get; init; }
 
     public required List<ContainerNode> Children { get; init; }
 
-    // Browser-engine only (Issue #42, Phase 3): see ExtractStep.FramePath —
-    // same meaning, resolved as an *absolute* path from the top document
-    // regardless of this node's own nesting depth in the tree, independent
-    // of any ancestor's FramePath (there's no path composition/inheritance
-    // — every node's FramePath, when set, is a complete top-to-target
-    // chain). null (the default) means Selector is evaluated against the
-    // inherited scope exactly as before this field existed.
+    // Browser engine only. Absolute from the top document, not inherited or composed with an ancestor's FramePath.
     public List<string>? FramePath { get; init; }
 }
 
 public sealed class DataFieldNode : ContainerNode
 {
-    // See ScrapingField.Selector — same "blank iff derived from a
-    // combineFields/splitField transform" relaxation (Issue #206 follow-up).
+    // Blank only for a derived field (see ScrapingField.Selector).
     public string? Selector { get; init; }
     public ExtractMode Mode { get; init; } = ExtractMode.Text;
 
-    // Only meaningful (and required) when Mode == Attribute.
+    // Required when Mode == Attribute.
     public string? Attribute { get; init; }
 
-    // See GroupNode.FramePath — same meaning and same "absolute, not
-    // inherited" semantics.
     public List<string>? FramePath { get; init; }
 
-    // See ExtractStep.Transforms (Issue #84) — same meaning. Not applied
-    // when Mode == Exists (a boolean-ish presence check, not a string
-    // pipeline); the extension UI hides the transform section for that mode.
+    // Not applied for Mode == Exists.
     public List<FieldTransform>? Transforms { get; init; }
 
-    // Issue #213: only meaningful (and only valid, see
-    // ScrapingPlanValidator) when Mode == Attribute — the attribute's raw
-    // extracted value is treated as a URL to a downloadable resource (e.g.
-    // an <img>'s src, or an <a>'s href to a standalone file), downloaded by
-    // the generated script and replaced with the resource's own local file
-    // path instead of the bare URL. A plain non-nullable bool defaulting to
-    // false, like GroupNode.Repeating and Mode itself, since this is a
-    // per-field toggle rather than a plan-level opt-in (contrast
-    // ScrapingConfig's own nullable bool? flags, where null/false both mean
-    // "today's exact behavior" at the wire level). Container mode only
-    // originally (Issue #213) — Issue #214 (see ScrapingField.Download)
-    // extended the same mechanism to flat mode, once that mode gained its
-    // own attribute-picking UI; API mode still has no Mode/Attribute
-    // concept at all, so it's still out of scope.
+    // Mode == Attribute only: the value is a URL; the script downloads it and writes the local file path instead.
     public bool Download { get; init; }
 
-    // Issue #214: an optional safety net alongside Download — a downloaded
-    // response exceeding this many bytes, or (see AllowedContentTypes)
-    // whose Content-Type isn't in an explicitly configured allowlist, is
-    // treated the same as any other failed download (a warning, the field
-    // left empty, never a hard failure). Null/empty = no restriction,
-    // today's exact Issue #213 behavior.
+    // Download safety net: a response over the size or outside the allowed content types counts as a failed
+    // download (a warning and an empty field), never a hard failure.
     public int? MaxDownloadSizeBytes { get; init; }
     public List<string>? AllowedContentTypes { get; init; }
 
-    // See ScrapingField.HiddenFromOutput.
     public bool HiddenFromOutput { get; init; }
 }
 
-// Issue #169: OwnText extracts only the direct text-node children of the
-// matched element, excluding text contributed by any nested element — e.g.
-// <h3>Burrata mit Tomaten<span class="badge">vegan möglich</span></h3>
-// yields "Burrata mit Tomaten", not the two concatenated (which is what
-// Text mode's plain get_text()/text_content() would produce, since that
-// walks every descendant). See scraper_grouped.py.j2/
-// playwright_scraper_grouped.py.j2's own extract_group() for the runtime
-// implementation difference between the two.
+// OwnText takes only the element's direct text nodes: <h3>Burrata<span>vegan</span></h3> gives "Burrata", where
+// Text would give both.
 public enum ExtractMode { Text, Attribute, Exists, OwnText }

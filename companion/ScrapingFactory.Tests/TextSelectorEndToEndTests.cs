@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -22,45 +21,12 @@ public class TextSelectorEndToEndTests : IDisposable
 
     public void Dispose() => Directory.Delete(_workDir, recursive: true);
 
-    private static async Task<(int ExitCode, string Stderr)> RunScriptAsync(string scriptPath, string workDir)
-    {
-        Exception? lastError = null;
-        foreach (var candidate in new[] { "python3", "python" })
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = candidate,
-                WorkingDirectory = workDir,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            psi.ArgumentList.Add(scriptPath);
-            try
-            {
-                using var process = new Process { StartInfo = psi };
-                process.Start();
-                var stderrTask = process.StandardError.ReadToEndAsync();
-                var stdoutTask = process.StandardOutput.ReadToEndAsync();
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
-                await process.WaitForExitAsync(cts.Token);
-                _ = await stdoutTask;
-                return (process.ExitCode, await stderrTask);
-            }
-            catch (System.ComponentModel.Win32Exception ex)
-            {
-                lastError = ex; // executable not found — try the next candidate
-            }
-        }
-        throw new InvalidOperationException("No Python interpreter found (tried: python3, python).", lastError);
-    }
-
     private async Task<(int Exit, string Stderr)> RunAsync(string script)
     {
         var scriptPath = Path.Combine(_workDir, "scraper.py");
         await File.WriteAllTextAsync(scriptPath, script);
-        return await RunScriptAsync(scriptPath, _workDir);
+        var result = await ScriptRunner.RunAsync(scriptPath, _workDir, timeout: TimeSpan.FromSeconds(90));
+        return (result.ExitCode, result.Stderr);
     }
 
     private string[] ReadLines(string fileName)

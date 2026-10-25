@@ -1,0 +1,7 @@
+{{~ if dedup.enabled ~}}
+    _dedup_save_state(_dedup_collect_keys(root))
+{{~ end ~}}
+{{~ if proxy.enabled ~}}
+    if _PROXY_ENV_MISSING:
+        sys.exit(EXIT_MISSING_ENV_VAR)
+{{~ end ~}}

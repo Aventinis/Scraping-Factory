@@ -3,17 +3,9 @@ using ScrapingFactory.Compiler.IR;
 
 namespace ScrapingFactory.Compiler.Backends.Python;
 
-// Issue #222: builds the single Scriban context object every request-making
-// template renders `request_delay.*` from — mirrors PythonProxyLiteral. The
-// bounds are rendered as Python float literals in seconds (the runtime's
-// time.sleep/random.uniform unit), always with a decimal point.
-//
-// Issue #228: the same pacing mechanism also serves "honor robots.txt
-// Crawl-delay/Request-rate" — that setting alone (no explicit pause) enables
-// it with a 0..0 base pause, so every call site of _pace_request that was
-// already gated on `request_delay.enabled` needs no change. `robots_urls`
-// are the plan's start URLs (or the API URL template); the runtime reduces
-// them to origins and reads each one's robots.txt once.
+// Builds the `request_delay.*` Scriban context: bounds as Python float literals in seconds. The same pacing also
+// serves "honor robots.txt Crawl-delay" on its own (a 0..0 base pause), so every `request_delay.enabled` call site
+// needs no change; robots_urls are the start URLs (or the API template) the runtime reduces to origins.
 internal static class PythonRequestDelayLiteral
 {
     public static object BuildContext(ScrapingPlan plan)

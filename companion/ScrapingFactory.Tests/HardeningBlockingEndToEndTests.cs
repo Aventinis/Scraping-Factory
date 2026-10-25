@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using ScrapingFactory.Compiler.Backends.Python;
 using ScrapingFactory.Compiler.IR;
 using Xunit;
@@ -10,47 +9,13 @@ namespace ScrapingFactory.Tests;
 // runtime — like NullRateCheck, a blocked-but-200 response can still
 // produce a non-empty output file, so PythonScriptVerifier's own
 // black-box success/failure result can't distinguish a triggered check
-// from an untriggered one. Same RunScriptAsync pattern as
+// from an untriggered one. Same ScriptRunner pattern as
 // HardeningNullRateEndToEndTests/HardeningBaselineEndToEndTests, for the
 // same reason. Static engine only — see ProxyEndToEndTests' own doc
 // comment for why Browser-engine coverage instead lives in template-string
 // assertions (CompanionEndpointTests' round-trip test for this check).
 public class HardeningBlockingEndToEndTests
 {
-    private static async Task<(int ExitCode, string Stderr)> RunScriptAsync(string scriptPath, string workDir)
-    {
-        Exception? lastError = null;
-        foreach (var candidate in new[] { "python3", "python" })
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = candidate,
-                WorkingDirectory = workDir,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            psi.ArgumentList.Add(scriptPath);
-
-            try
-            {
-                using var process = new Process { StartInfo = psi };
-                process.Start();
-                var stderrTask = process.StandardError.ReadToEndAsync();
-                var stdoutTask = process.StandardOutput.ReadToEndAsync();
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                await process.WaitForExitAsync(cts.Token);
-                return (process.ExitCode, await stderrTask);
-            }
-            catch (System.ComponentModel.Win32Exception ex)
-            {
-                lastError = ex; // executable not found — try the next candidate
-            }
-        }
-        throw new InvalidOperationException("No Python interpreter found (tried: python3, python).", lastError);
-    }
-
     private static async Task<(int Exit, string Stderr)> GenerateAndRunAsync(ScrapingPlan plan, string tempPrefix)
     {
         var script = new PythonCodeGenerator().Generate(plan);
@@ -59,7 +24,8 @@ public class HardeningBlockingEndToEndTests
         {
             var scriptPath = Path.Combine(workDir, "scraper.py");
             await File.WriteAllTextAsync(scriptPath, script);
-            return await RunScriptAsync(scriptPath, workDir);
+            var result = await ScriptRunner.RunAsync(scriptPath, workDir);
+            return (result.ExitCode, result.Stderr);
         }
         finally
         {

@@ -1,0 +1,64 @@
+{
+  "version": "1",
+  "url": "https://example.test/list",
+  "fields": [
+    {
+      "name": "Title",
+      "selector": "h2.title",
+      "attribute": null
+    },
+    {
+      "name": "Price",
+      "selector": "span.price",
+      "attribute": null
+    },
+    {
+      "name": "Link",
+      "selector": "a.more",
+      "attribute": "href"
+    },
+    {
+      "name": "Stock",
+      "selector": "span.stock",
+      "attribute": null,
+      "framePath": [
+        "iframe#shop"
+      ]
+    }
+  ],
+  "outputFormat": "Csv",
+  "scriptFileName": null,
+  "outputFileName": null,
+  "engine": "Browser",
+  "browserActions": [
+    {
+      "kind": "scroll",
+      "containerSelector": "div.feed",
+      "loadMoreButtonSelector": "button.more",
+      "maxIterations": 6,
+      "waitAfterMs": 700,
+      "scrollStepPx": 400
+    },
+    {
+      "kind": "click",
+      "selector": "button.cookies"
+    },
+    {
+      "kind": "click",
+      "selector": "a.toggle",
+      "target": "All",
+      "waitAfterMs": 300,
+      "framePath": [
+        "iframe#cmp"
+      ]
+    },
+    {
+      "kind": "waitFor",
+      "selector": "#consent",
+      "timeoutMs": 5000,
+      "framePath": [
+        "iframe#cmp"
+      ]
+    }
+  ]
+}

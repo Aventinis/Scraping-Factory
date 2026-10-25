@@ -14,28 +14,10 @@ namespace ScrapingFactory.Tests;
 // sets live in the same store.
 public class SavedOutputsEndpointTests : IDisposable
 {
-    private readonly string _dbPath;
-    private readonly WebApplicationFactory<Program> _factory;
-    private readonly HttpClient _client;
+    private readonly TempDatabaseCompanion _companion = new("Companion:SavedConfigsDbPath", "saved-outputs-endpoint-test");
+    private HttpClient _client => _companion.Client;
 
-    public SavedOutputsEndpointTests()
-    {
-        _dbPath = Path.Combine(Path.GetTempPath(), $"sf-saved-outputs-endpoint-test-{Guid.NewGuid():N}.db");
-        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-            builder.ConfigureAppConfiguration((_, config) =>
-                config.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["Companion:SavedConfigsDbPath"] = _dbPath,
-                })));
-        _client = _factory.CreateClient();
-    }
-
-    public void Dispose()
-    {
-        _client.Dispose();
-        _factory.Dispose();
-        if (File.Exists(_dbPath)) File.Delete(_dbPath);
-    }
+    public void Dispose() => _companion.Dispose();
 
     private static StringContent JsonBody(object value) =>
         new(JsonSerializer.Serialize(value), Encoding.UTF8, "application/json");

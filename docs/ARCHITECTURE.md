@@ -10,11 +10,11 @@ extension/companion boundary. It's meant to answer three recurring questions:
    interact with?
 3. **Briefing an implementation** — which exact files should a change start from?
 
-It deliberately does not re-explain *why* individual decisions were made — that's
-`CLAUDE.md`, which stays the authoritative source for behavioral detail, edge cases,
-and the reasoning behind non-obvious choices. This document is the structural map;
-`CLAUDE.md` is the annotated reference. When in doubt, this doc tells you *where*,
-`CLAUDE.md` tells you *why it works the way it does*.
+It deliberately does not re-explain *why* individual decisions were made — the
+cross-cutting rules and architecture decisions are in `CLAUDE.md`, and the behavior,
+edge cases and reasoning of each feature are in `docs/design-notes/`. This document is
+the structural map. When in doubt, this doc tells you *where*, the design notes tell
+you *why it works the way it does*.
 
 Contents:
 
@@ -35,19 +35,19 @@ flowchart LR
     subgraph Browser["Browser"]
         direction TB
         subgraph Page["Inspected page (per-frame)"]
-            CS["content-script.js\n(ISOLATED world)"]
-            AC["api-capture.js\n(MAIN world)"]
+            CS["content-script.ts\n(ISOLATED world)"]
+            AC["api-capture.ts\n(MAIN world)"]
             CS <-- window.postMessage --> AC
         end
-        SW["service-worker.js\n(background, pure relay)"]
-        SP["popup.js + friends\n(side panel UI, state machine)"]
+        SW["service-worker.ts\n(background, pure relay)"]
+        SP["popup.ts + friends\n(side panel UI, state machine)"]
         CS <-- chrome.runtime messages --> SW
         SW <-- chrome.runtime messages --> SP
     end
     SP -- "HTTP: GET /health, POST /generate,\nPOST/GET/DELETE /configs,\nPOST/GET/DELETE /configs/{id}/outputs,\nPOST/GET/PUT/DELETE /blueprints" --> Companion
     subgraph Companion["Companion app (.NET 10 process)"]
         direction TB
-        Program["Program.cs\n(minimal API)"]
+        Program["Program.cs (startup) +\nEndpoints/*.cs"]
         Plan["ScrapingPlanBuilder /\nScrapingPlanValidator"]
         Gen["ICodeGenerator\n(Python* code generators)"]
         Ver["IScriptVerifier\n(PythonScriptVerifier)"]
@@ -60,13 +60,22 @@ flowchart LR
     Ver -- "spawns" --> PySub["python3 subprocess\n(the actual generated script,\nrun once as a trial)"]
 ```
 
+The companion's HTTP surface is wired in `Program.cs` (services, middleware, `/health`, `/whoami`) and implemented in
+`companion/ScrapingFactory.Companion/Endpoints/`: `ConfigEndpoints.cs` (`/configs`, outputs, `replay-hardening`),
+`BlueprintEndpoints.cs`, `TransformPresetEndpoints.cs` and `GenerateEndpoint.cs` (+ `.Combined.cs`, `.Blocks.cs`: the
+mode-exclusivity checks and the three `/generate` handlers). The trial-run skip rules live in
+`Compiler/Backends/VerificationPolicy.cs`. `ScrapingPlanValidator` is one `partial` class in `Compiler/IR/`
+(`ScrapingPlanValidator.cs` sequences the checks; `.Settings`, `.BrowserSteps`, `.Shapes`, `.Fields`, `.Output`,
+`.Hardening`, `.Blocks` and `.Api*` hold the per-area checks). Below, "in `Program.cs`" for an endpoint or an
+outer-request rejection means the matching `Endpoints/` file.
+
 ### 1.1 The extension has three separate JS execution contexts
 
 | Context | File(s) | Runs where | Can reach |
 |---|---|---|---|
-| Content script (isolated world) | `extension/content/content-script.js` | Once per frame of the inspected page (`all_frames: true`) | The page's DOM (but not its JS globals); `chrome.runtime` |
-| Network recorder (MAIN world) | `extension/content/api-capture.js` | Once per frame, injected at `document_start`, before the page's own scripts run | The page's real `window.fetch`/`XMLHttpRequest` (needed to patch them); **not** `chrome.runtime` |
-| Background service worker | `extension/background/service-worker.js` | Once per browser session | `chrome.tabs`, relays messages; has no page/DOM access itself |
+| Content script (isolated world) | `extension/content/content-script.ts` | Once per frame of the inspected page (`all_frames: true`) | The page's DOM (but not its JS globals); `chrome.runtime` |
+| Network recorder (MAIN world) | `extension/content/api-capture.ts` | Once per frame, injected at `document_start`, before the page's own scripts run | The page's real `window.fetch`/`XMLHttpRequest` (needed to patch them); **not** `chrome.runtime` |
+| Background service worker | `extension/background/service-worker.ts` | Once per browser session | `chrome.tabs`, relays messages; has no page/DOM access itself |
 | Side panel UI | `extension/popup/popup.html` + its scripts | Once per open panel | `chrome.runtime`, `chrome.storage`, `fetch` to the companion |
 
 The content script and the MAIN-world recorder are two different JS realms that
@@ -74,13 +83,13 @@ happen to share one `window` — they can only talk via `window.postMessage`, ne
 via a shared variable or direct function call. The service worker cannot talk to a
 content script directly either; it must go through `chrome.tabs.sendMessage`, and a
 content script/panel replies via `chrome.runtime.sendMessage`. The service worker
-(`extension/background/service-worker.js`) is intentionally a pure relay — it holds
+(`extension/background/service-worker.ts`) is intentionally a pure relay — it holds
 no feature logic, just a `FORWARD_TO_TAB` allow-list and a couple of pull-based
 request/response bridges (`GET_LOGS`, `GET_API_CAPTURE_ENTRIES`, `CHECK_ROBOTS_TXT`).
 
 ### 1.2 The side panel is a single state machine, split across files for size
 
-`extension/popup/popup.js` owns one module-level `_state` object and a `STATES`
+`extension/popup/popup.ts` owns one module-level `_state` object and a `STATES`
 enum (`CHECKING_COMPANION → IDLE ⇄ SELECTING`, `IDLE → API_CONFIG`, `IDLE →
 GENERATING → DONE`). Every state transition goes through `setState`/`patchState`,
 which re-renders the whole visible screen from scratch (`render()`) — there is no
@@ -88,21 +97,21 @@ partial/virtual-DOM diffing. `setState` also persists selected state fields to
 `chrome.storage.session` (see `persistState()`) so the panel survives being closed
 mid-configuration; `chrome.storage.local` is used instead for the two settings that
 should survive a full browser restart (UI language, a custom companion URL — see
-`extension/i18n/i18n.js` and `extension/shared/companion-config.js`).
+`extension/i18n/i18n.ts` and `extension/shared/companion-config.ts`).
 
-Because `popup.js` had grown past ~3800 lines, mode-specific logic was split out
+Because `popup.ts` had grown past ~3800 lines, mode-specific logic was split out
 into sibling files loaded *before* it (see `popup.html`'s script order):
 
 ```mermaid
 flowchart TB
-    logger["shared/logger.js"]
-    i18n["i18n/i18n.js"]
-    ccfg["shared/companion-config.js"]
-    apiCfg["popup/api-config.js\n(pure builders/validators, API mode)"]
-    ctree["popup/container-tree.js\n(pure builders/validators, Container mode)"]
-    apiUi["popup/api-config-ui.js + api-*-ui.js\n(DOM rendering + handlers, API mode)"]
-    ctreeUi["popup/container-tree-ui.js\n(DOM rendering + handlers, Container mode)"]
-    popup["popup/popup.js\n(orchestrator: _state, render(), wireEvents())"]
+    logger["shared/logger.ts"]
+    i18n["i18n/i18n.ts"]
+    ccfg["shared/companion-config.ts"]
+    apiCfg["popup/api-config.ts\n(pure builders/validators, API mode)"]
+    ctree["popup/container-tree.ts\n(pure builders/validators, Container mode)"]
+    apiUi["popup/api-config-ui.ts + api-*-ui.js\n(DOM rendering + handlers, API mode)"]
+    ctreeUi["popup/container-tree-ui.ts\n(DOM rendering + handlers, Container mode)"]
+    popup["popup/popup.ts\n(orchestrator: _state, render(), wireEvents())"]
 
     i18n --> apiCfg
     i18n --> ctree
@@ -124,53 +133,54 @@ flowchart TB
 
 Every file is a plain CommonJS module (`const { ... } = require('./x')`,
 `module.exports = { ... }`). Since Issue #389 `extension/build.js` (esbuild) bundles
-the popup — `popup/popup.js` is the entry point and `popup.html` has a single
+the popup — `popup/popup.ts` is the entry point and `popup.html` has a single
 `<script src="popup.js">` — together with the other three contexts (content
 script, MAIN-world recorder, service worker) into `extension/dist/`, which is what
 "Load unpacked" points at; Jest runs the same sources directly. Module-level names
 never collide, so there is no load order to maintain.
 
-`api-config-ui.js` and `container-tree-ui.js`'s handler functions take a `bridge`
+`api-config-ui.ts` and `container-tree-ui.ts`'s handler functions take a `bridge`
 object (`{ getState, setState, patchState, stopPreviewIfActive, requestDomTree,
-showToast }`) as their first parameter instead of closing over `popup.js`'s
-`_state` — necessary because `_state` is private to `popup.js` (importing it back
+showToast }`) as their first parameter instead of closing over `popup.ts`'s
+`_state` — necessary because `_state` is private to `popup.ts` (importing it back
 would make a dependency cycle), and because each file is a separate, isolated Jest
-module with no shared closure. `api-config.js` and
-`container-tree.js` need no such bridge: they're pure, DOM-free functions
+module with no shared closure. `api-config.ts` and
+`container-tree.ts` need no such bridge: they're pure, DOM-free functions
 (build/resolve/insert/remove/serialize tree drafts, no state or DOM access).
 
-**API mode's UI is several modules** (Issue #390: `api-config-ui.js` had grown to
-1,967 lines). `api-config-ui.js` stays the orchestrator — the API_CONFIG screen's
+**API mode's UI is several modules** (Issue #390: `api-config-ui.ts` had grown to
+1,967 lines). `api-config-ui.ts` stays the orchestrator — the API_CONFIG screen's
 own render/confirm/cancel, the modals' render and `wireApiConfigEvents`, which calls
 each module's `wire…Events(bridge)` in turn — and re-exports every name it used to
-export (`api-config-ui-exports.test.js` pins that surface), so `popup.js` and
-`idle-screen-ui.js` import unchanged. The focused modules, none importing
-`api-config-ui.js` (no cycles; `api-config-shared-ui.js` holds the helpers two of
+export (`api-config-ui-exports.test.js` pins that surface), so `popup.ts` and
+`idle-screen-ui.ts` import unchanged. The focused modules, none importing
+`api-config-ui.ts` (no cycles; `api-config-shared-ui.ts` holds the helpers two of
 them share):
 
 | Module | Owns |
 | --- | --- |
-| `api-capture-ui.js` | recording toggle, the click-based searches (network, embedded JSON), candidate and recorded-request lists, confirming a candidate |
-| `api-response-tree-ui.js` | response-tree rows, the group and leaf-transforms modals, the JSON-scoped tree search |
-| `api-parameters-ui.js` | URL parts and parameter-source cards (value list, discovery endpoint, range) |
-| `api-browser-discovery-ui.js` | the BrowserDiscoverySource action editor (its listener branches are called by `api-parameters-ui.js`) |
-| `api-request-ui.js` | captured-header table, POST body tree and its "new parameter" modal |
-| `api-config-shared-ui.js` | `patchApiConfigDraft`/`patchApiConfigSource`, the parameter-placeholder picker |
+| `api-capture-ui.ts` | recording toggle, the click-based searches (network, embedded JSON), candidate and recorded-request lists, confirming a candidate |
+| `api-response-tree-ui.ts` | response-tree rows, the group and leaf-transforms modals, the JSON-scoped tree search |
+| `api-parameters-ui.ts` | URL parts and parameter-source cards (value list, discovery endpoint, range) |
+| `api-browser-discovery-ui.ts` | the BrowserDiscoverySource action editor (its listener branches are called by `api-parameters-ui.ts`) |
+| `api-request-ui.ts` | captured-header table, POST body tree and its "new parameter" modal |
+| `api-config-shared-ui.ts` | `patchApiConfigDraft`/`patchApiConfigSource`, the parameter-placeholder picker |
 
-These DOM-free `<feature>.js` modules are also exactly the ones opted into
-JSDoc type checking (Issue #238, see CLAUDE.md's own entry on this) — a
-leading `// @ts-check` pragma plus `extension/tsconfig.json`
-(`npm run typecheck`, wired into CI) against two ambient namespaces under
-`extension/types/`: `SFWire` (`companion-ir.d.ts`, a hand-kept mirror of the
-companion's wire-format IR) and `SFDraft` (`popup-drafts.d.ts`, this popup's
-own internal pre-serialization shapes, e.g. `container-tree.js`'s tree
-nodes). `checkJs` stays off project-wide — the DOM-rendering `<feature>-ui.js`
-files and `popup.js` itself aren't annotated (yet).
+Every extension source is TypeScript under `strict` (`extension/tsconfig.json`, `npm run typecheck`,
+wired into CI), against four type modules under `extension/types/`, imported as namespaces:
+`SFWire` (`wire.ts`, a hand-kept mirror of the companion's wire-format IR), `SFDraft` (`drafts.ts`,
+this popup's own internal pre-serialization shapes, e.g. `container-tree.ts`'s tree nodes),
+`types/popup.ts` (`State`, the shape of `popup.ts`'s `_state`; `Screen`; `PopupBridge`, what every
+`<feature>-ui` module receives as `bridge`) and `types/messages.ts` (the messages between the
+content script, the service worker and the side panel, plus the window messages of the network
+recorder and the frame-path handshake). The only JavaScript left is deliberate: the Node-side
+scripts `build.js`, `docs-build.js` and `jest-transform.js` (type-checked from their JSDoc) and the
+`*.test.js` files (see `docs/design-notes/extension.md`, "TypeScript migration").
 
 ### 1.3 The companion pipeline: wire format → canonical IR → codegen → real execution
 
 Everything the extension sends is `ScrapingFactory.Compiler.IR.ScrapingConfig` —
-described in full in `CLAUDE.md`'s Architecture Decisions §1. `Program.cs`'s
+described in full in `CLAUDE.md`'s Architecture Decisions §1. `Endpoints/GenerateEndpoint.cs`'s
 `/generate` endpoint runs it through a fixed pipeline, and **every** stage after
 `ScrapingPlanBuilder` only ever sees the canonical `ScrapingPlan`, never the wire
 format directly:
@@ -195,7 +205,7 @@ any change:
   matching new `ScrapingStep` subtype.** `Fields` → `ExtractStep` (many),
   `Groups` → `ExtractGroupStep` (one, wrapping a whole tree), `Api` →
   `ApiCallStep` (one, wrapping `ApiConfig`). All three are mutually exclusive,
-  enforced in `Program.cs` before `ScrapingPlanBuilder` ever runs.
+  enforced in `Endpoints/GenerateEndpoint.cs` before `ScrapingPlanBuilder` ever runs.
 - **`ScrapingPlanValidator` runs before any subprocess is spawned.** It only
   catches structural issues that are wrong regardless of runtime behavior
   (bad URL, empty/duplicate names, `FramePath` without `Engine=Browser`, a
@@ -240,7 +250,7 @@ dimension — see §3.1 for the full class picture.
 For each feature: a plain-language explanation of what it does (for anyone
 orienting themselves, not just implementers), followed by the exact file set that
 implements it. For behavioral detail (edge cases, validation rules, why a design
-choice was made), see the matching section of `CLAUDE.md` — the file lists below
+choice was made), see the matching section of `docs/design-notes/` — the file lists below
 are deliberately terse.
 
 ### 2.1 Flat field scraping (original v1 mode)
@@ -248,8 +258,8 @@ are deliberately terse.
 Click an element on the page → get a CSS selector → name it → repeat → generate a
 CSV-producing script.
 
-- Extension: `popup/popup.js` (`_state.fields`, `addField`/`removeField`,
-  `renderFields`, `confirmField`), `content/content-script.js` (`buildSelector`,
+- Extension: `popup/popup.ts` (`_state.fields`, `addField`/`removeField`,
+  `renderFields`, `confirmField`), `content/content-script.ts` (`buildSelector`,
   `startSelection`/`onClick`)
 - Companion: `IR/ScrapingConfig.cs` (`ScrapingField`), `IR/ScrapingStep.cs`
   (`ExtractStep`), `IR/ScrapingPlanBuilder.cs`, `Backends/Python/PythonCodeGenerator.cs`,
@@ -266,9 +276,9 @@ flat list of fields. The generated script walks the same tree at runtime and
 writes the result as XML instead of CSV, since a tree doesn't fit CSV's flat
 column model.
 
-- Extension: `popup/container-tree.js` (pure tree helpers), `popup/container-tree-ui.js`
-  (tree editor UI, modals), `popup/popup.js` (`_state.groups`, `_state.mode ===
-  'container'`), `content/content-script.js` (`scopeSelector`/`scopeRoot` support
+- Extension: `popup/container-tree.ts` (pure tree helpers), `popup/container-tree-ui.ts`
+  (tree editor UI, modals), `popup/popup.ts` (`_state.groups`, `_state.mode ===
+  'container'`), `content/content-script.ts` (`scopeSelector`/`scopeRoot` support
   in `startSelection`/`buildSelector`, `matchGroupTree` for the DOM preview)
 - Companion: `IR/ContainerNode.cs` (`GroupNode`/`DataFieldNode`),
   `IR/ContainerNodeJsonConverter.cs`, `IR/ScrapingStep.cs` (`ExtractGroupStep`),
@@ -288,10 +298,10 @@ list, a second "discovery" request, or a computed range (e.g. the last N ISO
 weeks) — so the generated script can call the API directly, once per parameter
 combination, without ever touching the HTML.
 
-- Extension: `popup/api-config.js` (URL decomposition, value-source builders,
-  `buildApiConfig`), `popup/api-config-ui.js` (API_CONFIG screen rendering +
-  handlers, recording UI), `content/api-capture.js` (MAIN-world fetch/XHR patch),
-  `content/content-script.js` (`findApiCandidates`, `deriveItemsAndValuePath`,
+- Extension: `popup/api-config.ts` (URL decomposition, value-source builders,
+  `buildApiConfig`), `popup/api-config-ui.ts` (API_CONFIG screen rendering +
+  handlers, recording UI), `content/api-capture.ts` (MAIN-world fetch/XHR patch),
+  `content/content-script.ts` (`findApiCandidates`, `deriveItemsAndValuePath`,
   robots.txt-adjacent JSON-path helpers)
 - Companion: `IR/ApiConfig.cs` (`ApiConfig`, `ApiParameter`, `ApiParameterSource`
   variants, `ApiHeader`), `IR/ScrapingStep.cs` (`ApiCallStep`),
@@ -309,9 +319,9 @@ relative to its parent) instead of a single flat record list, mirroring Containe
 mode's own tree editor. Output becomes XML instead of CSV once a tree is used, for
 the same reason Container mode's tree output is XML.
 
-- Extension: `popup/api-config.js` (`ApiGroup`/`ApiField` draft
-  build/insert/remove/serialize), `popup/api-response-tree-ui.js` (`renderApiTree`,
-  `buildApiTreeNodeEl`, sub-group/sub-field search flows), `content/content-script.js`
+- Extension: `popup/api-config.ts` (`ApiGroup`/`ApiField` draft
+  build/insert/remove/serialize), `popup/api-response-tree-ui.ts` (`renderApiTree`,
+  `buildApiTreeNodeEl`, sub-group/sub-field search flows), `content/content-script.ts`
   (`deriveApiTreeSkeleton`, `resolveApiGroupScopePath`-adjacent `pathStartsWithScope`)
 - Companion: `IR/ApiConfig.cs` (`ApiConfig.Groups`, `ApiNode`/`ApiGroup`/`ApiField`),
   `IR/ApiNodeJsonConverter.cs`, `ScrapingPlanValidator.cs` (`ValidateApiNodes`),
@@ -329,10 +339,10 @@ already uses). GraphQL needs no special handling of its own — its `query`/
 `variables` body is just an ordinary nested object this generic mechanism already
 covers.
 
-- Extension: `popup/api-config.js` (`jsonValueToBodyDraft`, body-tree
-  update/reference/serialize helpers), `popup/api-request-ui.js`
+- Extension: `popup/api-config.ts` (`jsonValueToBodyDraft`, body-tree
+  update/reference/serialize helpers), `popup/api-request-ui.ts`
   (`buildBodyTreeNodeEl`/`renderBodyTree`, body-parameter modal wiring),
-  `content/api-capture.js` (`requestBody`/`requestBodySkipped` capture)
+  `content/api-capture.ts` (`requestBody`/`requestBodySkipped` capture)
 - Companion: `IR/ApiBodyNode.cs` (`ApiBodyObject`/`Array`/`Literal`/`Variable`),
   `IR/ApiBodyNodeJsonConverter.cs`, `IR/ApiConfig.cs` (`Method`, `Body`),
   `ScrapingPlanValidator.cs` (`ValidateApiBodyNode`),
@@ -346,7 +356,7 @@ Extends API mode (§2.3) to sites that render their complete data into the
 initial page HTML (Next.js `__NEXT_DATA__`, Nuxt `__NUXT__`, a generic
 `<script type="application/json">` state blob) and hydrate the DOM from it
 client-side, with no separate, capturable network request ever happening —
-`content/api-capture.js`'s recorder has nothing to correlate against in this
+`content/api-capture.ts`'s recorder has nothing to correlate against in this
 case. A second, recording-free candidate source (`findEmbeddedJsonCandidates`)
 scans `document.scripts` directly at click time and reuses §2.3's own
 `findValueInJson`/`siblingFields`/`deriveApiTreeSkeleton` unchanged — they're
@@ -356,10 +366,10 @@ companion fetches the page via `requests` and extracts the identified
 `ItemsPath`/`Fields`/`Groups` extraction is otherwise identical to an ordinary
 API-mode request (fetch-mechanism-agnostic by design).
 
-- Extension: `content/content-script.js` (`findEmbeddedJsonCandidates`,
-  `scriptTagSelector`), `popup/api-capture-ui.js`
+- Extension: `content/content-script.ts` (`findEmbeddedJsonCandidates`,
+  `scriptTagSelector`), `popup/api-capture-ui.ts`
   (`startEmbeddedJsonFieldSearch`, `confirmEmbeddedJsonFieldCandidate`,
-  `renderApiCandidates`'s `candidate.scriptSelector` branch), `popup/api-config.js`
+  `renderApiCandidates`'s `candidate.scriptSelector` branch), `popup/api-config.ts`
   (`buildApiConfig`'s `embeddedJsonSource` param)
 - Companion: `IR/ApiConfig.cs` (`ApiConfig.EmbeddedJsonSource`,
   `EmbeddedJsonSource`), `ScrapingPlanValidator.cs` (`ValidateApiConfig`'s
@@ -387,16 +397,16 @@ names only; `/generate`'s trial run takes one-time test values for them via
 auto-detects the token's JSON path by finding the response value the main
 request actually sends.
 
-- Extension: `popup/api-bootstrap.js` (pure draft/wire logic:
+- Extension: `popup/api-bootstrap.ts` (pure draft/wire logic:
   `bootstrapDraftFromCaptureEntry`, `detectTokenInResponse`,
   `wireTokenIntoMainRequest`, `buildApiBootstrap`, `resolveBootstrapUrlParts`,
-  `buildBootstrapVerificationValues`), `popup/api-bootstrap-ui.js` (the
-  section's render/wiring, recording picker), `popup/api-config.js`
+  `buildBootstrapVerificationValues`), `popup/api-bootstrap-ui.ts` (the
+  section's render/wiring, recording picker), `popup/api-config.ts`
   (`buildApiConfig`'s `bootstrap` param, `buildApiHeaders`'s `'bootstrap'`
-  mode, the Apply gate), `popup/api-request-ui.js` (header "From token" mode),
-  `popup/api-parameters-ui.js` (the "Token value" URL-part source),
-  `popup/api-config-ui.js` (`confirmApiConfig`),
-  `popup/companion-client.js` (bootstrap test values → `verificationValues`),
+  mode, the Apply gate), `popup/api-request-ui.ts` (header "From token" mode),
+  `popup/api-parameters-ui.ts` (the "Token value" URL-part source),
+  `popup/api-config-ui.ts` (`confirmApiConfig`),
+  `popup/companion-client.ts` (bootstrap test values → `verificationValues`),
   `popup/screens/api-config.html` (`#api-bootstrap-section`)
 - Companion: `IR/ApiConfig.cs` (`ApiConfig.Bootstrap`, `ApiBootstrap`,
   `ApiBootstrapBodyField`, `ApiBootstrapBodyEncoding`, `ApiHeader.Template`),
@@ -426,11 +436,11 @@ is returned, an optional has-more flag is falsy, a cursor repeats, or
 "Detect from recording" button reads the recorded response/request for
 cursor-looking keys. The `Link`-header sibling is §2.5d.
 
-- Extension: `popup/api-cursor-pagination.js` (pure draft/wire logic:
+- Extension: `popup/api-cursor-pagination.ts` (pure draft/wire logic:
   `cursorDraftIsComplete`, `buildApiCursorPagination`,
-  `detectCursorSuggestion`), `popup/api-cursor-pagination-ui.js` (the
-  section's render/wiring), `popup/api-config.js` (`buildApiConfig`'s
-  `cursorPagination` param, the Apply gate), `popup/api-config-ui.js`
+  `detectCursorSuggestion`), `popup/api-cursor-pagination-ui.ts` (the
+  section's render/wiring), `popup/api-config.ts` (`buildApiConfig`'s
+  `cursorPagination` param, the Apply gate), `popup/api-config-ui.ts`
   (`confirmApiConfig`, `sourceEntryId` on the draft),
   `popup/screens/api-config.html` (`#api-cursor-section`)
 - Companion: `IR/ApiConfig.cs` (`ApiConfig.CursorPagination`,
@@ -461,9 +471,9 @@ reached. GET only; flat and tree shapes. The recorder keeps only a
 `hasNextLink` boolean per entry, so the API_CONFIG screen can suggest the
 option.
 
-- Extension: `content/api-capture.js` (`hasNextLinkRel`), `content/content-script.js`
-  (`hasNextLink` on candidates), `popup/api-link-pagination.js` (pure),
-  `popup/api-link-pagination-ui.js`, `popup/api-config.js`,
+- Extension: `content/api-capture.ts` (`hasNextLinkRel`), `content/content-script.ts`
+  (`hasNextLink` on candidates), `popup/api-link-pagination.ts` (pure),
+  `popup/api-link-pagination-ui.ts`, `popup/api-config.ts`,
   `popup/screens/api-config.html` (`#api-link-section`)
 - Companion: `IR/ApiConfig.cs` (`ApiConfig.LinkHeaderPagination`,
   `ApiLinkHeaderPagination`), `ScrapingPlanValidator.cs`
@@ -485,10 +495,10 @@ assemble things like a login flow (fill username/password → click submit → w
 for the result) or trigger lazy-loaded content, all executed once before
 extraction runs, with no dedicated login-specific UI.
 
-- Extension: `popup/popup.js` (`_state.engine`, `_state.browserActions`,
+- Extension: `popup/popup.ts` (`_state.engine`, `_state.browserActions`,
   `addBrowserAction`/`updateBrowserAction`/`serializeBrowserActions`,
   `renderBrowserActions`, `_state.fillTestValues`/`buildVerificationValues`),
-  `content/content-script.js` (cross-frame path resolution: `resolveFramePath`,
+  `content/content-script.ts` (cross-frame path resolution: `resolveFramePath`,
   `handleFramePathMessage`, `findIframeSelectorForWindow`, `frameDepth`)
 - Companion: `IR/BrowserAction.cs`, `IR/ScrapingStep.cs`
   (`WaitForStep`/`FillStep`/`ClickStep`/`ScrollStep`), `IR/FillVerificationValues.cs`,
@@ -510,7 +520,64 @@ clear error message instead of a silently broken download.
 
 - Companion: `Backends/Python/PythonScriptVerifier.cs`,
   `Backends/ScriptVerificationResult.cs`, `Backends/IScriptVerifier.cs`,
-  `Program.cs` (the `/generate` handler's verify-then-respond logic)
+  `Endpoints/GenerateEndpoint.cs` (the `/generate` handler's verify-then-respond logic)
+
+### 2.7a Generated-script snapshot tests (Issue #386)
+
+Golden files pin the exact text of every generated script, so a change to a
+template, a fragment or a code generator is visible as a diff instead of being
+discovered by users. This is also the safety net for refactoring the templates
+(Issue #395): sharing code between them must leave every snapshot untouched.
+
+- `companion/ScrapingFactory.Tests/SnapshotCases.cs` (base shapes, `All`, `Add`),
+  `SnapshotCases.Features.cs` (static/browser flat and container features),
+  `SnapshotCases.Api.cs` (API, Blocks, Combined, interaction cases) — a case is
+  named wire-format JSON, built from a base shape plus a patch; its id is the
+  snapshot file name
+- `ScriptSnapshotTests.cs` — renders each case via the real `POST /generate`
+  (`skipVerification`, no Python run) and compares byte for byte; also checks for
+  orphan snapshot files and that rendering is deterministic
+- `SnapshotSupport.cs` — paths, line-ending normalization, update mode
+  (`UPDATE_SNAPSHOTS=1`), the failure message
+- `SnapshotCoverageTests.cs` — cases may only use properties the IR knows; every
+  settable IR property appears in some case or in the documented `NotRendered`
+  list; no machine-specific content
+- `companion/ScrapingFactory.Tests/Snapshots/*.py` — the golden files;
+  `.gitattributes` keeps them LF
+
+Update with `UPDATE_SNAPSHOTS=1 dotnet test companion/ScrapingFactory.sln --filter Snapshot`
+and review the diff. Template context keys are not checked separately; the IR
+property check is the proxy for "every option reaches a template".
+
+### 2.7b Wire-format mirrors and how each is checked (Issue #388)
+
+Some behavior exists twice, on both sides of the extension/companion boundary. Each copy is pinned by a test that
+reads the same data, so changing only one side fails. The shared data lives in `test-vectors/` (see its README).
+
+| Mirror | Extension side | Companion / script side | Checked by |
+| --- | --- | --- | --- |
+| File-name cleanup | `sanitizeFileNameBase` (`scraping-config-builder.ts`) | `IR/FileNameSanitizer.cs` | `file-name-sanitizer.json` — `scraping-config-builder*.test.js`, `FileNameSanitizerTests.cs` |
+| Transform previews | `applyTransformsPreview` (`field-transforms.ts`) | `fragments/transforms.py.j2` `_apply_transforms` | `transforms.json` — `transform-vectors.test.js`, `TransformVectorTests.cs` (real helper, imported from a generated script) |
+| robots.txt matching | `evaluateRobotsTxt` (`content-script.ts`) | `fragments/robots_disallow.py.j2` | `robots.json` — `robots-vectors.test.js`, `RobotsVectorTests.cs` |
+| Range formats | `compileRangeFormatPattern` (`api-config.ts`) | `Backends/Python/RangeFormat.cs`, `fragments/api_common.py.j2` | `range-format.json`, `range-expansion.json` — `range-format-vectors.test.js`, `RangeFormatVectorTests.cs` |
+| URL-template matching | `findUrlTemplateMatches` (`api-config.ts`) | `_match_url_against_template` (`fragments/api_common.py.j2`) | `url-template.json` — `url-template-vectors.test.js`, `UrlTemplateVectorTests.cs` |
+| `:contains("…")` split | `selector-text-filter.ts`, `content-script.ts` | `IR/SelectorTextFilter.cs`, `fragments/text_selector_common.py.j2` | `text-selector.json` — both JS tests, `SelectorTextFilterTests.cs` |
+| Environment-variable names | `env-var.ts` | `ScrapingPlanValidator` | `env-var-name.json` — `env-var.test.js`, `EnvVarNameVectorTests.cs` |
+| The request body | `buildScrapingConfig` and the draft builders | `IR/ScrapingConfig.cs` and `/generate` | `test-vectors/wire/*.json` — `wire-fixtures.test.js` writes/verifies, `WireFixtureTests.cs` deserializes strictly and calls `/generate` |
+| TypeScript wire types | `types/wire.ts` | `IR/*.cs` | `IrTypeDeclarationTests.cs` (reflection: property names, required-ness, enum unions) |
+
+**Evaluated and rejected: generating `wire.ts`.** `System.Text.Json`'s `JsonSchemaExporter` handles the
+plain properties and the `[JsonPolymorphic]` unions (`hardening`, `pagination`, `transforms`, parameter sources come out
+as `anyOf` with a `const kind`), but not the custom converters: container nodes lose their `DataFieldNode` branch
+(`children` becomes an untyped array), and API nodes, body nodes and blueprint trees are not described at all. It also
+emits JSON Schema, so a second tool would be needed to get TypeScript, and C# `required` does not mean "the extension must
+send it". So the file stays hand-written and `IrTypeDeclarationTests` guards it (its first run found a missing
+`skipVerification` and an `OutputFormat` without `Sqlite`/`Xlsx`).
+
+Adding a mirror: put the shared cases in `test-vectors/<name>.json`, run them from a Jest test and an xUnit test (the Python
+side through `PythonContractHarness`), and add a row to this table. Known, accepted differences are cases with
+`appliesTo` and a `note`; for example JavaScript's `\w` is ASCII-only while Python's is Unicode-aware, so a transform
+preview can differ from the script for a pattern that depends on that.
 
 ### 2.8 Trial-run data preview (Issue #122)
 
@@ -519,11 +586,11 @@ of what the trial run in §2.7 actually scraped — a table for flat/CSV output,
 read-only pretty-printed XML snippet for tree output — directly in the popup,
 before ever downloading or running the script themselves.
 
-- Extension: `popup/popup.js` (`_state.includeDataPreview`, `_state.dataPreview`,
+- Extension: `popup/popup.ts` (`_state.includeDataPreview`, `_state.dataPreview`,
   `renderDataPreview`, the `generate()` branch that parses JSON vs. plain text)
 - Companion: `IR/ScrapingConfig.cs` (`IncludePreview`),
   `Backends/ScriptPreviewData.cs`, `Backends/Python/PythonScriptVerifier.cs`
-  (`BuildCsvPreview`/`BuildXmlPreview`/`ParseCsvLine`), `Program.cs` (the
+  (`BuildCsvPreview`/`BuildXmlPreview`/`ParseCsvLine`), `Endpoints/GenerateEndpoint.cs` (the
   `IncludePreview == true` response branch)
 
 ### 2.8a Download the full trial-run output (Issue #161)
@@ -536,12 +603,12 @@ Python/Playwright install needed to run the generated script themselves.
 paths rather than re-deriving it from the already-parsed/capped preview data,
 so the download is byte-identical to what the script wrote.
 
-- Extension: `popup/popup.js` (`_state.includeOutputFile`, `_state.outputFile`,
+- Extension: `popup/popup.ts` (`_state.includeOutputFile`, `_state.outputFile`,
   `triggerOutputFileDownload`, the `btn-download-output` visibility toggle)
 - Companion: `IR/ScrapingConfig.cs` (`IncludeOutputFile`),
   `Backends/ScriptVerificationResult.cs` (`OutputFileContent`/`OutputFileName`),
   `Backends/IScriptVerifier.cs`/`Backends/Python/PythonScriptVerifier.cs` (the
-  `includeOutputFile` parameter), `Program.cs` (the widened JSON-envelope
+  `includeOutputFile` parameter), `Endpoints/GenerateEndpoint.cs` (the widened JSON-envelope
   condition, `outputFile` response key)
 
 ### 2.9 robots.txt check
@@ -551,9 +618,9 @@ disallowed for generic crawlers according to the target site's own robots.txt �
 shown directly in the popup so the user can make an informed decision before
 scraping a site, without having to go look the file up themselves.
 
-- Extension: `content/content-script.js` (`parseRobotsTxt`, `evaluateRobotsTxt`,
-  `checkRobotsTxt`), `background/service-worker.js` (`CHECK_ROBOTS_TXT` relay),
-  `popup/popup.js` (`checkRobotsTxt`, the idle-screen result rendering)
+- Extension: `content/content-script.ts` (`parseRobotsTxt`, `evaluateRobotsTxt`,
+  `checkRobotsTxt`), `background/service-worker.ts` (`CHECK_ROBOTS_TXT` relay),
+  `popup/popup.ts` (`checkRobotsTxt`, the idle-screen result rendering)
 - No companion involvement — entirely client-side.
 
 ### 2.10 Companion URL configuration/discovery
@@ -563,8 +630,8 @@ app's local HTTP server address — needed when the default `localhost:5000` is
 already taken on the user's machine, or when the companion runs on a different
 port or even a different host than the browser.
 
-- Extension: `shared/companion-config.js` (`getCompanionUrl`,
-  `setCompanionUrlOverride`), `popup/popup.js` (`checkCompanion`,
+- Extension: `shared/companion-config.ts` (`getCompanionUrl`,
+  `setCompanionUrlOverride`), `popup/popup.ts` (`checkCompanion`,
   `useCustomCompanionUrl`, `resetCustomCompanionUrl`, the `COMPANION_ERROR` screen)
 - Companion: `ScrapingFactory.Companion/CompanionHostOptions.cs`,
   `CompanionBackendOverrides.cs`, `Program.cs` (`builder.WebHost.UseUrls(...)`)
@@ -576,12 +643,12 @@ plain-language explanation and the three situations (not installed / installed b
 not running / another address or port) with the concrete next step for the user's
 OS — in full until a companion has answered once on this browser
 (`chrome.storage.local` `companionReached`), as a one-line hint afterwards — plus a
-"Why can't it connect?" help popover. See CLAUDE.md for the behavior details.
+"Why can't it connect?" help popover. See docs/design-notes/extension.md for the behavior details.
 
-- Extension: `popup/companion-guidance.js` (OS detection, installer commands/paths,
-  `likelySituations`, the persisted flag), `popup/companion-guidance-ui.js`
-  (`renderCompanionGuidance`, called from `popup.js`'s `render()`),
-  `popup/companion-client.js` (`checkCompanion` loads/sets the flag and keeps the last
+- Extension: `popup/companion-guidance.ts` (OS detection, installer commands/paths,
+  `likelySituations`, the persisted flag), `popup/companion-guidance-ui.ts`
+  (`renderCompanionGuidance`, called from `popup.ts`'s `render()`),
+  `popup/companion-client.ts` (`checkCompanion` loads/sets the flag and keeps the last
   failure for `getCompanionFailure()`), `#screen-error` in `popup/popup.html`,
   `error.*`/`help.companionError.*` in `i18n/*.json`
 - Tests: `popup/companion-guidance.test.js`, `popup/companion-guidance-ui.test.js`,
@@ -593,12 +660,12 @@ OS — in full until a companion has answered once on this browser
 `help.fieldType.container|flat`) next to the first decisions of a scrape, a match-count
 check after a container pick against the type chosen beforehand, a clickable
 "(single)"/"(repeating)" suffix in the container tree, and a "try the Browser engine"
-suggestion when a Static trial run returns no data. See CLAUDE.md for details.
+suggestion when a Static trial run returns no data. See docs/design-notes/extension.md for details.
 
-- Extension: `popup/choice-guidance.js` (pure: `containerCountAdvice`,
-  `shouldSuggestBrowserEngine`), `popup/toast.js` (`showMatchCountToast`),
-  `popup/message-router.js`/`popup/session-restore.js` (pass the chosen type),
-  `popup/container-tree-ui.js` (`.group-tree-type` toggle), `popup/companion-client.js`
+- Extension: `popup/choice-guidance.ts` (pure: `containerCountAdvice`,
+  `shouldSuggestBrowserEngine`), `popup/toast.ts` (`showMatchCountToast`),
+  `popup/message-router.ts`/`popup/session-restore.ts` (pass the chosen type),
+  `popup/container-tree-ui.ts` (`.group-tree-type` toggle), `popup/companion-client.ts`
   (`generate()` suggestion), help hosts in `popup/screens/idle.html`/`modals.html`,
   `help.*`/`toast.*`/`group.*` in `i18n/*.json`
 - Tests: `popup/choice-guidance.test.js`, real-browser check
@@ -609,11 +676,11 @@ suggestion when a Static trial run returns no data. See CLAUDE.md for details.
 A failed Generate shows a translated title and hint (what happened, what to try)
 instead of the companion's or script's raw text; the raw text stays behind a
 "Details" disclosure (copyable) and is what "Report bug" sends. Recognised by pattern
-in `popup/error-messages.js`; unknown errors keep the old wording. See CLAUDE.md.
+in `popup/error-messages.ts`; unknown errors keep the old wording. See docs/design-notes/extension.md.
 
-- Extension: `popup/error-messages.js` (pure: `classifyError`, `describeError`),
-  `popup/toast.js` (`showErrorToast`, `hideToast`, `wireErrorToastEvents`; sticky toast
-  with hint/details/close/copy), `popup/companion-client.js` (`showGenerateFailure`),
+- Extension: `popup/error-messages.ts` (pure: `classifyError`, `describeError`),
+  `popup/toast.ts` (`showErrorToast`, `hideToast`, `wireErrorToastEvents`; sticky toast
+  with hint/details/close/copy), `popup/companion-client.ts` (`showGenerateFailure`),
   the toast markup in `popup/popup.html`, `errors.*` in `i18n/*.json`
 - Tests: `popup/error-messages.test.js`, real-browser check
   `e2e/examples/issue-401-plain-errors-check.js`
@@ -624,14 +691,14 @@ Every input that takes the *name* of an environment variable (change detection,
 proxy, login Fill actions, custom request headers, API headers, the API auth
 bootstrap, an API discovery Fill action) shares one explanation popover
 (`help.envVar.what`), one inline name validation and one pre-flight check in
-`generate()`. See CLAUDE.md for the conventions (`data-env-var`, `envVarNoteHtml()`).
+`generate()`. See docs/design-notes/extension.md for the conventions (`data-env-var`, `envVarNoteHtml()`).
 
-- Extension: `popup/env-var.js` (pure: `validateEnvVarName`, `findInvalidEnvVarNames`),
-  `popup/env-var-ui.js` (`envVarNoteHtml`, `applyEnvVarValidation`,
-  `refreshEnvVarValidation`, `wireEnvVarValidation`), `popup/popup.js` (`render()`),
-  `popup/companion-client.js` (`generate()` guard), the inputs in `popup/screens/idle.html`,
-  `api-config.html`, `browser-actions-ui.js`, `request-headers-ui.js`, `api-config-ui.js`,
-  `api-bootstrap-ui.js`, `envVar.*`/`help.envVar.*` in `i18n/*.json`
+- Extension: `popup/env-var.ts` (pure: `validateEnvVarName`, `findInvalidEnvVarNames`),
+  `popup/env-var-ui.ts` (`envVarNoteHtml`, `applyEnvVarValidation`,
+  `refreshEnvVarValidation`, `wireEnvVarValidation`), `popup/popup.ts` (`render()`),
+  `popup/companion-client.ts` (`generate()` guard), the inputs in `popup/screens/idle.html`,
+  `api-config.html`, `browser-actions-ui.ts`, `request-headers-ui.ts`, `api-config-ui.ts`,
+  `api-bootstrap-ui.ts`, `envVar.*`/`help.envVar.*` in `i18n/*.json`
 - Tests: `popup/env-var.test.js`, real-browser check
   `e2e/examples/issue-397-env-var-help-check.js`
 
@@ -641,12 +708,12 @@ The "Regex extract" transform gets a **Pattern helper** (recipes: first number, 
 text after/before/between, text inside brackets — the user's text escaped, only
 constructs .NET and Python read the same), and "Convert to date" pre-selects the format
 guessed from the picked value. The recipe panel keeps its state in its own DOM; the
-transform objects are unchanged. See CLAUDE.md for the details.
+transform objects are unchanged. See docs/design-notes/extension.md for the details.
 
-- Extension: `popup/transform-helpers.js` (pure: `buildRecipe`, `previewRecipe`,
-  `inferDateFormat`), `popup/transform-helpers-ui.js`, `popup/field-transforms-ui.js`
+- Extension: `popup/transform-helpers.ts` (pure: `buildRecipe`, `previewRecipe`,
+  `inferDateFormat`), `popup/transform-helpers-ui.ts`, `popup/field-transforms-ui.ts`
   (`getRawValue` getter through `renderTransformList`/`wireTransformList`),
-  `flat-mode-ui.js`/`container-tree-ui.js`/`api-config-ui.js` (raw-value resolvers),
+  `flat-mode-ui.ts`/`container-tree-ui.ts`/`api-config-ui.ts` (raw-value resolvers),
   `transforms.helper.*`/`help.transforms.*` in `i18n/*.json`
 - Companion (tests only): `ScrapingFactory.Tests/RegexRecipeEndToEndTests.cs`
 - Tests: `popup/transform-helpers.test.js` (incl. Python `re` parity),
@@ -659,26 +726,52 @@ Labels, help and a preset for the Monitoring section: a one-sentence intro, a
 "Warn me" / "Stop the run" severity wording with its own popover (no wire change), one
 popover per hardening check, thresholds written as sentences, the rare blocking options
 under an "Advanced" disclosure, and a one-click "Recommended checks" preset. See
-CLAUDE.md for the details.
+docs/design-notes/extension.md for the details.
 
-- Extension: `popup/hardening-presets.js` (pure: `applyRecommendedHardening`),
-  `popup/settings-panel-ui.js` (button wiring, null-rate row sentences),
+- Extension: `popup/hardening-presets.ts` (pure: `applyRecommendedHardening`),
+  `popup/settings-panel-ui.ts` (button wiring, null-rate row sentences),
   `popup/screens/idle.html` (intro, heading, hosts, sentences, disclosure),
   `idle.hardening*`/`help.hardening.*` in `i18n/*.json`
 - Tests: `popup/hardening-presets.test.js`, `popup/hardening-presets-ui.test.js`,
   real-browser check `e2e/examples/issue-399-hardening-plain-language-check.js`
 
+### 2.10n German documentation (Issue #436)
+
+`docs/user/de/*.md` is the German version of the user documentation (same file names, same heading
+structure), built next to the English pages; "Learn more" opens the German page when the panel is
+German. No wire-format or companion change. See docs/design-notes/extension.md for the details.
+
+- Build: `extension/docs-build.js` (both trees, `anchors.json`, source stamps, `translationStatus`),
+  `extension/docs-template/docs.css` (language switch), `install/build-bundle.sh` (both Markdown trees)
+- Extension: `popup/docs-links.ts` (`resolveDocTarget(key, language, anchors)`), `popup/docs-links-ui.ts`
+  (loads `docs/anchors.json` when the panel is German), `common.learnMore`
+- Screenshots/checks: `e2e/screenshots/run.js --language de`, `lib.js` (`imagesDirFor`, `word()`),
+  `check-docs.js` (both trees, translation status)
+- Tests: `docs-build.test.js`, `popup/docs-links.test.js`, `popup/docs-links-ui.test.js`, real-browser check
+  `e2e/examples/issue-436-german-docs-check.js`
+
+### 2.10m Pick ids for the pending-selector fallback (Issue #429)
+
+Each element pick carries a `pickId`; the service worker's fallback write stores it, the panel records the
+pick it handled, and a restore ignores a stored selector of an already handled pick, so a late write can
+no longer reopen a field dialog after a reload. No wire-format or companion change. See docs/design-notes/extension.md.
+
+- Extension: `content/content-script.ts` (`pickId`), `background/service-worker.ts` (`pendingPickId`),
+  `popup/message-router.ts` + `popup/session-restore.ts` (`markPickHandled`, `isLeftoverOfHandledPick`)
+- Tests: `popup/session-restore.test.js`, `background/service-worker.test.js`, `content/content-script*.test.js`,
+  `popup/api-capture-flow.test.js`, real-browser check `e2e/examples/issue-429-pending-selector-race-check.js`
+
 ### 2.10l Bundled documentation and "Learn more" (Issue #354 Part B)
 
 `docs/user/*.md` is built into HTML pages inside the extension (`dist/docs/`), the panel's
 long hints became one line each, and "Learn more" links open the bundled page offline. No
-wire-format or companion change. See CLAUDE.md for the details.
+wire-format or companion change. See docs/design-notes/extension.md for the details.
 
 - Build: `extension/docs-build.js` (markdown → HTML, link/anchor check, `slugify`),
   `extension/docs-template/docs.css`, `extension/build.js` (`copyDocs`), `install/build-bundle.sh`
   (docs as files in the bundle)
-- Extension: `popup/docs-links.js` (key → page#anchor table), `popup/docs-links-ui.js`
-  (links, click, `learnMoreHtml`), `popup/help-popover-ui.js` (`data-doc` on a help host),
+- Extension: `popup/docs-links.ts` (key → page#anchor table), `popup/docs-links-ui.ts`
+  (links, click, `learnMoreHtml`), `popup/help-popover-ui.ts` (`data-doc` on a help host),
   `popup/screens/*.html`/`popup.html` (the links), `common.learnMore` + shortened `*Hint` texts in `i18n/*.json`
 - Tests: `docs-build.test.js`, `popup/docs-links.test.js`, `popup/docs-links-ui.test.js`,
   `i18n/hint-length.test.js`, real-browser check `e2e/examples/issue-354-bundled-docs-check.js`
@@ -689,12 +782,12 @@ Plainer names for the jargon terms (output layout, safety checks, "Alerts & safe
 skip-if-unchanged, "Collect from the page", "Remove duplicates"), rarely used options under
 remembered "Advanced" groups that open themselves when the option is in use, a 1-based
 "Part" in Split field, and a glossary on the Settings screen. Labels and grouping only: no
-wire-format, companion or generated-script change. See CLAUDE.md for the details.
+wire-format, companion or generated-script change. See docs/design-notes/extension.md for the details.
 
-- Extension: `i18n/{de,en,es}.json` (renamed values; keys unchanged), `popup/advanced-defaults.js`
+- Extension: `i18n/{de,en,es}.json` (renamed values; keys unchanged), `popup/advanced-defaults.ts`
   (pure: does a retry code list / dedup retention differ from its default?),
-  `popup/advanced-disclosure-ui.js` (`autoOpenAdvanced`), `popup/combine-split-fields.js`
-  (`partNumberToIndex`/`indexToPartNumber`), `popup/glossary.js` + `glossary-ui.js`,
+  `popup/advanced-disclosure-ui.ts` (`autoOpenAdvanced`), `popup/combine-split-fields.ts`
+  (`partNumberToIndex`/`indexToPartNumber`), `popup/glossary.ts` + `glossary-ui.ts`,
   `popup/screens/{idle,settings,modals}.html`, `help.outputLayout|safetyChecks|preflight|dedup.overview`
 - Tests: `popup/advanced-defaults.test.js`, `advanced-groups-ui.test.js`, `glossary.test.js`,
   `combine-split-fields.test.js`, real-browser check `e2e/examples/issue-407-terminology-advanced-check.js`
@@ -705,14 +798,14 @@ wire-format, companion or generated-script change. See CLAUDE.md for the details
 paths, the cursor's body field, the bootstrap token path), "?" popovers for URL parts,
 value sources and the body, and the rarely needed options (auth bootstrap, cursor and
 Link pagination, browser discovery, value type) under "Advanced". No wire-format or
-companion change. See CLAUDE.md for the details.
+companion change. See docs/design-notes/extension.md for the details.
 
-- Extension: `popup/json-path-picker.js` (pure tree model + path derivation),
-  `popup/json-path-picker-ui.js` (state-driven panel, loading, wiring),
-  `popup/api-cursor-pagination-ui.js`/`api-bootstrap-ui.js`/`api-response-tree-ui.js`
-  (buttons and panels), `popup/advanced-disclosure-ui.js` (`autoOpenAdvanced`),
+- Extension: `popup/json-path-picker.ts` (pure tree model + path derivation),
+  `popup/json-path-picker-ui.ts` (state-driven panel, loading, wiring),
+  `popup/api-cursor-pagination-ui.ts`/`api-bootstrap-ui.ts`/`api-response-tree-ui.ts`
+  (buttons and panels), `popup/advanced-disclosure-ui.ts` (`autoOpenAdvanced`),
   `popup/screens/api-config.html`/`modals.html`, `jsonPathPicker.*`/`help.api*` in `i18n/*.json`;
-  `content/content-script.js` (`readEmbeddedJson`) + `background/service-worker.js`
+  `content/content-script.ts` (`readEmbeddedJson`) + `background/service-worker.ts`
   (`GET_EMBEDDED_JSON`)
 - Tests: `popup/json-path-picker.test.js`, `json-path-picker-ui.test.js`,
   `api-config-guidance.test.js`, real-browser checks `e2e/examples/issue-404-*.js`
@@ -723,16 +816,16 @@ A page-number URL template proposed from a clicked "next"/"page 2" link or a sta
 that already says page 1, the typed "next" selector and the whole "Discover start URLs"
 option under "Advanced", and "?" popovers for the pattern and the max-pages limit. The
 companion's page-number template now needs only `{page}` for a single start page. See
-CLAUDE.md for the details.
+docs/design-notes/extension.md for the details.
 
-- Extension: `popup/pagination-template.js` (pure derivation), `popup/pagination-ui.js`
-  (banner, pickers, Advanced placement), `popup/message-router.js`/`session-restore.js`
+- Extension: `popup/pagination-template.ts` (pure derivation), `popup/pagination-ui.ts`
+  (banner, pickers, Advanced placement), `popup/message-router.ts`/`session-restore.ts`
   (the clicked link's address), `popup/screens/idle.html`, `idle.pagination*`/
   `help.pagination.*`/`help.discoveredUrls.*` in `i18n/*.json`
 - Companion: `IR/ScrapingPlanValidator.cs` (`ValidatePageNumberUrlTemplate`),
   `IR/PaginationConfig.cs` (doc comment)
 - Tests: `popup/pagination-template.test.js`, `popup/pagination-ui.test.js`,
-  `ScrapingPlanValidatorTests`, `PaginationEndToEndTests`, fixture
+  `ScrapingPlanValidator*Tests`, `PaginationEndToEndTests`, fixture
   `test-pages/paginated-listing` + `e2e/examples/issue-405-pagination-helpers-check.js`
 
 ### 2.10h Login flow guidance for the browser actions (Issue #403)
@@ -740,12 +833,12 @@ CLAUDE.md for the details.
 A "Login form (4 steps)" starter, role-named cards, times in seconds, an overview and
 "Max. rounds" popover, and the rarely used options under "Advanced". UI-only: the
 wire format and generated scripts are unchanged (a starter action's `role` never
-leaves the draft). See CLAUDE.md for the details.
+leaves the draft). See docs/design-notes/extension.md for the details.
 
-- Extension: `popup/login-flow.js` (pure: `addLoginFlow`, `msToSecondsText`,
-  `secondsTextToMs`), `popup/browser-actions-ui.js` (cards, starter wiring),
-  `popup/api-browser-discovery-ui.js` (the discovery action editor shares the seconds inputs),
-  `popup/advanced-disclosure-ui.js` (open state applied synchronously),
+- Extension: `popup/login-flow.ts` (pure: `addLoginFlow`, `msToSecondsText`,
+  `secondsTextToMs`), `popup/browser-actions-ui.ts` (cards, starter wiring),
+  `popup/api-browser-discovery-ui.ts` (the discovery action editor shares the seconds inputs),
+  `popup/advanced-disclosure-ui.ts` (open state applied synchronously),
   `popup/screens/idle.html`, `browserActions.*`/`help.browserActions.*` in `i18n/*.json`
 - Tests: `popup/login-flow.test.js`, real-browser check
   `e2e/examples/issue-403-login-starter-check.js`
@@ -756,12 +849,12 @@ leaves the draft). See CLAUDE.md for the details.
 Referer, User-Agent, Cookie, Authorization, X-Api-Key, Other) instead of an empty
 free-text row. Secrets default to an environment variable, a recognised header shows a
 plain-language description, and a credential-looking header kept as a fixed value gets a
-warning with a one-click switch. No wire-format or companion change. See CLAUDE.md for
+warning with a one-click switch. No wire-format or companion change. See docs/design-notes/extension.md for
 the details.
 
-- Extension: `popup/request-header-presets.js` (pure: presets, `isSecretHeaderName`,
-  `suggestHeaderEnvName`), `popup/request-headers.js` (`appendHeaderRow`),
-  `popup/request-headers-ui.js` (picker, notes, warning wiring),
+- Extension: `popup/request-header-presets.ts` (pure: presets, `isSecretHeaderName`,
+  `suggestHeaderEnvName`), `popup/request-headers.ts` (`appendHeaderRow`),
+  `popup/request-headers-ui.ts` (picker, notes, warning wiring),
   `popup/screens/idle.html` (`#select-add-request-header`), `popup/popup.css`
   (`.request-header-picker`/`-notes`), `requestHeaderPresets.*`/`help.requestHeaders.picker`
   in `i18n/*.json`
@@ -775,25 +868,25 @@ from a dropdown, independently of the browser's own UI language — via a small
 custom dictionary system rather than the browser's built-in `chrome.i18n`, which
 is tied to browser language and can't be switched from inside the extension.
 
-- Extension: `i18n/i18n.js`, `i18n/de.json`/`en.json`/`es.json`, every popup
-  module's `t(...)` calls, `popup.js`'s `applyStaticTranslations`
+- Extension: `i18n/i18n.ts`, `i18n/de.json`/`en.json`/`es.json`, every popup
+  module's `t(...)` calls, `popup.ts`'s `applyStaticTranslations`
 
 ### 2.11a Help popover and "Advanced" disclosure (Issue #396)
 
 Reusable UI building blocks for explaining an option *at the option* (a short
 "?" popover with an optional example, text under `help.<area>.<field>` in the
 three dictionaries) and for tucking rarely needed options into a collapsed,
-per-section-remembered `<details>`. See CLAUDE.md (Browser Extension section)
+per-section-remembered `<details>`. See `docs/design-notes/extension.md`
 for the conventions and the sync test that enforces them.
 
-- Extension: `popup/help-popover.js` (pure) + `popup/help-popover-ui.js`
+- Extension: `popup/help-popover.ts` (pure) + `popup/help-popover-ui.ts`
   (`initHelpPopovers`, `wireHelpPopoverEvents`; hosts declared as
   `<span class="help-host" data-help="help.…">` in `screens/*.html`),
-  `popup/advanced-disclosure.js` + `popup/advanced-disclosure-ui.js`
+  `popup/advanced-disclosure.ts` + `popup/advanced-disclosure-ui.ts`
   (`<details data-advanced="…">`, `chrome.storage.local` key `advancedSections`),
   `popup/popup.css` (`.help-btn`, `.help-popover`, `.advanced-disclosure`),
   `help.*`/`common.helpBtn`/`common.advanced` in `i18n/*.json`, wired from
-  `popup.js` (`applyStaticTranslations`, `wireEvents`, `init`)
+  `popup.ts` (`applyStaticTranslations`, `wireEvents`, `init`)
 - Tests: `popup/help-popover.test.js`, `popup/help-popover-ui.test.js`,
   `popup/advanced-disclosure.test.js`, `i18n/help-i18n.test.js` (key sync across
   de/en/es and HTML), real-browser check
@@ -807,10 +900,10 @@ shareable report, and can pre-fill a GitHub issue with it — so a bug can be
 diagnosed from what actually happened, without having to ask the user to
 reproduce it live or describe it from memory.
 
-- Extension: `shared/logger.js` (ring buffer, one instance per JS context),
-  `popup/popup.js` (`collectLogs`, `buildBugReport`, `buildGithubIssueUrl`,
-  `downloadBugReport`, `reportBug`), `background/service-worker.js`/
-  `content/content-script.js` (`GET_LOGS` responders)
+- Extension: `shared/logger.ts` (ring buffer, one instance per JS context),
+  `popup/popup.ts` (`collectLogs`, `buildBugReport`, `buildGithubIssueUrl`,
+  `downloadBugReport`, `reportBug`), `background/service-worker.ts`/
+  `content/content-script.ts` (`GET_LOGS` responders)
 
 ### 2.13 DOM tree view & selection-preview highlighting
 
@@ -822,17 +915,17 @@ right now — so a wrong or too-broad selector is visible immediately, without
 running a full trial. Distinct from the *data* preview in §2.8, which shows
 scraped values after a real `/generate` trial run, not live DOM matches.
 
-- Extension: `popup/popup.js` (`requestDomTree`, `renderDomTree`,
+- Extension: `popup/popup.ts` (`requestDomTree`, `renderDomTree`,
   `highlightHover`/`highlightSelected`, `startPreview`/`stopPreview`/`togglePreview`),
-  `content/content-script.js` (`serializeDomTree`, `computePreviewMatches`,
+  `content/content-script.ts` (`serializeDomTree`, `computePreviewMatches`,
   `matchFlatFields`/`matchGroupTree`, the preview-overlay drawing functions)
 - Single-row hover highlight (Issue #233): hovering one flat field row or
   container tree row highlights just that row's element(s) on the page, in
-  green, with no toggle — `popup/hover-highlight.js` (`buildFlatFieldHighlight`,
+  green, with no toggle — `popup/hover-highlight.ts` (`buildFlatFieldHighlight`,
   `buildGroupNodeHighlight`, `wireHoverHighlight`, wired from
-  `flat-mode-ui.js`/`container-tree-ui.js`), `HOVER_HIGHLIGHT`/
-  `HOVER_HIGHLIGHT_CLEAR` in `background/service-worker.js`'s
-  `FORWARD_TO_TAB`, `content/content-script.js` (`matchHoverHighlight`,
+  `flat-mode-ui.ts`/`container-tree-ui.ts`), `HOVER_HIGHLIGHT`/
+  `HOVER_HIGHLIGHT_CLEAR` in `background/service-worker.ts`'s
+  `FORWARD_TO_TAB`, `content/content-script.ts` (`matchHoverHighlight`,
   `showHoverHighlight`/`clearHoverHighlight`, the shared `createHighlightBox`)
 
 ### 2.14 Configuration export ("Konfiguration exportieren")
@@ -842,7 +935,7 @@ byte the same request body `/generate` would receive, plus a timestamp and
 extension version — so a user can attach their exact setup to a bug/selector
 report instead of describing it by hand.
 
-- Extension: `popup/popup.js` (`buildConfigExport`, `downloadConfigExport`) — reuses
+- Extension: `popup/popup.ts` (`buildConfigExport`, `downloadConfigExport`) — reuses
   `buildScrapingConfig` verbatim, no companion involvement
 
 ### 2.14a Local saved-configuration history (Issue #141)
@@ -864,14 +957,14 @@ leaves the user's machine, same trust boundary as `/generate` itself; an older
 companion without `/configs` (or a network hiccup) just leaves the panel
 empty, no error shown.
 
-- Extension: `popup/popup.js` (`fetchSavedConfigs`, `saveCurrentConfig`,
+- Extension: `popup/popup.ts` (`fetchSavedConfigs`, `saveCurrentConfig`,
   `loadSavedConfig`, `deleteSavedConfig`, `renderSavedConfigsList`,
   `requestDeleteSavedConfig`/`cancelDeleteSavedConfig`), `popup/
-  config-import.js` (`applyConfigToState` — the reverse of
+  config-import.ts` (`applyConfigToState` — the reverse of
   `buildScrapingConfig`/`buildConfigExport`)
 - Companion: `SavedConfigStore.cs` (SQLite-backed, `Host`-scoped lookup —
   the config JSON itself is stored and returned opaquely, never deserialized
-  into `ScrapingConfig`), `Program.cs` (`POST /configs`, `GET
+  into `ScrapingConfig`), `Endpoints/ConfigEndpoints.cs` (`POST /configs`, `GET
   /configs?url=...`, `GET /configs/{id}`, `DELETE /configs/{id}`)
 
 ### 2.14b Persist and browse run outputs (Issue #202)
@@ -891,7 +984,7 @@ than needing the extension/companion application layer to clean them up
 first. Storage/browse/download only — evaluating hardening checks against a
 saved output is a separate, not-yet-implemented issue (#207).
 
-- Extension: `popup/popup.js` (`saveCurrentOutput`, `fetchSavedOutputs`,
+- Extension: `popup/popup.ts` (`saveCurrentOutput`, `fetchSavedOutputs`,
   `toggleSavedConfigOutputs`, `downloadSavedOutput`,
   `requestDeleteSavedOutput`/`cancelDeleteSavedOutput`/`deleteSavedOutput`,
   `renderSaveOutputModal`, `openSaveConfigModal`, `downloadFile` — the
@@ -900,7 +993,7 @@ saved output is a separate, not-yet-implemented issue (#207).
   feature's own modal/download action)
 - Companion: `SavedConfigStore.cs` (`SavedOutputs` table, `SavedConfigId`
   foreign key with `ON DELETE CASCADE`, `OpenConnection()` enabling `PRAGMA
-  foreign_keys` for every query so that cascade actually fires), `Program.cs`
+  foreign_keys` for every query so that cascade actually fires), `Endpoints/ConfigEndpoints.cs`
   (`POST/GET /configs/{configId}/outputs`, `GET/DELETE
   /configs/{configId}/outputs/{id}`)
 
@@ -912,7 +1005,7 @@ with invalid characters stripped the same way on both the extension (for the
 actual download) and the companion (baked into the script's own "Run: python
 X.py" comment) — so the two names shown to the user always agree.
 
-- Extension: `popup/popup.js` (`sanitizeFileNameBase`, the output-settings inputs,
+- Extension: `popup/popup.ts` (`sanitizeFileNameBase`, the output-settings inputs,
   `triggerDownload`)
 - Companion: `IR/FileNameSanitizer.cs`, `IR/ScrapingConfig.cs`
   (`ScriptFileName`/`OutputFileName`), `IR/ScrapingPlan.cs`
@@ -928,9 +1021,9 @@ the frame the click happened in, so the generated Playwright script can reach th
 same element later via chained frame locators. Static-engine scripts have no
 concept of frames at all, so this only applies to the Browser engine (§2.6).
 
-- Extension: `content/content-script.js` (the whole "Cross-frame path resolution"
+- Extension: `content/content-script.ts` (the whole "Cross-frame path resolution"
   section — `resolveFramePath`, `handleFramePathMessage`, `findIframeSelectorForWindow`),
-  `popup/popup.js` (`frameBadgeHtml`, `pendingFramePath` threading through every
+  `popup/popup.ts` (`frameBadgeHtml`, `pendingFramePath` threading through every
   confirm handler)
 - Companion: `FramePath` properties on `ScrapingField`/`ExtractStep`/`WaitForStep`/
   `FillStep`/`ClickStep`/`ScrollStep`/`GroupNode`/`DataFieldNode`/every
@@ -944,11 +1037,11 @@ picked, instead of only surfacing much later via a full `/generate` round-trip
 and trial run (§2.7). Purely client-side — the content script already has the
 live DOM in front of it, so it can just ask it directly.
 
-- Extension: `content/content-script.js` (`countSelectorMatches`, called from
+- Extension: `content/content-script.ts` (`countSelectorMatches`, called from
   `onClick` alongside `buildSelector`; result travels as `matchCount` on the
-  `ELEMENT_SELECTED` message), `background/service-worker.js`
+  `ELEMENT_SELECTED` message), `background/service-worker.ts`
   (`pendingMatchCount` in the same session-storage fallback as
-  `pendingSelector`/`pendingFramePath`), `popup/popup.js`
+  `pendingSelector`/`pendingFramePath`), `popup/popup.ts`
   (`_state.pendingMatchCount`, `renderMatchCountHint` for the flat/container
   field modals, `showMatchCountToast` for container-group creation, which has
   no confirmation modal of its own to show a hint in)
@@ -962,10 +1055,10 @@ output row — e.g. turning `"Preis: 12,99 €"` into `"12.99"` without the user
 hand-editing the generated script. Added independently to all three field
 shapes (flat/container/API) since none of them share a common leaf type.
 
-- Extension: `popup/field-transforms.js` (pure data helpers — create/add/
-  remove/update/changeKind/move/validate), `popup/field-transforms-ui.js`
+- Extension: `popup/field-transforms.ts` (pure data helpers — create/add/
+  remove/update/changeKind/move/validate), `popup/field-transforms-ui.ts`
   (DOM rendering + delegated event wiring, shared between `modal-field-name`
-  and `modal-field-extended`), `popup/popup.js` (`_state.pendingTransforms`,
+  and `modal-field-extended`), `popup/popup.ts` (`_state.pendingTransforms`,
   `lastFieldModalSelector` — tells a genuine modal reopen apart from a
   re-render triggered by editing a transform row)
 - Companion: `IR/FieldTransform.cs` (`TrimTransform`/`RegexExtractTransform`/
@@ -978,30 +1071,30 @@ shapes (flat/container/API) since none of them share a common leaf type.
   `PythonApiConfigLiteral`, and flat mode's own `TRANSFORMS` dict)
 - All six leaf templates (§2.6/§2.3/§2.4's own template list) carry the same
   hand-duplicated `_apply_transforms`/`_to_number` runtime helper pair — see
-  the Python Templates section of `CLAUDE.md` for the `_to_number` heuristic's
+  the `docs/design-notes/templates.md` for the `_to_number` heuristic's
   documented ambiguity.
 - **Live preview** (Issue #143): a hint below the transform list in
   `modal-field-name`/`modal-field-extended` shows what the chain actually
   produces against the picked element's real raw value, updating live as
   steps are added/edited/reordered/removed — entirely client-side, no
-  `/generate` round trip. `content-script.js`'s `onClick` collects the
+  `/generate` round trip. `content-script.ts`'s `onClick` collects the
   clicked element's trimmed text and full attribute map
   (`collectElementAttributes`), sent as `rawText`/`attributes` on the same
   `ELEMENT_SELECTED` message the selector/matchCount already travel on;
-  `service-worker.js`'s session-storage fallback persists them as
+  `service-worker.ts`'s session-storage fallback persists them as
   `pendingRawText`/`pendingElementAttributes` alongside `pendingMatchCount`.
-  `field-transforms.js`'s `applyTransformsPreview`/`toNumberPreview` are a
+  `field-transforms.ts`'s `applyTransformsPreview`/`toNumberPreview` are a
   hand-kept JS mirror of the Python runtime's own
   `_apply_transforms`/`_to_number` — an invalid-for-JS regex pattern makes
   the preview return `null` (rendered as "preview unavailable") instead of
   throwing.
 - **API mode follow-up:** the same editor is also reachable from the
   `API_CONFIG` tree screen (§2.16), via a "Transformieren" button rendered
-  next to every leaf `ApiField` row in `popup/api-response-tree-ui.js`'s
+  next to every leaf `ApiField` row in `popup/api-response-tree-ui.ts`'s
   `buildApiTreeNodeEl` (never for a group node — only a leaf actually
   extracts a value, matching `ApiGroup` having no `Transforms` property on
   the companion side). Opens `modal-api-field-transforms`, reusing the exact
-  same `field-transforms.js`/`field-transforms-ui.js` editor and
+  same `field-transforms.ts`/`field-transforms-ui.ts` editor and
   `_state.pendingTransforms` slot the flat/container modals already use
   (mutually exclusive screens, no conflict); confirming writes the chain
   onto the `ApiField` draft node via `updateApiTreeNode`, and
@@ -1010,10 +1103,10 @@ shapes (flat/container/API) since none of them share a common leaf type.
 - **API mode live preview** (Issue #147): unlike a DOM pick, a tree field
   node has no raw value to preview against once inserted — the only value
   ever available is the one matched at candidate-confirm time.
-  `buildApiFieldDraft` (`api-config.js`) gained an optional `sampleValue`
+  `buildApiFieldDraft` (`api-config.ts`) gained an optional `sampleValue`
   (the raw JSON scalar the field/sibling resolved to — `candidate.value` for
   the primary field, or the matching entry's own `.value` in
-  `candidate.siblings` for a picked sibling, see `content-script.js`'s
+  `candidate.siblings` for a picked sibling, see `content-script.ts`'s
   `siblingFields`) — popup-internal only, never sent to the companion.
   `openApiFieldTransformsModal` converts it into `pendingRawText` the same
   way the Python runtime resolves a value before applying transforms (`""`
@@ -1061,14 +1154,14 @@ for a hardening check that runs once at the very end, not per-transform).
   `RangeFormat.CompilePattern` does in C#, and rejects a structurally-
   matching but non-existent calendar date (e.g. `"2026-02-30"`) via
   `datetime.date`'s own `ValueError`.
-- Extension: the shared `field-transforms.js`/`field-transforms-ui.js`
+- Extension: the shared `field-transforms.ts`/`field-transforms-ui.ts`
   editor (§2.18) gains the three kinds directly — no new module, since every
   mode's transform modal already routes through this one editor.
   `toIntegerPreview`/`toBooleanPreview`/`toDatePreview` are hand-kept JS
   mirrors of the three new Python helpers, feeding the existing live preview
   (Issue #143) the same way `toNumberPreview` already does.
 - Tests: `FieldTransformJsonTests` (polymorphic (de)serialization),
-  `ScrapingPlanValidatorTests` (`OnError`/`SourceFormat` validation),
+  `ScrapingPlanValidator*Tests` (`OnError`/`SourceFormat` validation),
   `TypeConversionTransformEndToEndTests` (real generated-script runs proving
   each kind's success/failure/onError behavior — the same "black-box
   `PythonScriptVerifier` can't see per-cell values" reasoning
@@ -1092,8 +1185,8 @@ float rounding); a mismatch goes through the shared `onError` contract.
   `UseDefault`-needs-a-value rule), `PythonFieldTransformLiteral`
 - Every template carrying `_apply_transforms` (all eight): `_CURRENCY_FORMATS`
   table + `_to_currency`
-- Extension: `field-transforms.js` (`toCurrencyPreview` — hand-kept JS mirror
-  of `_to_currency` — plus `CURRENCY_FORMAT_IDS`), `field-transforms-ui.js`
+- Extension: `field-transforms.ts` (`toCurrencyPreview` — hand-kept JS mirror
+  of `_to_currency` — plus `CURRENCY_FORMAT_IDS`), `field-transforms-ui.ts`
   (format `<select>`), i18n `transforms.toCurrencyOption`/`transforms.currencyFormat.*`
 - Tests: `CurrencyTransformTests.cs` (wire format, validation, real
   generated-script runs for every preset across flat/container/API),
@@ -1110,16 +1203,16 @@ with the extension; the user's own presets live in a small cross-site
 companion store, the same way Output Blueprints do (§2.23). Applying appends
 a copy of the steps (an existing chain is never replaced).
 
-- Extension: `popup/transform-presets.js` (`BUILTIN_TRANSFORM_PRESETS`,
+- Extension: `popup/transform-presets.ts` (`BUILTIN_TRANSFORM_PRESETS`,
   `allTransformPresets`, `applyTransformPreset`, `transformChainIsSaveable`),
-  `popup/transform-presets-ui.js` (fetch wrappers, the "Apply preset … / Save
+  `popup/transform-presets-ui.ts` (fetch wrappers, the "Apply preset … / Save
   as preset" controls under all three transform editors, the Settings
   section), `.transform-preset-controls` in `screens/modals.html`,
   `#settings-transform-presets-section` in `screens/settings.html`,
-  `bridge.fetchTransformPresets` called from `companion-client.js`'s health
+  `bridge.fetchTransformPresets` called from `companion-client.ts`'s health
   check
 - Companion: `TransformPresetStore.cs` (`transform-presets.db`), `/transform-presets`
-  POST/GET/PUT(rename)/DELETE and `ValidateTransformPresetChain` in `Program.cs`
+  POST/GET/PUT(rename)/DELETE and `ValidateChain` in `Endpoints/TransformPresetEndpoints.cs`
 - Tests: `TransformPresetsEndpointTests.cs`, `extension/popup/transform-presets.test.js`,
   real-browser check `e2e/examples/issue-279-transform-presets-check.js`
 
@@ -1131,7 +1224,7 @@ results from every URL are combined into a single output file. Applies to
 flat and container mode only; API mode already builds its own request URL
 from `urlTemplate`/`Parameters` and rejects the combination outright.
 
-- Extension: `popup/popup.js` (`_state.additionalStartUrls`,
+- Extension: `popup/popup.ts` (`_state.additionalStartUrls`,
   `parseAdditionalUrls` — splits the textarea on newlines and drops blank
   lines, threaded through `buildScrapingConfig`/`buildConfigExport` as
   `additionalUrls`), `popup/popup.html` (`#input-additional-urls`, hidden for
@@ -1143,7 +1236,7 @@ from `urlTemplate`/`Parameters` and rejects the combination outright.
   `IR/ScrapingStep.cs` (`NavigateStep.Urls`, `List<string>` instead of a
   single `Url` — the one breaking change to the canonical `ScrapingPlan`,
   confined to the two code generators below), `IR/ScrapingPlanValidator.cs`
-  (validates every entry, identifying a failure by index), `Program.cs` (the
+  (validates every entry, identifying a failure by index), `Endpoints/GenerateEndpoint.cs` (the
   `Api`+`AdditionalUrls` `400` guard, same style as the existing Fields/
   Groups/Api mutual-exclusivity checks)
 - `Backends/Python/PythonCodeGenerator.cs`/`PythonPlaywrightCodeGenerator.cs`
@@ -1171,7 +1264,7 @@ already has its own page-parameter mechanism via a Number `RangeSource`
 paginates onward independently, entirely inside the generated script's own
 `scrape()` function, so `main()`'s existing multi-URL loop needs no changes.
 
-- Extension: `popup/popup.js` (`_state.pagination`, `buildPaginationConfig`
+- Extension: `popup/popup.ts` (`_state.pagination`, `buildPaginationConfig`
   — mirrors `buildProxyConfig`'s own "incomplete draft = toggle-off"
   convention — threaded through `buildScrapingConfig`/`buildConfigExport`),
   `popup/popup.html` (`#pagination-config` inside the collapsible Settings
@@ -1185,7 +1278,7 @@ paginates onward independently, entirely inside the generated script's own
   `NextLinkSelector`, or — reusing the same `UrlTemplatePlaceholderPattern`
   API mode's own `UrlTemplate` validation already uses — that
   `PageNumberPagination.UrlTemplate` references both `{url}` and `{page}`),
-  `Program.cs` (the `Api`+`Pagination` `400` guard, same style as
+  `Endpoints/GenerateEndpoint.cs` (the `Api`+`Pagination` `400` guard, same style as
   `Api`+`AdditionalUrls`)
 - `Backends/Python/PythonPaginationLiteral.cs` (`BuildContext`, mirrors
   `PythonProxyLiteral`/`PythonChangeDetectionLiteral` exactly — always emits
@@ -1210,7 +1303,7 @@ at all; the companion only validates the config and renders the right
 literals, the actual diff/notify happens entirely at runtime inside the
 generated script.
 
-- Extension: `popup/popup.js` (`_state.changeDetection`,
+- Extension: `popup/popup.ts` (`_state.changeDetection`,
   `buildChangeDetectionConfig` — converts the editable draft into the wire
   shape, returning `null` when disabled or a *required* env-var-name field
   is still blank, threaded through `buildScrapingConfig`/`buildConfigExport`
@@ -1260,7 +1353,7 @@ comma-separated list; the generated script resolves and rotates through it
 entirely at runtime, mirroring how `ChangeDetectionConfig` (Issue #87)
 already keeps credentials env-var-name-only.
 
-- Extension: `popup/popup.js` (`_state.proxy`, `buildProxyConfig` —
+- Extension: `popup/popup.ts` (`_state.proxy`, `buildProxyConfig` —
   converts the editable draft into the wire shape, returning `null` when
   disabled or the env-var-name field is still blank, threaded through
   `buildScrapingConfig`/`buildConfigExport` as `proxy`), `popup/popup.html`
@@ -1322,15 +1415,15 @@ minutes of pauses).
 
 - IR: `IR/RequestDelayConfig.cs` (`ScrapingConfig.RequestDelay`/
   `ScrapingPlan.RequestDelay`), validation in `ScrapingPlanValidator`,
-  Combined-mode outer-config rejection in `Program.cs`
+  Combined-mode outer-config rejection in `Endpoints/GenerateEndpoint.Combined.cs`
 - `Backends/Python/PythonRequestDelayLiteral` (`request_delay.*`), wired in
   `PythonScrapingContextBuilder` and `PythonApiCodeGenerator`
 - Templates: all eight request-making templates — `_pace_request()` before
   every request / page navigation
 - `Backends/Python/PythonScriptVerifier.RunScriptAsync`
   (`PauseAnnouncementPattern`, `MaxRequestDelayExtension`, moving deadline)
-- Extension: `scraping-config-builder.js` (`buildRequestDelayConfig`),
-  `config-import.js` (`applyRequestDelayConfig`), `settings-panel-ui.js`,
+- Extension: `scraping-config-builder.ts` (`buildRequestDelayConfig`),
+  `config-import.ts` (`applyRequestDelayConfig`), `settings-panel-ui.ts`,
   `#toggle-request-delay`/`#request-delay-config` in `screens/idle.html`
 - Tests: `RequestDelayTests.cs`, `extension/popup/request-delay.test.js`,
   real-browser check `e2e/examples/issue-222-request-delay-check.js`
@@ -1344,15 +1437,14 @@ larger of this and a configured pause wins). A site without such a directive
 is unaffected. Disallow re-checking is the separate option of 2.21ab2 below.
 
 - IR: `ScrapingConfig.RespectRobotsDelay`/`ScrapingPlan.RespectRobotsDelay`,
-  Combined-mode outer-config rejection in `Program.cs`
+  Combined-mode outer-config rejection in `Endpoints/GenerateEndpoint.Combined.cs`
 - `Backends/Python/PythonRequestDelayLiteral` (now takes the plan:
   `respect_robots`, `robots_urls_literal`)
 - Fragment `request_delay.py.j2` (`_robots_delay`, `_fetch_robots_delay`,
   `urllib.robotparser`); the fetch itself is `fragments/robots_fetch.py.j2`,
   shared with 2.21ab2
-- Extension: `scraping-config-builder.js` (trailing `respectRobotsDelay`
-  parameter), `config-import.js`, `session-restore.js`,
-  `settings-panel-ui.js`, `#toggle-respect-robots-delay` in `screens/idle.html`
+- Extension: `scraping-config-builder.ts` (`respectRobotsDelay` option), `config-import.ts`, `session-restore.ts`,
+  `settings-panel-ui.ts`, `#toggle-respect-robots-delay` in `screens/idle.html`
 - Tests: `RobotsCrawlDelayTests.cs`, `extension/popup/robots-crawl-delay.test.js`,
   fixture `test-pages/crawl-delay` +
   `e2e/examples/issue-228-robots-crawl-delay-check.js`
@@ -1371,16 +1463,16 @@ subresources, the auth bootstrap or browser-discovery sessions.
 
 - IR: `IR/RobotsDisallowConfig.cs` (`ScrapingConfig.RobotsDisallow`/
   `ScrapingPlan.RobotsDisallow`), Combined-mode outer-config rejection in
-  `Program.cs`
+  `Endpoints/GenerateEndpoint.Combined.cs`
 - `Backends/Python/PythonRobotsDisallowLiteral` (`robots_check.*`), wired in
   `PythonScrapingContextBuilder` and `PythonApiCodeGenerator`
 - Fragments: `robots_fetch.py.j2`, `robots_disallow.py.j2` (included from
   `request_delay.py.j2`); `_robots_gate` guards in the `main_*` fragments, the
   static page loops, the Browser pagination, preflight/discovery/download
   fragments and `api_fetch.py.j2`/`api_common.py.j2`
-- Extension: `scraping-config-builder.js` (trailing `robotsDisallow`),
-  `config-import.js` (`applyRobotsDisallowConfig`), `session-restore.js`,
-  `settings-panel-ui.js`, `#toggle-robots-disallow` in `screens/idle.html`
+- Extension: `scraping-config-builder.ts` (`robotsDisallow` option),
+  `config-import.ts` (`applyRobotsDisallowConfig`), `session-restore.ts`,
+  `settings-panel-ui.ts`, `#toggle-robots-disallow` in `screens/idle.html`
 - Tests: `RobotsDisallowTests.cs`, `RobotsDisallowEndpointTests.cs`,
   `extension/popup/robots-disallow.test.js`, fixture
   `test-pages/robots-disallow` + `e2e/examples/issue-333-robots-disallow-check.js`
@@ -1397,15 +1489,15 @@ output is one case of this mechanism (`ScrapingPlan.AppendsOutput`). Combined
 carries it per component only.
 
 - IR: `ScrapingConfig.AppendOutput`/`ScrapingPlan.AppendOutput`/
-  `AppendsOutput`, Combined-mode outer-config rejection in `Program.cs`
+  `AppendsOutput`, Combined-mode outer-config rejection in `Endpoints/GenerateEndpoint.Combined.cs`
 - Wiring: `PythonScrapingContextBuilder`, `PythonApiCodeGenerator`
   (`append_output`)
 - Fragments: `output_append.py.j2` (included from `main_flat`/`main_grouped`/
   `main_blocks` and the two API templates), the SQLite/Excel branches of
   `output_tabular.py.j2`
-- Extension: `scraping-config-builder.js` (trailing `appendOutput`),
-  `config-import.js`, `session-restore.js`, `settings-panel-ui.js`,
-  `#toggle-append-output` in `screens/idle.html`; `dedup-config.js` lost its
+- Extension: `scraping-config-builder.ts` (`appendOutput` option),
+  `config-import.ts`, `session-restore.ts`, `settings-panel-ui.ts`,
+  `#toggle-append-output` in `screens/idle.html`; `dedup-config.ts` lost its
   tree-shape Append restriction
 - Tests: `AppendOutputTests.cs`, `AppendOutputEndpointTests.cs`,
   `extension/popup/append-output.test.js`,
@@ -1422,7 +1514,7 @@ extends its deadline by the wait plus an allowance for the retried request.
 
 - IR: `IR/RetryConfig.cs` (`ScrapingConfig.Retry`/`ScrapingPlan.Retry`),
   validation in `ScrapingPlanValidator`, Combined outer-config rejection in
-  `Program.cs`
+  `Endpoints/GenerateEndpoint.Combined.cs`
 - `Backends/Python/PythonRetryLiteral` (`retry.*`), wired in
   `PythonScrapingContextBuilder`, `PythonApiCodeGenerator` and (for the
   navigate fragment) `PythonPlaywrightCodeGenerator`
@@ -1430,8 +1522,8 @@ extends its deadline by the wait plus an allowance for the retried request.
   `playwright_navigate_step.py.j2`
 - `Backends/Python/PythonScriptVerifier` (`RetryAnnouncementPattern`,
   `RetryAttemptAllowance`)
-- Extension: `scraping-config-builder.js` (`buildRetryConfig`),
-  `config-import.js` (`applyRetryConfig`), `settings-panel-ui.js`,
+- Extension: `scraping-config-builder.ts` (`buildRetryConfig`),
+  `config-import.ts` (`applyRetryConfig`), `settings-panel-ui.ts`,
   `#toggle-retry`/`#retry-config` in `screens/idle.html`
 - Tests: `RetryTests.cs`, `extension/popup/retry.test.js`, fixture
   `test-pages/flaky-server` + `e2e/examples/issue-223-retry-check.js`
@@ -1450,7 +1542,7 @@ repeating group instance that owns every key field.
 - IR: `IR/DeduplicationConfig.cs` (`ScrapingConfig.Deduplication`/
   `ScrapingPlan.Deduplication`), validation in
   `ScrapingPlanValidator.ValidateDeduplication`, Combined-outer/Blocks
-  rejection in `Program.cs`
+  rejection in `Endpoints/GenerateEndpoint.*.cs`
 - `Backends/Python/PythonDeduplicationLiteral` (`dedup.*` — the flags and the
   configuration as Python literals), wired in `PythonScrapingContextBuilder`
   and `PythonApiCodeGenerator`
@@ -1458,13 +1550,13 @@ repeating group instance that owns every key field.
   `fragments/dedup_{common,flat,tree}.py.j2` right before `main()`
   (`_dedup_filter_rows`/`_dedup_new_rows` for the flat shapes,
   `_dedup_register_instance`/`_dedup_delta_tree` for the tree shapes)
-- Extension: `dedup-config.js` (pure) + `dedup-config-ui.js`
-  (`renderDedupSection`/`wireDedupEvents`), `scraping-config-builder.js`
-  (trailing `deduplication` parameter), `config-import.js`,
-  `session-restore.js`, `#toggle-dedup`/`#dedup-config` in
+- Extension: `dedup-config.ts` (pure) + `dedup-config-ui.ts`
+  (`renderDedupSection`/`wireDedupEvents`), `scraping-config-builder.ts`
+  (`deduplication` option), `config-import.ts`,
+  `session-restore.ts`, `#toggle-dedup`/`#dedup-config` in
   `screens/idle.html`
 - Tests: `DeduplicationEndToEndTests.cs`, `DeduplicationConfigJsonTests.cs`,
-  `ScrapingPlanValidatorTests.cs`, `extension/popup/dedup-config.test.js`,
+  `ScrapingPlanValidator*Tests.cs`, `extension/popup/dedup-config.test.js`,
   fixture `test-pages/dedup-listing` +
   `e2e/examples/issue-225-deduplication-check.js`
 
@@ -1483,7 +1575,9 @@ per engine, per shape) instead of once per template.
 - `Backends/EmbeddedScribanTemplate` (`ExpandIncludes`, recursion/cycle
   guard, re-indentation), `ScrapingFactory.Compiler.csproj` (wildcard
   `EmbeddedResource` for `fragments/*.py.j2`)
-- `language-modules/python/templates/fragments/` (the fragments),
+- `language-modules/python/templates/fragments/` (the fragments; since Issue #395 also the shell blocks the
+  top-level templates share: `playwright_browser_*`, `static_*`, `main_*`, `api_*`, `blueprint_source_index` — see
+  `docs/design-notes/templates.md`),
   `scraper.py.j2` & co. (the templates, now mostly the parts that really
   differ per template)
 - Tests: `TemplateIncludeTests.cs`; the existing end-to-end tests run the
@@ -1501,21 +1595,21 @@ Playwright's `extra_http_headers` (every request of the page) and
 
 - IR: `ScrapingConfig.Headers`/`ScrapingPlan.Headers` (reusing `ApiHeader`),
   validation in `ScrapingPlanValidator.ValidateRequestHeaders`,
-  Api/Combined-outer rejection in `Program.cs`,
+  Api/Combined-outer rejection in `Endpoints/GenerateEndpoint.cs`,
   `FillVerificationValues.Filter` (`requestHeaders`)
 - `Backends/Python/PythonRequestHeadersLiteral` (`request_headers.*`), wired in
   `PythonScrapingContextBuilder` and `PythonPlaywrightCodeGenerator`
 - Fragments: `request_headers_static`, `request_headers_playwright`,
   `require_env_function`; the static/Browser templates and the Browser-engine
   `preflight_playwright`/`discovered_urls_playwright` fragments use them
-- Extension: `request-headers.js` (pure) + `request-headers-ui.js`
+- Extension: `request-headers.ts` (pure) + `request-headers-ui.ts`
   (`renderRequestHeadersSection`/`wireRequestHeadersEvents`),
-  `scraping-config-builder.js` (trailing `requestHeaders` parameter),
-  `companion-client.js` (test values → `verificationValues`),
-  `config-import.js`, `session-restore.js`, `#toggle-request-headers`/
+  `scraping-config-builder.ts` (`requestHeaders` option),
+  `companion-client.ts` (test values → `verificationValues`),
+  `config-import.ts`, `session-restore.ts`, `#toggle-request-headers`/
   `#request-headers-config` in `screens/idle.html`
 - Tests: `RequestHeadersEndToEndTests.cs`, `RequestHeadersEndpointTests.cs`,
-  `ScrapingPlanValidatorTests.cs`, `FillVerificationValuesTests.cs`,
+  `ScrapingPlanValidator*Tests.cs`, `FillVerificationValuesTests.cs`,
   `extension/popup/request-headers.test.js`, fixture
   `test-pages/request-headers` +
   `e2e/examples/issue-226-request-headers-check.js`
@@ -1529,7 +1623,7 @@ part of a selector, at most once, quoted with `'` or `"` (escapes `\"`, `\'`,
 `\\`), non-empty; not allowed in FramePath segments or
 `EmbeddedJsonSource.ScriptSelector`. Three mirrored implementations share test
 vectors: C# `SelectorTextFilter` (validation only), the Python runtime
-fragments, and JS (`content-script.js`, `popup/selector-text-filter.js`).
+fragments, and JS (`content-script.ts`, `popup/selector-text-filter.ts`).
 
 - IR: `IR/SelectorTextFilter.cs`, called from `ScrapingPlanValidator` for every
   selector-bearing step/field/pagination/discovery/browser-discovery action
@@ -1541,13 +1635,13 @@ fragments, and JS (`content-script.js`, `popup/selector-text-filter.js`).
   (patches `query_selector(_all)` and `locator` → `.filter(has_text=...)`)
 - Templates now escape selectors with `string.escape` when rendering them into
   Python string literals
-- Extension: `content-script.js` (`querySelectorAllWithText`,
-  `COUNT_PICK_WITH_TEXT`), `popup/selector-text-filter.js` +
-  `selector-text-filter-ui.js`, text filter row in `modal-field-name` /
+- Extension: `content-script.ts` (`querySelectorAllWithText`,
+  `COUNT_PICK_WITH_TEXT`), `popup/selector-text-filter.ts` +
+  `selector-text-filter-ui.ts`, text filter row in `modal-field-name` /
   `modal-field-extended`, live match count
 - Tests: `SelectorTextFilterTests.cs`, `TextSelectorEndToEndTests.cs`,
-  `ScrapingPlanValidatorTests.cs`, `extension/popup/selector-text-filter.test.js`,
-  `content-script.test.js`, fixture `test-pages/text-selector` +
+  `ScrapingPlanValidator*Tests.cs`, `extension/popup/selector-text-filter.test.js`,
+  `content-script*.test.js`, fixture `test-pages/text-selector` +
   `e2e/examples/issue-227-text-selector-check.js`
 
 ### 2.21ab Click target: first/last/all matches (Issue #267)
@@ -1563,9 +1657,9 @@ the last, or every match in order (with a pause after each click).
   `waitAfterMs`), `PythonPlaywrightCodeGenerator`
 - Templates: `playwright_click_step.py.j2`, `fragments/api_common.py.j2`
   (`_run_browser_action`)
-- Extension: `scraping-config-builder.js` (`addBrowserAction`,
-  `serializeBrowserActions`), `config-import.js`, `browser-actions-ui.js`,
-  `api-config-ui.js`
+- Extension: `scraping-config-builder.ts` (`addBrowserAction`,
+  `serializeBrowserActions`), `config-import.ts`, `browser-actions-ui.ts`,
+  `api-config-ui.ts`
 - Tests: `ClickTargetTests.cs`, `extension/popup/click-target.test.js`,
   fixture `test-pages/click-targets` +
   `e2e/examples/issue-267-click-target-check.js`
@@ -1589,10 +1683,10 @@ needed for Excel only. Appending to an existing file is §2.21ab3.
 - Verifier: `PythonScriptVerifier.VerifyTabularOutputAsync` (helper script),
   `ScriptVerificationResult.OutputFileEncoding`, `/generate` envelope
   `outputFile.encoding`; `HardeningReplayEvaluator.IsReplayable`
-- Extension: `shared/global-settings.js` (`outputFormat`, migration),
-  `global-settings-ui.js`, `screens/settings.html`, `idle-screen-ui.js`
-  (extension + flatten hint), `scraping-config-builder.js`,
-  `download-helpers.js` (base64 decode)
+- Extension: `shared/global-settings.ts` (`outputFormat`, migration),
+  `global-settings-ui.ts`, `screens/settings.html`, `idle-screen-ui.ts`
+  (extension + flatten hint), `scraping-config-builder.ts`,
+  `download-helpers.ts` (base64 decode)
 - Tests: `TabularOutputTests.cs`, `HardeningReplayEvaluatorTests.cs`,
   `extension/popup/tabular-output.test.js`, `e2e/examples/issue-229-tabular-output-check.js`
 
@@ -1625,7 +1719,7 @@ register autostart. The extension is still loaded manually ("Load unpacked").
 - Companion: `CompanionUserSettings.cs`, wired in `Program.cs`
 - Workflow: `.github/workflows/release-bundles.yml`
 - Tests: `CompanionUserSettingsTests.cs`; the Linux installer was verified by
-  hand end to end (see CLAUDE.md), Windows/macOS/systemd paths are untested
+  hand end to end (see `docs/design-notes/companion.md`), Windows/macOS/systemd paths are untested
 
 ### 2.21af MySQL storage backend (Issue #277)
 
@@ -1636,10 +1730,19 @@ stores in one database (tables created on first use, later columns by
 idempotent `information_schema`-checked migrations); an unreachable database
 answers `503`. The installer can write the settings (`--mysql`).
 
-- Companion: `Storage/StorageOptions.cs`, `MySqlSchema.cs`,
+- Companion: `Storage/StorageOptions.cs`, `MySqlSchema.cs`, `SqliteSchema.cs`,
   `MySqlSavedConfigStore.cs`, `MySqlOutputBlueprintStore.cs`,
   `MySqlTransformPresetStore.cs`; DI + startup validation + 503 middleware in
   `Program.cs`; dependency `MySqlConnector`
+- Store layer (Issue #392): every query is written once, against `System.Data.Common`,
+  in an abstract base per store — `Storage/SqlStore.cs` (command/query helpers),
+  `Auth/SqlUserStoreBase.cs`, `Storage/SqlSavedConfigStoreBase.cs`,
+  `SqlOutputBlueprintStoreBase.cs`, `SqlTransformPresetStoreBase.cs`. The SQLite
+  classes (`SqliteUserStore`, `SavedConfigStore`, `OutputBlueprintStore`,
+  `TransformPresetStore`) and the `MySql*Store` classes only add DDL, migrations
+  and the dialect hooks (last insert id, upsert, unique-violation detection,
+  case-insensitive name comparison, host-length limit). Dialect differences:
+  `docs/design-notes/companion.md`, "Store dialects".
 - Installer: `install.sh`/`install.ps1` (`--mysql`, `--sqlite`)
 - CI: `mysql:8.4` service container + `SF_TEST_MYSQL`
 - Tests: `StorageContractTests.cs` (SQLite + MySQL), `StorageProviderTests.cs`
@@ -1659,8 +1762,8 @@ request except `/health` and CORS preflights needs `Authorization: Bearer
   `MySqlUserStore`, `CurrentUser`, `AuthOptions`, `UserCommands`), middleware,
   `/health` (`authRequired`) and `/whoami` in `Program.cs`; `ownerId` on the
   three store interfaces and both implementations (`OwnerId` columns)
-- Extension: `shared/companion-config.js` (access key), `companionFetch` in
-  `popup/companion-client.js`, `global-settings-ui.js` + `screens/settings.html`
+- Extension: `shared/companion-config.ts` (access key), `companionFetch` in
+  `popup/companion-client.ts`, `global-settings-ui.ts` + `screens/settings.html`
 - Installer: `--enable-auth` / `-EnableAuth`
 - Tests: `AuthenticationTests.cs`, `extension/popup/access-key.test.js`,
   `e2e/examples/issue-278-access-key-check.js`
@@ -1675,7 +1778,7 @@ a name exists and a throttle slows guessing. The companion speaks HTTPS when
 `Companion:Tls` is configured and refuses to start with plain HTTP beyond the
 local machine. A self-signed certificate and plain remote HTTP exist only in
 development builds: compile-time in the companion (`CompanionBuild`), a rewritten
-channel constant in the extension (`shared/build-config.js`, set to `release` by
+channel constant in the extension (`shared/build-config.ts`, set to `release` by
 `install/build-bundle.sh`), so a user can't switch either on.
 
 - Companion: `Auth/` (`PasswordHasher`, `LoginThrottle`, `AuthEndpoints`; `IUserStore`
@@ -1683,10 +1786,10 @@ channel constant in the extension (`shared/build-config.js`, set to `release` by
   `disable`, `enable`), `CompanionTls.cs`, `CompanionBuild.cs`,
   `CompanionHostOptions.cs`, `Program.cs` (transport validation, Kestrel HTTPS,
   anonymous paths, `/health` `registration`)
-- Extension: `shared/build-config.js`, `shared/companion-config.js` (address policy,
-  developer flag), `popup/account.js` + `popup/account-ui.js`,
+- Extension: `shared/build-config.ts`, `shared/companion-config.ts` (address policy,
+  developer flag), `popup/account.ts` + `popup/account-ui.ts`,
   `popup/screens/settings.html` (Account, Developer options),
-  `popup/companion-client.js` (`getCompanionInfo`, `useCustomCompanionUrl`)
+  `popup/companion-client.ts` (`getCompanionInfo`, `useCustomCompanionUrl`)
 - Installer: `--registration`, `--host`, `--tls-cert`/`--tls-key`, `--no-tls`;
   `install/build-bundle.sh` (release channel)
 - Tests: `AccountTests.cs`, `CompanionTlsTests.cs`, `shared/companion-url-policy.test.js`,
@@ -1708,9 +1811,9 @@ verified address; a successful reset revokes every token.
   `Storage/MySqlSchema.EnsureIndex`; `UserCommands` (`set-email`, `verify`);
   `Program.cs` (validation, anonymous reset endpoints, `RequireVerified` gate,
   `/health` + `/whoami` fields)
-- Extension: `popup/email-account.js`, `popup/email-account-ui.js`,
-  `popup/account-ui.js` (shared state), `popup/screens/settings.html`,
-  `popup/companion-client.js` (`getCompanionInfo`)
+- Extension: `popup/email-account.ts`, `popup/email-account-ui.ts`,
+  `popup/account-ui.ts` (shared state), `popup/screens/settings.html`,
+  `popup/companion-client.ts` (`getCompanionInfo`)
 - Installer: `--smtp-*`, `--require-email`, `--require-verified-email`,
   `--email-domains`, `--no-email`
 - Tests: `EmailAccountTests.cs`, `popup/email-account*.test.js`,
@@ -1728,13 +1831,13 @@ minutes skips the trial run (response header
 
 - Companion: `Compiler/Backends/VerificationTimeEstimator.cs`,
   `RangeFormat.CountValues` (`Backends/Python/RangeFormat.cs`), the cap and
-  header in `Program.cs`
+  header in `Backends/VerificationPolicy.cs`
 - Tests: `VerificationTimeEstimatorTests.cs`,
   `ApiCombinationTimeoutEndToEndTests.cs`, `CompanionEndpointTests.cs`
 
 The caller can also switch the trial run off (`ScrapingConfig.SkipVerification`,
 Issue #292, the extension's Settings screen): same response mechanics as the
-cap skip, `VerificationSkipReason` in `Program.cs`. Tests:
+cap skip, `VerificationPolicy.SkipReason`. Tests:
 `SkipVerificationEndpointTests.cs`, `e2e/examples/issue-292-skip-verification-check.js`.
 
 ### 2.21ai Clean page-request errors (Issue #319)
@@ -1762,7 +1865,7 @@ exists from a previous run, skip the configured login-flow browser actions
 runs. Avoids repeating a login flow on every scheduled/recurring run of the
 same script.
 
-- Extension: `popup/popup.js` (`_state.persistentSession`, a plain boolean —
+- Extension: `popup/popup.ts` (`_state.persistentSession`, a plain boolean —
   unlike Proxy/Pagination, there are no sub-fields to draft — threaded
   through `buildScrapingConfig`/`buildConfigExport` as `persistentSession`,
   only sent when `true`), `popup/popup.html`
@@ -1825,28 +1928,28 @@ independently (Issue #244, see below), which is what lets two independent/
 sibling source repeating groups (which a `Flat` mapping must reject) each
 map into a different target branch.
 
-- Extension: `popup/output-blueprints.js` (pure — editing a blueprint's own
+- Extension: `popup/output-blueprints.ts` (pure — editing a blueprint's own
   ordered field-name list in the create/edit modal;
   building/validating the per-scrape source-field mapping draft) and
-  `popup/output-blueprints-ui.js` (CRUD against `/blueprints`, the
+  `popup/output-blueprints-ui.ts` (CRUD against `/blueprints`, the
   management modal, the create/edit modal, and the mapping picker itself —
   one `<select>` row per target field, sourced via the same
   `collectFieldNames` the hardening null-rate/required-fields pickers
-  already use). `popup/popup.js` (`_state.selectedOutputBlueprintId`/
+  already use). `popup/popup.ts` (`_state.selectedOutputBlueprintId`/
   `selectedOutputBlueprintFieldNames`/`outputBlueprintMapping`, persisted
-  like Proxy/Hardening), `popup/idle-screen-ui.js`
+  like Proxy/Hardening), `popup/idle-screen-ui.ts`
   (`#output-blueprint-toggle-row`'s mode-gated visibility,
   `OUTPUT_BLUEPRINT_RESET` on any mode switch, blocking "Generate" while a
-  picked mapping is incomplete). `scraping-config-builder.js`
+  picked mapping is incomplete). `scraping-config-builder.ts`
   (`buildOutputBlueprintMapping` → `outputBlueprint`, omitted whenever no
   blueprint is picked or the mapping isn't complete, the same convention
   `buildProxyConfig`/`buildChangeDetectionConfig` already use),
-  `config-import.js` (`applyOutputBlueprintConfig`, the reverse).
-- Extension (Issue #244): `output-blueprints.js` gains tree-schema editing
+  `config-import.ts` (`applyOutputBlueprintConfig`, the reverse).
+- Extension (Issue #244): `output-blueprints.ts` gains tree-schema editing
   helpers for the create/edit modal (`buildBlueprintSchemaGroup`/
   `buildBlueprintSchemaField`/`parseBlueprintSchemaTree`/
   `serializeBlueprintSchemaTree`/`blueprintTreeSchemaIsValid`) — the tree's
-  own structural editing reuses `container-tree.js`'s generic path-based
+  own structural editing reuses `container-tree.ts`'s generic path-based
   helpers directly (`insertContainerNode`/`removeGroupTreeNode`/
   `updateGroupTreeNode`/`moveGroupTreeNode`) rather than reimplementing
   them — and the per-scrape tree mapping draft (`createTreeMappingDraft`/
@@ -1864,7 +1967,7 @@ map into a different target branch.
   `outputBlueprintTreeMapping` through to `buildOutputBlueprintMapping`.
 - Companion: `OutputBlueprintStore.cs` (own SQLite file/db, no FK/cascade —
   a blueprint isn't tied to any saved configuration), five endpoints under
-  `/blueprints` (list/get/create/update/delete) registered in `Program.cs`,
+  `/blueprints` (list/get/create/update/delete) registered in `Endpoints/BlueprintEndpoints.cs`,
   which also rejects `OutputBlueprint` combined with `Combined`/`Blocks`
   with a `400` (the same rejection originally also covered `Groups`/
   `Api.Groups` — see Issue #192 below for why that's gone).
@@ -1877,7 +1980,7 @@ map into a different target branch.
   (`"Flat"`/`"Tree"`) to match that enum's own wire serialization exactly.
   `Save`/`Update` take an additional `schemaKind`/`tree` pair;
   `FieldCount` reports the total leaf count, recursively, for a tree.
-  `Program.cs`'s shared `ValidateBlueprintRequest` local function defaults
+  `BlueprintEndpoints`' shared `ValidateRequest` method defaults
   a missing `schemaKind` to `"Flat"` and validates a `"Tree"` request's own
   `tree` via `OutputBlueprintTreeSchemaValidator.Validate`.
 - Compiler: `IR/OutputBlueprintMapping.cs` (`OutputBlueprintMapping` —
@@ -2013,35 +2116,35 @@ are inherently site-independent concepts. No companion/wire-format changes
 at all — every request `/generate` receives is still byte-for-byte the same
 shape; only *where the extension sources those four values from* changed.
 
-- Extension: `shared/global-settings.js` — one `chrome.storage.local` key
+- Extension: `shared/global-settings.ts` — one `chrome.storage.local` key
   (`globalSettings`) holding all six preferences, mirroring
-  `shared/theme.js`'s exact cache-then-sync-read pattern
+  `shared/theme.ts`'s exact cache-then-sync-read pattern
   (`loadGlobalSettings`/`getGlobalSettings`/`updateGlobalSettings`).
   `popup/screens/settings.html` (new runtime-loaded partial, same
   `loadScreenPartial` convention as `idle.html`/`api-config.html`) +
-  `popup/global-settings-ui.js` (`renderSettingsScreen`/
+  `popup/global-settings-ui.ts` (`renderSettingsScreen`/
   `wireSettingsScreenEvents` — the four toggles and the script-name
   mode/fixed-name controls directly; delegates blueprint management to
-  `output-blueprints-ui.js`'s `renderManageBlueprintsModal` — unchanged,
+  `output-blueprints-ui.ts`'s `renderManageBlueprintsModal` — unchanged,
   just repointed from a modal to a permanent section — and the cross-site
-  list to `saved-configs-ui.js`'s new `renderAllSavedConfigsList`/
+  list to `saved-configs-ui.ts`'s new `renderAllSavedConfigsList`/
   `wireAllSavedConfigsEvents`, which read the already-unconditionally-
   fetched `state.allSavedConfigs` — Issue #239's own Combined-mode
   component-picker fetch, reused here — and share `buildSavedOutputsPanelEl`/
   `handleSavedOutputsSubPanelClick` with the per-site panel's own delegated
-  listener). `scraping-config-builder.js` gains
+  listener). `scraping-config-builder.ts` gains
   `deriveScriptFileNameFromHostname`/`computeScriptFileNamePatch` (pure —
   'hostname' mode always overwrites `scriptFileName` from the current
   site, 'fixed' mode only fills a still-blank one), called from
-  `companion-client.js`'s `checkCompanion()` and `message-router.js`'s
+  `companion-client.ts`'s `checkCompanion()` and `message-router.ts`'s
   stale-tracked-URL self-correction (Issue #85's own `ELEMENT_SELECTED`
   page-changed branch) — both "a fresh site was just detected" points.
-  `popup.js`'s `_state` drops `useJsonOutput`/`includeDataPreview`/
+  `popup.ts`'s `_state` drops `useJsonOutput`/`includeDataPreview`/
   `includeOutputFile`/`externalConfig` entirely; every `buildScrapingConfig`/
-  `buildConfigExport` call site (`companion-client.js`'s `generate()`,
-  `download-helpers.js`'s `downloadConfigExport`, `saved-configs-ui.js`'s
+  `buildConfigExport` call site (`companion-client.ts`'s `generate()`,
+  `download-helpers.ts`'s `downloadConfigExport`, `saved-configs-ui.ts`'s
   `createSavedConfig`) reads them from `getGlobalSettings()` instead.
-  `config-import.js`'s `applyConfigToState` no longer restores any of the
+  `config-import.ts`'s `applyConfigToState` no longer restores any of the
   four — loading/importing a saved config must never touch a cross-session
   preference.
 
@@ -2248,30 +2351,30 @@ compile time anywhere.
 
 | Concept | Extension builder / draft shape | Wire JSON | Companion type |
 |---|---|---|---|
-| Flat field | `popup.js`: `addField()`, `buildScrapingConfig()`'s `fields.map(...)` | `{name, selector, attribute?, framePath?}` | `IR/ScrapingConfig.cs`: `ScrapingField` |
-| Container tree node | `container-tree.js`: `buildGroupNode`/`buildFieldNode`, `serializeGroupTree` | `{name,selector,repeating,children:[...],framePath?}` or `{name,selector,mode,attribute?,framePath?}` | `IR/ContainerNode.cs`: `GroupNode`/`DataFieldNode` (via `ContainerNodeJsonConverter`) |
-| API config (top level) | `api-config.js`: `buildApiConfig()` | `{urlTemplate, method?, parameters:[...], headers?, itemsPath+fields \| groups, body?, embeddedJsonSource?, bootstrap?}` | `IR/ApiConfig.cs`: `ApiConfig` |
-| API parameter source | `api-config.js`: `buildStaticListSource`/`buildDiscoverySource`/`buildRangeSource` | `{kind:"staticList"\|"discovery"\|"range", ...}` | `IR/ApiConfig.cs`: `ApiParameterSource` (`[JsonPolymorphic]`) |
-| API embedded JSON source (Issue #136) | `api-capture-ui.js`: `confirmEmbeddedJsonFieldCandidate()` (`{scriptSelector}`, stamped from `content-script.js`'s `scriptTagSelector`) | `{scriptSelector}` | `IR/ApiConfig.cs`: `EmbeddedJsonSource` (plain optional object, no converter) |
-| API token/auth bootstrap (Issue #220) | `api-bootstrap.js`: `buildApiBootstrap()` (draft `{name,method,url,valuePath,bodyEncoding,headers,bodyFields}`) | `{name, method?, url, headers?, bodyFields?, bodyEncoding?, valuePath}` | `IR/ApiConfig.cs`: `ApiBootstrap` (plain optional object, no converter) |
-| API cursor/token pagination (Issue #224) | `api-cursor-pagination.js`: `buildApiCursorPagination()` (draft `{nextCursorPath,hasNextPagePath,target,queryParameterName,bodyPath,maxPages}`) | `{nextCursorPath, hasNextPagePath?, target: 'Query'\|'Body', queryParameterName?, bodyPath?, maxPages}` | `IR/ApiConfig.cs`: `ApiCursorPagination` (plain optional object, no converter) |
-| API response tree node | `api-config.js`: `buildApiGroupDraft`/`buildApiFieldDraft`, `serializeApiTree` | `{name,path,children:[...]}` or `{name,path}` | `IR/ApiConfig.cs`: `ApiGroup`/`ApiField` (via `ApiNodeJsonConverter`) |
-| API request body node | `api-config.js`: `jsonValueToBodyDraft`/`serializeBodyTree` | `{properties:{...}}` / `{items:[...]}` / `{kind,stringValue\|numberValue\|boolValue}` / `{parameterName, coerceTo?}` | `IR/ApiBodyNode.cs`: `ApiBodyObject`/`Array`/`Literal`/`Variable` (via `ApiBodyNodeJsonConverter`) |
-| Browser action | `popup.js`: `addBrowserAction`/`serializeBrowserActions` | `{kind:"waitFor"\|"fill"\|"click"\|"scroll", selector, ...}` | `IR/BrowserAction.cs`: `WaitForAction`/`FillAction`/`ClickAction`/`ScrollAction` (`[JsonPolymorphic]`) |
-| Verification values (login test values) | `popup.js`: `buildVerificationValues()` (from `_state.fillTestValues`, never persisted) | `{verificationValues: {ENV_NAME: "value"}}` | `IR/FillVerificationValues.cs`: `Filter()` reads `ScrapingConfig.VerificationValues` |
-| Data-preview opt-in / result | `popup.js`: `_state.includeDataPreview` toggle → `buildScrapingConfig`'s `includePreview` key; `renderDataPreview()` consumes the response | request: `{includePreview: true}`; response: `{script, preview: {outputFormat, totalCount, truncated, columns?, rows?, xmlSample?}}` | `IR/ScrapingConfig.cs`: `IncludePreview`; `Backends/ScriptPreviewData.cs` |
-| Script/output filenames | `popup.js`: `sanitizeFileNameBase()` (client-side mirror, download only) | `{scriptFileName?, outputFileName?}` | `IR/FileNameSanitizer.cs`: `SanitizeBaseName()` (server-side, authoritative) |
-| Additional start URLs | `popup.js`: `parseAdditionalUrls()` (splits textarea on newlines, drops blank lines) → `buildScrapingConfig`'s `additionalUrls` key | `{additionalUrls?: ["https://..."]}` | `IR/ScrapingConfig.cs`: `AdditionalUrls`; combined with `Url` into `IR/ScrapingStep.cs`: `NavigateStep.Urls` |
-| Change detection + notification | `popup.js`: `buildChangeDetectionConfig()` (returns `null` when disabled or a required field is blank) → `buildScrapingConfig`'s `changeDetection` key | `{changeDetection?: {notify:"Email"\|"Webhook", email?:{...EnvVar fields}, webhook?:{urlEnvVar}}}` | `IR/ChangeDetectionConfig.cs`: `ChangeDetectionConfig`/`EmailNotificationConfig`/`WebhookNotificationConfig` |
-| Proxy support | `popup.js`: `buildProxyConfig()` (returns `null` when disabled or the env-var-name field is blank) → `buildScrapingConfig`'s `proxy` key | `{proxy?: {environmentVariableName}}` | `IR/ProxyConfig.cs`: `ProxyConfig` |
-| Pagination | `popup.js`: `buildPaginationConfig()` (returns `null` when disabled or the kind-specific required field is blank) → `buildScrapingConfig`'s `pagination` key | `{pagination?: {kind:"nextLink", nextLinkSelector, maxPages} \| {kind:"pageNumber", urlTemplate, maxPages}}` | `IR/PaginationConfig.cs`: `NextLinkPagination`/`PageNumberPagination` (via `[JsonPolymorphic]`) |
-| Persistent session | `popup.js`: `_state.persistentSession` (plain boolean) → `buildScrapingConfig`'s `persistentSession` key, sent only when `true` | `{persistentSession?: true}` | `IR/ScrapingConfig.cs`: `bool? PersistentSession` |
-| Range format mini-template | `api-config.js`: `RANGE_FORMAT_PRESETS`, `compileRangeFormatPattern()` (client-side mirror) | `{format?: "{yyyy}-W{ww}"}` inside a `RangeSource` | `Backends/Python/RangeFormat.cs` (server-side, authoritative) |
-| Output Blueprint mapping | `output-blueprints.js`: `buildOutputBlueprintMapping()` (returns `null` when no blueprint is picked or the mapping isn't complete) → `buildScrapingConfig`'s `outputBlueprint` key | `{outputBlueprint?: {blueprintId, schemaKind: 'Flat', fields: [{targetField, sourceField}]} \| {blueprintId, schemaKind: 'Tree', tree: [{name, children: [...]} \| {name, sourceField}]}}` | `IR/OutputBlueprintMapping.cs`: `OutputBlueprintMapping`/`OutputBlueprintFieldMapping`/`OutputBlueprintSchemaKind`/`OutputBlueprintTreeMappingGroup`/`OutputBlueprintTreeMappingField` (Issue #244) |
+| Flat field | `popup.ts`: `addField()`, `buildScrapingConfig()`'s `fields.map(...)` | `{name, selector, attribute?, framePath?}` | `IR/ScrapingConfig.cs`: `ScrapingField` |
+| Container tree node | `container-tree.ts`: `buildGroupNode`/`buildFieldNode`, `serializeGroupTree` | `{name,selector,repeating,children:[...],framePath?}` or `{name,selector,mode,attribute?,framePath?}` | `IR/ContainerNode.cs`: `GroupNode`/`DataFieldNode` (via `ContainerNodeJsonConverter`) |
+| API config (top level) | `api-config.ts`: `buildApiConfig()` | `{urlTemplate, method?, parameters:[...], headers?, itemsPath+fields \| groups, body?, embeddedJsonSource?, bootstrap?}` | `IR/ApiConfig.cs`: `ApiConfig` |
+| API parameter source | `api-config.ts`: `buildStaticListSource`/`buildDiscoverySource`/`buildRangeSource` | `{kind:"staticList"\|"discovery"\|"range", ...}` | `IR/ApiConfig.cs`: `ApiParameterSource` (`[JsonPolymorphic]`) |
+| API embedded JSON source (Issue #136) | `api-capture-ui.ts`: `confirmEmbeddedJsonFieldCandidate()` (`{scriptSelector}`, stamped from `content-script.ts`'s `scriptTagSelector`) | `{scriptSelector}` | `IR/ApiConfig.cs`: `EmbeddedJsonSource` (plain optional object, no converter) |
+| API token/auth bootstrap (Issue #220) | `api-bootstrap.ts`: `buildApiBootstrap()` (draft `{name,method,url,valuePath,bodyEncoding,headers,bodyFields}`) | `{name, method?, url, headers?, bodyFields?, bodyEncoding?, valuePath}` | `IR/ApiConfig.cs`: `ApiBootstrap` (plain optional object, no converter) |
+| API cursor/token pagination (Issue #224) | `api-cursor-pagination.ts`: `buildApiCursorPagination()` (draft `{nextCursorPath,hasNextPagePath,target,queryParameterName,bodyPath,maxPages}`) | `{nextCursorPath, hasNextPagePath?, target: 'Query'\|'Body', queryParameterName?, bodyPath?, maxPages}` | `IR/ApiConfig.cs`: `ApiCursorPagination` (plain optional object, no converter) |
+| API response tree node | `api-config.ts`: `buildApiGroupDraft`/`buildApiFieldDraft`, `serializeApiTree` | `{name,path,children:[...]}` or `{name,path}` | `IR/ApiConfig.cs`: `ApiGroup`/`ApiField` (via `ApiNodeJsonConverter`) |
+| API request body node | `api-config.ts`: `jsonValueToBodyDraft`/`serializeBodyTree` | `{properties:{...}}` / `{items:[...]}` / `{kind,stringValue\|numberValue\|boolValue}` / `{parameterName, coerceTo?}` | `IR/ApiBodyNode.cs`: `ApiBodyObject`/`Array`/`Literal`/`Variable` (via `ApiBodyNodeJsonConverter`) |
+| Browser action | `popup.ts`: `addBrowserAction`/`serializeBrowserActions` | `{kind:"waitFor"\|"fill"\|"click"\|"scroll", selector, ...}` | `IR/BrowserAction.cs`: `WaitForAction`/`FillAction`/`ClickAction`/`ScrollAction` (`[JsonPolymorphic]`) |
+| Verification values (login test values) | `popup.ts`: `buildVerificationValues()` (from `_state.fillTestValues`, never persisted) | `{verificationValues: {ENV_NAME: "value"}}` | `IR/FillVerificationValues.cs`: `Filter()` reads `ScrapingConfig.VerificationValues` |
+| Data-preview opt-in / result | `popup.ts`: `_state.includeDataPreview` toggle → `buildScrapingConfig`'s `includePreview` key; `renderDataPreview()` consumes the response | request: `{includePreview: true}`; response: `{script, preview: {outputFormat, totalCount, truncated, columns?, rows?, xmlSample?}}` | `IR/ScrapingConfig.cs`: `IncludePreview`; `Backends/ScriptPreviewData.cs` |
+| Script/output filenames | `popup.ts`: `sanitizeFileNameBase()` (client-side mirror, download only) | `{scriptFileName?, outputFileName?}` | `IR/FileNameSanitizer.cs`: `SanitizeBaseName()` (server-side, authoritative) |
+| Additional start URLs | `popup.ts`: `parseAdditionalUrls()` (splits textarea on newlines, drops blank lines) → `buildScrapingConfig`'s `additionalUrls` key | `{additionalUrls?: ["https://..."]}` | `IR/ScrapingConfig.cs`: `AdditionalUrls`; combined with `Url` into `IR/ScrapingStep.cs`: `NavigateStep.Urls` |
+| Change detection + notification | `popup.ts`: `buildChangeDetectionConfig()` (returns `null` when disabled or a required field is blank) → `buildScrapingConfig`'s `changeDetection` key | `{changeDetection?: {notify:"Email"\|"Webhook", email?:{...EnvVar fields}, webhook?:{urlEnvVar}}}` | `IR/ChangeDetectionConfig.cs`: `ChangeDetectionConfig`/`EmailNotificationConfig`/`WebhookNotificationConfig` |
+| Proxy support | `popup.ts`: `buildProxyConfig()` (returns `null` when disabled or the env-var-name field is blank) → `buildScrapingConfig`'s `proxy` key | `{proxy?: {environmentVariableName}}` | `IR/ProxyConfig.cs`: `ProxyConfig` |
+| Pagination | `popup.ts`: `buildPaginationConfig()` (returns `null` when disabled or the kind-specific required field is blank) → `buildScrapingConfig`'s `pagination` key | `{pagination?: {kind:"nextLink", nextLinkSelector, maxPages} \| {kind:"pageNumber", urlTemplate, maxPages}}` | `IR/PaginationConfig.cs`: `NextLinkPagination`/`PageNumberPagination` (via `[JsonPolymorphic]`) |
+| Persistent session | `popup.ts`: `_state.persistentSession` (plain boolean) → `buildScrapingConfig`'s `persistentSession` key, sent only when `true` | `{persistentSession?: true}` | `IR/ScrapingConfig.cs`: `bool? PersistentSession` |
+| Range format mini-template | `api-config.ts`: `RANGE_FORMAT_PRESETS`, `compileRangeFormatPattern()` (client-side mirror) | `{format?: "{yyyy}-W{ww}"}` inside a `RangeSource` | `Backends/Python/RangeFormat.cs` (server-side, authoritative) |
+| Output Blueprint mapping | `output-blueprints.ts`: `buildOutputBlueprintMapping()` (returns `null` when no blueprint is picked or the mapping isn't complete) → `buildScrapingConfig`'s `outputBlueprint` key | `{outputBlueprint?: {blueprintId, schemaKind: 'Flat', fields: [{targetField, sourceField}]} \| {blueprintId, schemaKind: 'Tree', tree: [{name, children: [...]} \| {name, sourceField}]}}` | `IR/OutputBlueprintMapping.cs`: `OutputBlueprintMapping`/`OutputBlueprintFieldMapping`/`OutputBlueprintSchemaKind`/`OutputBlueprintTreeMappingGroup`/`OutputBlueprintTreeMappingField` (Issue #244) |
 
 Two rows above are explicitly **hand-kept mirrors**, not generated from a shared
-schema: `sanitizeFileNameBase` (popup.js) vs. `FileNameSanitizer` (C#), and the
-range-format regex compiler in `api-config.js` vs. `RangeFormat.cs`. Both sides
+schema: `sanitizeFileNameBase` (popup.ts) vs. `FileNameSanitizer` (C#), and the
+range-format regex compiler in `api-config.ts` vs. `RangeFormat.cs`. Both sides
 must independently reach the same answer for the same input; there is no
 compile-time or test-time enforcement of this beyond hand-written unit tests on
 each side. Keep this in mind when touching either — a "small tweak" to one side's
@@ -2283,9 +2386,9 @@ sanitization/format logic silently breaks the guarantee that what the popup
 ```mermaid
 sequenceDiagram
     actor User
-    participant Popup as popup.js
-    participant SW as service-worker.js
-    participant CS as content-script.js
+    participant Popup as popup.ts
+    participant SW as service-worker.ts
+    participant CS as content-script.ts
     participant Comp as Companion (/generate)
     participant Py as python3 subprocess
 
@@ -2328,7 +2431,7 @@ each time. These are patterns observed across the existing feature history
 `IR/BrowserAction.cs` (new `[JsonDerivedType]`) → `IR/ScrapingStep.cs` (new step
 type) → `ScrapingPlanBuilder.ToStep()` → `ScrapingPlanValidator.cs` (structural
 checks + browser-only gating) → each Playwright template (`playwright_scraper.py.j2`
-+ a new `playwright_<kind>_step.py.j2` fragment) → `popup.js`
++ a new `playwright_<kind>_step.py.j2` fragment) → `popup.ts`
 (`addBrowserAction`/`updateBrowserAction`/`serializeBrowserActions`/
 `renderBrowserActions`) → i18n dictionaries for the new action's UI strings.
 
@@ -2336,32 +2439,32 @@ checks + browser-only gating) → each Playwright template (`playwright_scraper.
 `IR/ApiConfig.cs` (new `[JsonDerivedType]` on `ApiParameterSource`) →
 `ScrapingPlanValidator.ValidateApiConfig` (per-source validation) →
 `PythonApiConfigLiteral.RenderSource` → `scraper_api.py.j2`'s
-`_resolve_parameter_values` runtime → `api-config.js` (a new `buildXxxSource`
-builder) → `api-parameters-ui.js` (`renderApiConfigParameters`'s per-kind branch,
+`_resolve_parameter_values` runtime → `api-config.ts` (a new `buildXxxSource`
+builder) → `api-parameters-ui.ts` (`renderApiConfigParameters`'s per-kind branch,
 `API_CONFIG_SOURCE_DEFAULTS`).
 
 **Add a new field extracted from the page/response** (extending an existing shape,
 not a new mode): usually extension-only if the shape already exists — flat mode's
 `ScrapingField`, container's `DataFieldNode`, or API's `ApiField` already carry
 everything a code generator needs; only the popup UI that builds one needs
-touching (`popup.js`/`container-tree-ui.js`/`api-config-ui.js`'s respective modal
+touching (`popup.ts`/`container-tree-ui.ts`/`api-config-ui.ts`'s respective modal
 or tree-insert flow).
 
 **Change what a `ScrapingConfig` can express at the top level** (a new
 mutually-exclusive mode, like a hypothetical fourth extraction shape): `IR/ScrapingConfig.cs`
-(new nullable field) → `Program.cs`'s `/generate` mutual-exclusion checks →
+(new nullable field) → `Endpoints/GenerateEndpoint.cs`'s `/generate` mutual-exclusion checks →
 `ScrapingPlanBuilder.Build()` (new branch, decide `OutputFormat`/`Engine`) →
 `ScrapingPlanValidator.cs` (new validation branch) → a new `ICodeGenerator`
 implementation + template(s) → `LanguageModuleRegistry` picks it up automatically
 (no registration needed) → extension: a new top-level mode button, `_state.mode`
 branch, `MODE_SWITCH_CLEARS` entry, and its own draft/serialize module (mirroring
-`api-config.js`/`container-tree.js`).
+`api-config.ts`/`container-tree.ts`).
 
 **Add a field to an existing IR node that also needs a UI toggle** (like `Issue
 #122`'s `IncludePreview`, or `FramePath` on Issue #42): add the nullable/optional
 property to the C# type (additive, so it stays wire-compatible for old payloads) →
 thread it through `ScrapingPlanBuilder`/`ScrapingPlan` if the code generator or
-verifier needs it → the relevant template(s) → `popup.js`'s `buildScrapingConfig`
+verifier needs it → the relevant template(s) → `popup.ts`'s `buildScrapingConfig`
 (only include the key when non-default, matching the "byte-for-byte the same
 request when unused" convention every optional field in this codebase follows) →
 a UI control + its `_state` field + `render()` branch.
@@ -2375,14 +2478,14 @@ backend's own optional constructor parameter, via `ctorOverrides`) → no
 
 **Add a new extension-side persisted preference** (like the companion URL
 override or UI language): `chrome.storage.local` (survives browser restart) via a
-small dedicated module mirroring `shared/companion-config.js`'s
+small dedicated module mirroring `shared/companion-config.ts`'s
 `getStoredOverride`/`setXxxOverride`/`resetXxxOverride` shape — don't add it to
-`popup.js`'s `persistState()`, which is `chrome.storage.session` (popup-lifetime
+`popup.ts`'s `persistState()`, which is `chrome.storage.session` (popup-lifetime
 only).
 
 **Add a new popup-to-content-script round trip** (like `CHECK_ROBOTS_TXT` or
 `GET_API_CAPTURE_ENTRIES`): pick push (service worker forwards a live message,
-add the type to `FORWARD_TO_TAB` in `service-worker.js`) vs. pull (request/response
+add the type to `FORWARD_TO_TAB` in `service-worker.ts`) vs. pull (request/response
 via `sendResponse`, mirroring `GET_LOGS`'s `chrome.tabs.sendMessage(...).then(sendResponse)`
 pattern) based on whether the panel might be closed when the content script has
 something to report — pull is more robust for anything the panel only needs on

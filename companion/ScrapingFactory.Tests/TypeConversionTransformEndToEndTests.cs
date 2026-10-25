@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using ScrapingFactory.Compiler.Backends.Python;
 using ScrapingFactory.Compiler.IR;
 using Xunit;
@@ -14,40 +13,6 @@ namespace ScrapingFactory.Tests;
 // only checks row/element counts, not individual cell values).
 public class TypeConversionTransformEndToEndTests
 {
-    private static async Task<(int ExitCode, string Stderr)> RunScriptAsync(string scriptPath, string workDir)
-    {
-        Exception? lastError = null;
-        foreach (var candidate in new[] { "python3", "python" })
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = candidate,
-                WorkingDirectory = workDir,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            psi.ArgumentList.Add(scriptPath);
-
-            try
-            {
-                using var process = new Process { StartInfo = psi };
-                process.Start();
-                var stderrTask = process.StandardError.ReadToEndAsync();
-                var stdoutTask = process.StandardOutput.ReadToEndAsync();
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                await process.WaitForExitAsync(cts.Token);
-                return (process.ExitCode, await stderrTask);
-            }
-            catch (System.ComponentModel.Win32Exception ex)
-            {
-                lastError = ex; // executable not found — try the next candidate
-            }
-        }
-        throw new InvalidOperationException("No Python interpreter found (tried: python3, python).", lastError);
-    }
-
     // Scrapes a single ".value" field off a one-element page and returns its
     // extracted, transformed cell (the second CSV line — the first is the
     // header) — enough to observe a single transform's actual runtime
@@ -71,7 +36,7 @@ public class TypeConversionTransformEndToEndTests
             var scriptPath = Path.Combine(workDir, "scraper.py");
             await File.WriteAllTextAsync(scriptPath, script);
 
-            var (exit, stderr) = await RunScriptAsync(scriptPath, workDir);
+            var (exit, stderr) = await ScriptRunner.RunAsync(scriptPath, workDir);
             Assert.Equal(0, exit);
             Assert.Empty(stderr);
 

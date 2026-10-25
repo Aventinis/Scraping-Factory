@@ -3,38 +3,18 @@ using ScrapingFactory.Compiler.IR;
 
 namespace ScrapingFactory.Compiler.Backends;
 
-// How much *extra* time (on top of the verifier's own base timeout) a
-// /generate trial run of this plan can legitimately need — extracted from
-// Program.cs (Issue #295) so it can be unit tested. Two independent costs
-// are summed:
-//   - browser actions (Issue #289): every ScrollStep/WaitForStep, plus every
-//     BrowserDiscoverySource parameter's nested Actions (Issue #216) — those
-//     run as their own sequential Playwright sessions and never pass through
-//     ScrapingPlanBuilder's step translation, so a plain plan.Steps scan
-//     doesn't see them;
-//   - API request count (Issue #295): API mode sends one real, sequential
-//     HTTP request per parameter combination, so a large cartesian product
-//     of value lists/ranges alone can exceed the base timeout without a
-//     single browser action being involved.
+// The extra time (on top of the verifier's base timeout) a trial run of this plan can legitimately need, summed from:
+// browser actions (every ScrollStep / WaitForStep plus the nested Actions of BrowserDiscoverySource parameters, which
+// run as their own sessions and are not in plan.Steps) and the API request count (one sequential request per parameter
+// combination).
 public static class VerificationTimeEstimator
 {
-    // Budget for one API request beyond the first. Deliberately generous
-    // (a slow public API answers in a few hundred ms, the script's own
-    // per-request timeout is 10 s) without making a legitimately large but
-    // fast configuration look absurdly expensive: with Program.cs's
-    // 10-minute cap this allows roughly 600 combinations to still be
-    // verified for real, beyond that the trial run is skipped (the same
-    // header/toast path Issue #289 already built). A fixed constant rather
-    // than a configuration knob — it is an estimate, not a tuning parameter,
-    // and anyone whose target is slower than this loses nothing but the
-    // trial run itself. Request delay (#222) and retry waits (#223) are
-    // deliberately not added here: PythonScriptVerifier already extends its
-    // own deadline for every pause/retry the script announces at run time.
+    // Budget per API request beyond the first: generous, but with VerificationPolicy's 10-minute cap about 600 combinations are
+    // still verified for real; beyond that the trial run is skipped. A constant, not a setting: it is an estimate. Request
+    // delay and retry waits are not counted (the verifier extends its deadline for those at run time).
     public const long AssumedMsPerApiRequest = 1000;
 
-    // What a parameter whose value count is only known at run time
-    // (DiscoverySource/BrowserDiscoverySource) contributes to the
-    // combination count: no information, so "doesn't multiply".
+    // A parameter whose count is only known at run time contributes no information: it does not multiply.
     private const long UnknownParameterValueCount = 1;
 
     public static long EstimateExtraMs(ScrapingPlan plan)

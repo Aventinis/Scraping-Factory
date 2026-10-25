@@ -1,44 +1,14 @@
 // Issue #234: the extension side of "Convert price/currency to number" —
-// toCurrencyPreview (the client-side mirror of the templates' _to_currency,
-// which must reach the same result for the same input: the cases below are
-// the same ones CurrencyTransformTests.cs runs through the real generated
-// script), the chain integration, and the transform-editor row.
+// toCurrencyPreview (the client-side mirror of the templates' _to_currency; its
+// input/output table is test-vectors/transforms.json, run by transform-vectors.test.js
+// and TransformVectorTests.cs), the chain integration, and the transform-editor row.
 const {
   createDefaultTransform, changeTransformKind, transformsAreValid, applyTransformsPreview, toCurrencyPreview, CURRENCY_FORMAT_IDS,
 } = require('./field-transforms');
 const { renderTransformList, wireTransformList, renderTransformPreview } = require('./field-transforms-ui');
 
 describe('toCurrencyPreview', () => {
-  test.each([
-    ['1.234,56', 'Preis: 1.234,56 €', '1234.56'],
-    ['1.234,56', '€ 1.234', '1234'],
-    ['1.234,56', '12,90 €', '12.90'],
-    ['1.234,56', '-12,99 €', '-12.99'],
-    ['1.234,56', '1.234.567,00 EUR', '1234567.00'],
-    ['1.234,56', 'Preis: 12,99.', '12.99'],
-    ['1,234.56', '£51.77', '51.77'],
-    ['1,234.56', '$1,234,567.8', '1234567.8'],
-    ['1,234.56', '+0005', '5'],
-    ['1 234,56', '1 234,56 kr', '1234.56'],
-    ['1 234,56', '1 234,56 €', '1234.56'],
-    ['1 234,56', '1 234,56 €', '1234.56'],
-    ["1'234.56", "CHF 1'234.50", '1234.50'],
-    ["1'234.56", 'CHF 1’234.50', '1234.50'],
-    ['1,234.56', '123456789012345678901234,5', null], // "," isn't a valid decimal separator here
-    ['1.234,56', '123456789012345678901234,5', '123456789012345678901234.5'], // no float precision loss
-  ])('%s: %j → %j', (format, raw, expected) => {
-    expect(toCurrencyPreview(raw, format)).toBe(expected);
-  });
-
-  test.each([
-    ['1.234,56', '12.99'], // "." groups thousands here, "99" isn't a 3-digit group
-    ['1,234.56', '1,23,456'],
-    ['1.234,56', 'kein Preis'],
-    ['1.234,56', '1,2,3'],
-  ])('%s: %j is a strict mismatch', (format, raw) => {
-    expect(toCurrencyPreview(raw, format)).toBeNull();
-  });
-
+  // The amount/format table lives in test-vectors/transforms.json (toCurrency cases), shared with the Python side.
   test('an unknown format falls back to the comma-decimal preset, like the runtime', () => {
     expect(toCurrencyPreview('1.234,56', 'nope')).toBe('1234.56');
   });

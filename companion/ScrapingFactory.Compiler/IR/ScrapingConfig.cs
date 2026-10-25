@@ -1,274 +1,91 @@
 namespace ScrapingFactory.Compiler.IR;
 
+// The /generate request body, exactly as the extension sends it. Every optional property is additive:
+// null/false is the behavior from before the option existed. Details per option: docs/design-notes/compiler.md.
+//
+// Exactly one of Fields / Groups / Api / Combined / Blocks describes what to extract. Rejected by /generate
+// (Endpoints/GenerateEndpoint*.cs): AdditionalUrls, Pagination, DiscoveredUrls and Preflight together with Api; most
+// per-run options on the outer config of a Combined request (each component carries its own); ChangeDetection and
+// Hardening on the outer config of a Blocks request (they are per block).
 public sealed class ScrapingConfig
 {
     public string Version { get; init; } = "1";
     public required string Url { get; init; }
 
-    // Issue #83: extra start URLs the same Fields/Groups extraction config
-    // runs against, in addition to Url — results are combined into one
-    // output file (see ScrapingPlanBuilder/NavigateStep.Urls). Additive,
-    // wire-compatible: null/empty is today's exact single-URL behavior.
-    // Mutually exclusive with Api (enforced in the /generate endpoint) —
-    // Api mode builds its own request URL from UrlTemplate/Parameters and
-    // never consumes the page-scraping start URL at all, so a URL list here
-    // would silently do nothing rather than express what the caller intended.
+    // Further start URLs for the same extraction; results go into one output file.
     public List<string>? AdditionalUrls { get; init; }
 
     public List<ScrapingField> Fields { get; init; } = [];
 
-    // Container-Mode: mutually exclusive with Fields (enforced in the
-    // /generate endpoint, before ScrapingPlanBuilder ever sees the config).
-    // When set, OutputFormat is forced to Xml server-side, unless the caller
-    // explicitly asked for Json (Issue #86) — see ScrapingPlanBuilder.
+    // Container mode. Output defaults to Xml (see ScrapingPlanBuilder).
     public List<GroupNode>? Groups { get; init; }
 
-    // API-Mode (Issue #53): mutually exclusive with both Fields and Groups
-    // (enforced in the /generate endpoint). When set, Engine is forced to
-    // ScrapingEngine.Api server-side, and OutputFormat is forced to Csv/Xml
-    // depending on the response shape (flat/tree, see below), unless the
-    // caller explicitly asked for Json (Issue #86) — see ScrapingPlanBuilder.
+    // API mode. Forces Engine.Api; output defaults to Csv (flat) or Xml (tree).
     public ApiConfig? Api { get; init; }
 
     public OutputFormat OutputFormat { get; init; } = OutputFormat.Csv;
 
-    // Additive, wire-compatible: existing extension payloads omit this and
-    // get Static, today's only behavior. No extension UI to set it yet —
-    // reachable only by sending "engine": "Browser" directly.
     public ScrapingEngine Engine { get; init; } = ScrapingEngine.Static;
 
-    // Browser-engine-only action steps (WaitFor/Fill/Click/Scroll, see
-    // BrowserAction), executed in order after navigation and before
-    // extraction (Fields/Groups/Api alike — see ScrapingPlanBuilder).
-    // Rejected server-side unless Engine is Browser (see
-    // ScrapingPlanValidator). Null/empty = no actions, today's only
-    // behavior for existing payloads.
+    // Browser engine only (rejected otherwise); run in order after navigation, before extraction.
     public List<BrowserAction>? BrowserActions { get; init; }
 
-    // One-time, verification-only values for FillAction.EnvironmentVariableName
-    // (login credentials etc.), keyed by env var name. Used only for the
-    // /generate trial-run subprocess (PythonScriptVerifier) — never reaches
-    // ScrapingPlan/the code generator/the generated script; FillAction stays
-    // env-var-only by design (see IR/FillVerificationValues.cs).
+    // One-time values for FillAction env vars, used only by the trial run; never reaches the script.
     public Dictionary<string, string>? VerificationValues { get; init; }
 
-    // Base filename (no extension) for the downloaded .py script. Purely
-    // cosmetic today — used only in the generated script's "# Run: python
-    // X.py" header comment, since the extension names the actual download
-    // itself and never asks the companion for it. Sanitized server-side too
-    // (see FileNameSanitizer) in case a caller talks to /generate directly.
-    // Null/blank falls back to "scraper".
+    // Base names (no extension), sanitized by FileNameSanitizer; blank falls back to "scraper" / "output".
     public string? ScriptFileName { get; init; }
-
-    // Base filename (no extension) for the data file the generated script
-    // writes (output.csv/output.xml today) — the extension itself is still
-    // chosen by OutputFormat/Container-Mode, only the base name is
-    // configurable. Sanitized server-side (see FileNameSanitizer). Null/blank
-    // falls back to "output".
     public string? OutputFileName { get; init; }
 
-    // Issue #122: opt-in trial-run data preview. When true, /generate's
-    // trial run keeps a capped sample of the CSV rows/XML elements it reads
-    // to check "at least one data row" anyway (see PythonScriptVerifier),
-    // and the success response becomes a JSON envelope (script + preview)
-    // instead of the plain script text — see Program.cs's /generate handler.
-    // Additive, wire-compatible: null/false is today's exact behavior.
+    // Either one turns the plain-text /generate response into a JSON envelope (script + preview / outputFile).
     public bool? IncludePreview { get; init; }
-
-    // Issue #161: opt-in full trial-run output download. When true,
-    // /generate's trial run keeps the *complete*, uncapped CSV/XML/Json file
-    // it already wrote to check "at least one data row" anyway (see
-    // PythonScriptVerifier) and the success response becomes a JSON envelope
-    // (script + outputFile) instead of the plain script text — same
-    // envelope-triggering mechanism as IncludePreview above, just carrying
-    // the full file instead of a capped sample. Additive, wire-compatible:
-    // null/false is today's exact behavior. Independent of IncludePreview —
-    // either, both, or neither may be requested in the same call.
     public bool? IncludeOutputFile { get; init; }
 
-    // Issue #292: opt out of the trial run entirely — /generate still runs
-    // every structural check (ScrapingPlanValidator, 400 on failure) but
-    // never spawns the script, and returns it straight away with the
-    // X-ScrapingFactory-Verification-Skipped header explaining that it was
-    // not run against the live page. Trades the Consistency Rule's safety
-    // net for speed as an explicit opt-in. Mode-independent (single-mode,
-    // Combined and Blocks alike — read from the outer request only; a
-    // Combined component's own nested value is ignored, since the single
-    // verification run belongs to the combined script). A preview/output
-    // file requested alongside comes back empty, there being nothing to
-    // read them from. Additive, wire-compatible: null/false is today's
-    // exact behavior.
+    // Skips the trial run (structural validation still runs); read from the outer request only.
     public bool? SkipVerification { get; init; }
 
-    // Issue #87: opt-in change-detection + notification, mode-independent
-    // (Fields/Groups/Api alike) — see IR/ChangeDetectionConfig.cs. Null is
-    // today's exact behavior (no previous-run comparison, no notification).
     public ChangeDetectionConfig? ChangeDetection { get; init; }
-
-    // Issue #88: opt-in proxy support, mode-independent (Fields/Groups/Api
-    // alike) — see IR/ProxyConfig.cs. Null is today's exact behavior (direct
-    // connection, no proxying).
     public ProxyConfig? Proxy { get; init; }
-
-    // Issue #222: opt-in pause between outbound requests, mode-independent
-    // (Fields/Groups/Api/Blocks alike) — see IR/RequestDelayConfig.cs. Null
-    // is today's exact behavior (no pacing at all).
     public RequestDelayConfig? RequestDelay { get; init; }
 
-    // Issue #228: opt-in — the generated script reads Crawl-delay /
-    // Request-rate from the target's robots.txt at startup and uses it as a
-    // minimum gap between requests (see IR/RequestDelayConfig.cs for the
-    // pacing itself; this is one more, automatically derived source for the
-    // same mechanism). Independent of RequestDelay: either, both or neither
-    // may be set, the larger gap wins. Null/false is today's exact behavior.
+    // Reads Crawl-delay / Request-rate from robots.txt as an extra minimum gap; the larger of the two gaps wins.
     public bool? RespectRobotsDelay { get; init; }
 
-    // Issue #333: opt-in — the script checks every request against the
-    // target's robots.txt Disallow/Allow rules at run time (see
-    // IR/RobotsDisallowConfig.cs). Independent of RespectRobotsDelay (they
-    // share the one robots.txt fetch per origin). Null is today's exact
-    // behavior.
     public RobotsDisallowConfig? RobotsDisallow { get; init; }
 
-    // Issue #342: opt-in — instead of replacing the previous output file, the
-    // script appends this run's result to it, for every output format (CSV,
-    // JSON, XML, SQLite, Excel; flat or tree). Schema drift between runs is
-    // handled by one rule in all formats: columns/fields the file already
-    // has are kept, new ones are added, missing values are empty. It is also
-    // what deduplication's incremental "Append" output now means (see
-    // ScrapingPlanBuilder). Mode-independent (Fields/Groups/Api/Blocks
-    // alike); null/false is today's exact behavior (a fresh file).
+    // Appends to the previous output file instead of replacing it (every output format).
     public bool? AppendOutput { get; init; }
 
-    // Issue #223: opt-in retry with backoff on transient request failures,
-    // mode-independent — see IR/RetryConfig.cs. Null is today's exact
-    // behavior (a failed request is never retried).
     public RetryConfig? Retry { get; init; }
 
-    // Issue #226: custom request headers for flat/container/Blocks mode (API
-    // mode keeps ApiConfig.Headers) — each a fixed literal or backed by an
-    // environment variable, same shape as ApiHeader (whose Template variant
-    // is meaningless here and rejected by ScrapingPlanValidator). Null/empty
-    // is today's exact behavior (only the default User-Agent is sent).
+    // Custom request headers for flat/container/Blocks mode (API mode has ApiConfig.Headers); no Template variant.
     public List<ApiHeader>? Headers { get; init; }
 
-    // Issue #225: opt-in deduplication of the output by key field(s) (and,
-    // optionally, incremental "only new items since the last run" output),
-    // mode-independent — see IR/DeduplicationConfig.cs. Null is today's exact
-    // behavior (no deduplication, byte-for-byte the same script).
     public DeduplicationConfig? Deduplication { get; init; }
-
-    // Issue #129: opt-in script hardening checks, mode-independent
-    // (Fields/Groups/Api alike) — see IR/HardeningCheck.cs. Null/empty is
-    // today's exact behavior (the generated script never re-checks its own
-    // result, byte-for-byte the same script as before this existed).
     public List<HardeningCheck>? Hardening { get; init; }
 
-    // Issue #174: opt-in classic multi-page pagination (page 1, 2, 3, … via
-    // a "next" link or a page-number URL template) — see IR/PaginationConfig.cs.
-    // Applies to Fields/Groups alike; mutually exclusive with Api (enforced
-    // in Program.cs's /generate handler, same reasoning as AdditionalUrls
-    // above — Api mode never reads the page-scraping start URL at all, so
-    // this would silently do nothing there). Composes with AdditionalUrls:
-    // each start URL (Url + every entry in AdditionalUrls) paginates onward
-    // independently. Null is today's exact behavior (a single fetch per
-    // start URL, no further pages followed).
+    // Fields/Groups only; each start URL paginates independently.
     public PaginationConfig? Pagination { get; init; }
 
-    // Issue #218: opt-in discovery of additional start URLs by harvesting
-    // links from a navigation/listing page — see IR/DiscoveredUrlsConfig.cs.
-    // Applies to Fields/Groups alike; mutually exclusive with Api (same
-    // reasoning as AdditionalUrls/Pagination above). Composes with both:
-    // additive with AdditionalUrls (the discovered list is combined with,
-    // not instead of, the statically-typed one), and each discovered URL
-    // paginates onward independently exactly like any other start URL
-    // already does. Null is today's exact behavior (no discovery pass runs).
+    // Fields/Groups only; additive with AdditionalUrls.
     public DiscoveredUrlsConfig? DiscoveredUrls { get; init; }
 
-    // Issue #219: opt-in preflight check — a single cheap HEAD request
-    // against the primary start URL, run before the main extraction phase
-    // even starts, mode-independent like DiscoveredUrls above (Fields/Groups
-    // only; mutually exclusive with Api, same reasoning as AdditionalUrls/
-    // Pagination/DiscoveredUrls — Api has no single fixed start URL to
-    // preflight-check). A plain on/off switch with no sub-fields, same as
-    // PersistentSession/ExternalConfig below — which ETag/Last-Modified
-    // value counts as "changed" is tracked entirely by the generated
-    // script's own sidecar file, never configured here. Engine-independent:
-    // even a Browser-engine script's preflight check is a plain `requests`
-    // call, never Playwright, so a skip avoids the cost of ever launching a
-    // browser session at all. Null/false is today's exact behavior (the
-    // main extraction always runs unconditionally).
+    // Fields/Groups only; a single HEAD request that can skip the whole run, never launches a browser.
     public bool? Preflight { get; init; }
 
-    // Issue #175: opt-in persistent session/cookie handling, Browser-engine
-    // only (rejected server-side otherwise, same as WaitFor/Fill/Click/
-    // Scroll — see ScrapingPlanValidator). When true, the generated script
-    // saves its Playwright context's storage_state (cookies/localStorage) to
-    // a sidecar file next to its own output after every run, and — once
-    // that file exists from a previous run — skips the configured login-flow
-    // browser actions (WaitFor/Fill/Click/Scroll) entirely on the next run,
-    // going straight from Navigate to extraction instead. Null/false is
-    // today's exact behavior (a fresh, empty browser context every run).
+    // Browser engine only: keeps the login session in a sidecar file and skips the login actions while it exists.
     public bool? PersistentSession { get; init; }
 
-    // Issue #178: opt-in external XML config file. When true, the generated
-    // script self-creates (on first run, if missing) a small sidecar XML file
-    // next to itself, and re-reads it on every subsequent run — letting a
-    // non-technical user tweak the start URL(s), the output filename, a flat
-    // field's output name, or a fixed-value-list API parameter's values,
-    // without touching the .py file or reopening the extension. A missing
-    // file is not an error (a fresh one is written); a malformed/stale one
-    // is a clean, English error naming exactly what's wrong plus a dedicated
-    // exit code, never a raw Python traceback — see the Python templates for
-    // the runtime side of this. Null/false is today's exact behavior (no
-    // extra file, nothing re-read at runtime).
+    // The script reads an editable sidecar XML next to itself (created on first run).
     public bool? ExternalConfig { get; init; }
 
-    // Combined mode (Issue #239): mutually exclusive with Fields/Groups/Api
-    // AND with AdditionalUrls/Pagination/BrowserActions/ChangeDetection/
-    // Proxy/Hardening/PersistentSession/ExternalConfig on THIS (outer)
-    // config — all of those are component-level concerns only (each
-    // CombinedComponentConfig.Config carries its own). At least two
-    // components required; a component whose own Config.Combined is set is
-    // rejected (no nesting) — see Program.cs's /generate handler for all of
-    // the above. Each component is generated through the exact same
-    // pipeline a standalone request would use, then forced to
-    // OutputFormat.Json (see ScrapingPlan.With) so every component's output
-    // can be merged into one combined JSON object, keyed by component name.
+    // Combined mode: at least two independent components, merged into one JSON object keyed by component name.
     public List<CombinedComponentConfig>? Combined { get; init; }
 
-    // Issue #182: mutually exclusive with Fields/Groups/Api/Combined
-    // (enforced in the /generate endpoint) — an alternative for a single
-    // page presenting more than one distinct item shape side by side (e.g.
-    // different offer types with different fields/structure), where each
-    // shape should be scraped into its own separate output file in one run
-    // rather than forced into one lowest-common-denominator schema, or run
-    // as entirely separate scripts. Unlike Combined mode, every block here
-    // shares this same, single request's Url/AdditionalUrls/Engine/
-    // BrowserActions/Proxy/PersistentSession/Pagination/VerificationValues —
-    // one navigation, one browser session, N extraction+write phases against
-    // it — which is also why ChangeDetection/Hardening are rejected on THIS
-    // (outer) config when Blocks is set: each block produces its own
-    // independent result set, so those two specifically only make sense
-    // per-block (see ExtractionBlockConfig). Pagination stays outer-level
-    // rather than per-block because it governs the shared page-fetching
-    // loop itself (how many pages are fetched, and from where) — every
-    // block extracts from every fetched page, so per-block pagination
-    // cadence would contradict "one shared navigation". At least two blocks
-    // required (a single block is just Fields/Groups). ExternalConfig and
-    // Api are both out of scope for Blocks in this first version — rejected
-    // alongside Fields/Groups/Api/Combined in Program.cs.
+    // Blocks mode: at least two extraction blocks sharing one navigation, each with its own output file.
     public List<ExtractionBlockConfig>? Blocks { get; init; }
 
-    // Issue #191: opt-in output blueprint field mapping — see
-    // IR/OutputBlueprintMapping.cs. Only valid for flat-shaped output (this
-    // config's own Fields, or Api's flat ItemsPath/Fields shape) — rejected
-    // alongside Groups/Api.Groups/Combined/Blocks in Program.cs's /generate
-    // handler, the same "ship the simpler shape first" precedent
-    // RequiredFieldsCheck (Issue #133) and ExternalConfig's own field-
-    // renaming (Issue #178) already set for this exact flat-vs-tree scope
-    // boundary. Null is today's exact behavior (output keyed/ordered by the
-    // source fields' own names, unchanged).
+    // Flat-shaped output only (flat Fields, API flat) and container / API tree via flattening; not Combined/Blocks.
     public OutputBlueprintMapping? OutputBlueprint { get; init; }
 }
 
@@ -276,49 +93,23 @@ public sealed class ScrapingField
 {
     public required string Name { get; init; }
 
-    // Required to be non-blank UNLESS Transforms starts with a
-    // CombineFieldsTransform/SplitFieldTransform (Issue #206 follow-up) — a
-    // field entirely derived from other already-computed sibling fields has
-    // no DOM value of its own to select, so forcing a real (functionally
-    // unused) selector on it no longer makes sense once the extension has
-    // its own dedicated, selector-less creation flow for these two kinds.
-    // See ScrapingPlanValidator's own IsDerivedFieldOnly check.
+    // May be blank only when Transforms starts with a combineFields/splitField transform (a derived field).
     public string? Selector { get; init; }
-    // null = text content; "href", "src" etc. for attribute extraction
+
+    // null = text content; "href", "src", … = attribute value.
     public string? Attribute { get; init; }
 
-    // See ExtractStep.FramePath — same meaning, just the wire-format mirror.
     public List<string>? FramePath { get; init; }
-
-    // See ExtractStep.Transforms (Issue #84) — same meaning, just the
-    // wire-format mirror.
     public List<FieldTransform>? Transforms { get; init; }
 
-    // See ExtractStep.Download (Issue #213/#214) — same meaning, just the
-    // wire-format mirror. Only valid (and only meaningful) when Attribute is
-    // set — flat mode has no separate Mode enum the way DataFieldNode does,
-    // so "Attribute mode" here just means a non-blank Attribute.
+    // Saves the attribute's URL target next to the output; requires Attribute.
     public bool Download { get; init; }
-
-    // See ExtractStep.MaxDownloadSizeBytes/AllowedContentTypes.
     public int? MaxDownloadSizeBytes { get; init; }
     public List<string>? AllowedContentTypes { get; init; }
 
-    // Issue #206 follow-up: this field is still computed (so a later
-    // combineFields/splitField transform can still reference its value via
-    // the usual sibling lookup) but excluded from the written output — set
-    // only via the extension's "remove original field(s)" checkbox on the
-    // new combine/split creation modal, never a standalone toggle. Plain
-    // non-nullable bool, same convention as Download.
+    // Computed (derived fields can read it) but left out of the written output.
     public bool HiddenFromOutput { get; init; }
 }
 
-// Json (Issue #86) is a third, user-choosable alternative to Csv/Xml for
-// every mode — a flat list-of-records dump for Fields/API-flat, a nested
-// object mirroring the group/API tree for Groups/API-tree. See
-// ScrapingPlanBuilder for exactly when each mode honors it vs. still forcing
-// its own default.
-// Issue #229: Sqlite/Xlsx are tabular, binary alternatives to Csv for flat-shaped
-// output — one table "data" / one sheet "Data". A tree-shaped source (container
-// mode, API tree) is flattened into rows for them (see ScrapingPlanBuilder).
+// Sqlite/Xlsx are tables (sheet "Data"); a tree-shaped source is flattened into rows for them.
 public enum OutputFormat { Csv, Xml, Json, Sqlite, Xlsx }

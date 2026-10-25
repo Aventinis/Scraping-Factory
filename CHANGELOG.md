@@ -1,5 +1,41 @@
 # Changelog
 
+## [1.21.0](https://github.com/Aventinis/Scraping-Factory/compare/v1.20.4...v1.21.0) (2026-10-25)
+
+
+### Miscellaneous Chores
+
+* **release:** promote to 1.21.0 ([863e6a7](https://github.com/Aventinis/Scraping-Factory/commit/863e6a7d9517c52ba74f84619ace528048366d49))
+
+## [1.20.4](https://github.com/Aventinis/Scraping-Factory/compare/v1.20.3...v1.20.4) (2026-10-24)
+
+
+### Features
+
+* **extension:** add typed DOM helpers (popup/dom.ts) ([5f062da](https://github.com/Aventinis/Scraping-Factory/commit/5f062da046009081312ef8ed23c1f148930a1128))
+
+## [1.20.3](https://github.com/Aventinis/Scraping-Factory/compare/v1.20.2...v1.20.3) (2026-10-23)
+
+
+### Bug Fixes
+
+* **templates:** strip illegal XML characters via a translate table instead of a regex class ([a983fd4](https://github.com/Aventinis/Scraping-Factory/commit/a983fd4d3b284891b6cabc51c19616b10690858f))
+
+## [1.20.2](https://github.com/Aventinis/Scraping-Factory/compare/v1.20.1...v1.20.2) (2026-10-23)
+
+
+### Features
+
+* **docs:** build a German tree next to the English one, map anchors by heading position, language-aware Learn more, source stamps ([#436](https://github.com/Aventinis/Scraping-Factory/issues/436)) ([fab042e](https://github.com/Aventinis/Scraping-Factory/commit/fab042e8e3668db001c33d2cdd8b2d0f3f31ef89))
+* **docs:** screenshot generator --language de and a docs check over both trees with translation status ([#436](https://github.com/Aventinis/Scraping-Factory/issues/436)) ([2c788a5](https://github.com/Aventinis/Scraping-Factory/commit/2c788a5a7c9b1273f80bcccd419d101b255f8167))
+
+## [1.20.1](https://github.com/Aventinis/Scraping-Factory/compare/v1.20.0...v1.20.1) (2026-10-23)
+
+
+### Bug Fixes
+
+* **selection:** name every pick and let the panel mark it handled, so a late service-worker write is not replayed ([#429](https://github.com/Aventinis/Scraping-Factory/issues/429)) ([4b39cf4](https://github.com/Aventinis/Scraping-Factory/commit/4b39cf4ef23cdf5e8c390a1e4d1ff37839ddf4f1))
+
 ## [1.20.0](https://github.com/Aventinis/Scraping-Factory/compare/v1.19.22...v1.20.0) (2026-10-23)
 
 

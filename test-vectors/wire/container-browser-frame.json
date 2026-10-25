@@ -1,0 +1,27 @@
+{
+  "version": "1",
+  "url": "https://example.test/list",
+  "groups": [
+    {
+      "name": "Widget",
+      "selector": "div.widget",
+      "repeating": true,
+      "children": [
+        {
+          "name": "Name",
+          "selector": "h4",
+          "mode": "Text",
+          "framePath": [
+            "iframe#shop"
+          ]
+        }
+      ],
+      "framePath": [
+        "iframe#shop"
+      ]
+    }
+  ],
+  "scriptFileName": null,
+  "outputFileName": null,
+  "engine": "Browser"
+}

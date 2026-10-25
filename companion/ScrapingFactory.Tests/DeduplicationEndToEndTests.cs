@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 using System.Xml.Linq;
 using ScrapingFactory.Compiler.Backends.Python;
@@ -21,47 +20,14 @@ public class DeduplicationEndToEndTests : IDisposable
 
     public void Dispose() => Directory.Delete(_workDir, recursive: true);
 
-    private static async Task<(int ExitCode, string Stdout, string Stderr)> RunScriptAsync(string scriptPath, string workDir)
-    {
-        Exception? lastError = null;
-        foreach (var candidate in new[] { "python3", "python" })
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = candidate,
-                WorkingDirectory = workDir,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            psi.ArgumentList.Add(scriptPath);
-
-            try
-            {
-                using var process = new Process { StartInfo = psi };
-                process.Start();
-                var stderrTask = process.StandardError.ReadToEndAsync();
-                var stdoutTask = process.StandardOutput.ReadToEndAsync();
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-                await process.WaitForExitAsync(cts.Token);
-                return (process.ExitCode, await stdoutTask, await stderrTask);
-            }
-            catch (System.ComponentModel.Win32Exception ex)
-            {
-                lastError = ex; // executable not found — try the next candidate
-            }
-        }
-        throw new InvalidOperationException("No Python interpreter found (tried: python3, python).", lastError);
-    }
-
     // Writes the script into the shared working directory and runs it there;
     // calling this again re-runs it against the previous run's leftovers.
     private async Task<(int Exit, string Stdout, string Stderr)> RunAsync(string script)
     {
         var scriptPath = Path.Combine(_workDir, "scraper.py");
         await File.WriteAllTextAsync(scriptPath, script);
-        return await RunScriptAsync(scriptPath, _workDir);
+        var result = await ScriptRunner.RunAsync(scriptPath, _workDir, timeout: TimeSpan.FromSeconds(60));
+        return (result.ExitCode, result.Stdout, result.Stderr);
     }
 
     private string[] ReadLines(string fileName)

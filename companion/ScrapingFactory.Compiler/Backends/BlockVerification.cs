@@ -2,21 +2,11 @@ using ScrapingFactory.Compiler.IR;
 
 namespace ScrapingFactory.Compiler.Backends;
 
-// Issue #182: one block's own output identity, as far as verification is
-// concerned — the same (OutputFormat, OutputFileBaseName) pair VerifyAsync's
-// own two parameters already carry for the single-shape case, just one per
-// block instead of one for the whole plan. Name is carried through purely so
-// IScriptVerifier.VerifyBlocksAsync can prefix a per-block failure with which
-// block it came from, and so the /generate response can key its own
-// per-block envelope by the same name the wire format already uses.
+// One block's output identity, the per-block form of VerifyAsync's (outputFormat, outputFileBaseName). Name
+// prefixes a per-block failure and keys the /generate response.
 public sealed record BlockOutputSpec(string Name, OutputFormat OutputFormat, string OutputFileBaseName);
 
-// One block's own verification outcome — the per-block analog of
-// ScriptVerificationResult's RowCount/Preview/OutputFileContent/
-// OutputFileName. A block that itself produced no data (or failed to parse)
-// fails the *whole* VerifyBlocksAsync call rather than being reported here
-// as an unsuccessful entry — see VerifyBlocksAsync's own doc comment — so
-// this type carries no Success/Error of its own.
+// One block's outcome. A block without data fails the whole VerifyBlocksAsync call, so there is no Success/Error here.
 public sealed class BlockVerificationResult
 {
     public required string Name { get; init; }

@@ -35,7 +35,7 @@
    automatically when the OS prefers dark AND the user hasn't made an
    explicit choice (:root:not([data-theme])); an explicit choice
    (html[data-theme="light"|"dark"], set by #btn-theme-toggle via
-   shared/theme.js, mirroring i18n.js's own chrome.storage.local
+   shared/theme.ts, mirroring i18n.ts's own chrome.storage.local
    pattern) always wins over both, and for "light" specifically needs no
    *custom-property* rule of its own — the media query already stays out
    of its way, so :root's own defaults show through unchanged (it still
@@ -182,7 +182,7 @@ input, textarea, select { transition: border-color var(--transition-fast), box-s
 /* Issue #140 modernization: slim, theme-aware scrollbars for every
    scrollable container introduced across #138/#122 — ::-webkit-scrollbar
    is Chromium-only, which is exactly the extension's own supported
-   range (Chrome/Edge/Opera, see CLAUDE.md's Build section), so no
+   range (Chrome/Edge/Opera), so no
    Firefox-specific scrollbar-* fallback is needed. Listed once here as
    a combined selector rather than a new shared class, so none of these
    five elements' existing class lists (and anything that queries them)
@@ -228,7 +228,7 @@ body {
   flex-direction: column;
   min-height: 100%;
 }
-/* Only one .screen is ever unhidden at a time (see popup.js's render());
+/* Only one .screen is ever unhidden at a time (see popup.ts's render());
    flex:1 lets it fill whatever height the panel actually has instead of
    being intrinsically sized to its own content. */
 .screen {
@@ -315,7 +315,7 @@ body {
 
 /* Frame-path indicator (Issue #42, Phase 7) — flags a field/node/action
    whose selector was picked inside an iframe (see FramePath on the wire
-   format); the amber tone matches content-script.js's own in-page
+   format); the amber tone matches content-script.ts's own in-page
    overlay/badge color for the same concept. */
 .frame-badge {
   flex: none; font-size: 10px; padding: 1px 6px; border-radius: var(--radius-pill);
@@ -349,7 +349,7 @@ body {
 }
 /* Issue #140 modernization: an animated sliding "thumb" behind whichever
    .mode-btn is .active, instead of each button just recoloring itself in
-   place — see popup.js's syncModeToggleThumbs for the positioning (JS,
+   place — see popup.ts's syncModeToggleThumbs for the positioning (JS,
    not CSS-only, since it depends on the active button's actual rendered
    width/offset, not a fixed value). Sits behind the buttons (z-index: 0
    vs. 1) so their own transparent background lets it show through. */
@@ -566,8 +566,8 @@ body {
 /* Issue #139: shared chevron icon for all three tree-toggle implementations
    (group/api/dom) — one static down-pointing SVG per row instead of each
    swapping between two different Unicode glyphs on click; collapsed state
-   is just a rotation via the .collapsed class (see container-tree-ui.js/
-   api-config-ui.js/popup.js's buildTreeNodeEl for the class toggling). */
+   is just a rotation via the .collapsed class (see container-tree-ui.ts/
+   api-config-ui.ts/popup.ts's buildTreeNodeEl for the class toggling). */
 .group-tree-toggle svg, .api-tree-toggle svg, .dom-tree-toggle svg {
   width: 12px; height: 12px; display: block; transition: transform var(--transition-fast);
 }
@@ -578,7 +578,7 @@ body {
    chevron+.collapsed convention as the tree-toggle rule above, applied
    to a single fixed-title section header instead of a per-row tree
    toggle. Starts expanded (not collapsed) in the markup itself — see
-   popup.js's own render()-time default-open computation for why the
+   popup.ts's own render()-time default-open computation for why the
    .collapsed class is instead toggled entirely from JS on first
    render, never left implicit in the HTML the way tree rows do. */
 .monitoring-section-header {
@@ -875,7 +875,7 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
   background: var(--color-surface); color: var(--color-text-secondary); font-family: inherit;
 }
 /* Theme toggle (Issue #140) — cycles system/light/dark, see shared/
-   theme.js's own doc comment for why a single compact button instead of
+   theme.ts's own doc comment for why a single compact button instead of
    a dropdown (no room for a second select next to the language one at
    this panel width). */
 #theme-toggle {
@@ -992,7 +992,7 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
 .text-filter-row .preview-summary { text-align: left; margin: 6px 0 4px; }
 .text-filter-row + .match-count-hint { margin-top: 0; }
 
-/* Issue #396: reusable help popover (help-popover-ui.js). The "?" button
+/* Issue #396: reusable help popover (help-popover-ui.ts). The "?" button
    sits inline next to a label; its explanation is an in-flow block right
    after the label's row, so it can never run off a narrow side panel. All
    colors come from the theme tokens, so light/dark need no rules of their
@@ -1023,7 +1023,7 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
   color: var(--color-text); font-size: 11px; white-space: pre-wrap; user-select: all;
 }
 
-/* Issue #396: "Advanced" disclosure (advanced-disclosure-ui.js) */
+/* Issue #396: "Advanced" disclosure (advanced-disclosure-ui.ts) */
 .advanced-disclosure { margin-top: 8px; }
 .advanced-disclosure > summary {
   cursor: pointer; font-size: 12px; font-weight: 600; color: var(--color-text-secondary);
@@ -1032,7 +1032,7 @@ button:active:not(:disabled), .blueprint-import-file-trigger:active { transform:
 .advanced-disclosure > summary:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .advanced-disclosure-body { padding-top: 4px; }
 
-/* Issue #397: environment-variable name inputs (env-var-ui.js) — the shared
+/* Issue #397: environment-variable name inputs (env-var-ui.ts) — the shared
    "What is an environment variable?" line, and the inline validation. */
 .env-var-note { margin: 4px 0 6px; font-size: 11px; color: var(--color-text-muted); text-align: left; }
 .env-var-error { margin: 2px 0 6px; font-size: 11px; color: var(--color-danger); text-align: left; overflow-wrap: anywhere; }
@@ -1043,7 +1043,7 @@ input.env-var-invalid, input.env-var-invalid:focus { border-color: var(--color-d
 .output-settings-row:has(> input[data-env-var]) label { width: 150px; }
 @media (max-width: 340px) { .output-settings-row:has(> input[data-env-var]) label { width: 110px; } }
 
-/* Issue #400: regex "Pattern helper" panel and the date-format hint (transform-helpers-ui.js) */
+/* Issue #400: regex "Pattern helper" panel and the date-format hint (transform-helpers-ui.ts) */
 .transform-helper-panel {
   list-style: none; margin: 0 0 8px; padding: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
   background: var(--color-primary-soft); border: 1px solid var(--color-border); border-radius: var(--radius-md);
@@ -1079,7 +1079,7 @@ input.env-var-invalid, input.env-var-invalid:focus { border-color: var(--color-d
 .pagination-suggestion code { word-break: break-all; }
 .pagination-suggestion-example { color: var(--color-text-muted); word-break: break-all; }
 
-/* Issue #404: the JSON-path picker panel under a path input (json-path-picker-ui.js) */
+/* Issue #404: the JSON-path picker panel under a path input (json-path-picker-ui.ts) */
 .json-path-panel {
   margin: 4px 0 8px; padding: 6px 8px; border: 1px solid var(--color-border); border-radius: var(--radius-md);
   background: var(--color-surface-subtle); font-size: 12px; max-width: 100%; overflow-x: auto;

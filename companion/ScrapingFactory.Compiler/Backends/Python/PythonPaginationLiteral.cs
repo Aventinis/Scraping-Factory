@@ -2,13 +2,8 @@ using ScrapingFactory.Compiler.IR;
 
 namespace ScrapingFactory.Compiler.Backends.Python;
 
-// Issue #174: builds the single Scriban context object every one of the
-// four non-API templates (scraper.py.j2, playwright_scraper.py.j2,
-// scraper_grouped.py.j2, playwright_scraper_grouped.py.j2) renders
-// `pagination.*` from — mirrors PythonChangeDetectionLiteral/
-// PythonProxyLiteral exactly: always emits every possible field regardless
-// of which kind (or no kind at all) is active, so the template layer never
-// has to branch on which shape of object it got, only on `enabled`/`kind`.
+// Builds the `pagination.*` Scriban context for the four non-API templates; every field is always emitted, so the
+// templates only branch on `enabled` / `kind`.
 internal static class PythonPaginationLiteral
 {
     public static object BuildContext(PaginationConfig? pagination)
@@ -18,12 +13,7 @@ internal static class PythonPaginationLiteral
             return new
             {
                 enabled = false,
-                // Plain "nextLink"/"pageNumber" (not Python-literal-quoted) —
-                // used for Scriban {{ if }} branching, kept separate from the
-                // *_literal fields below (the quoted form actually emitted as
-                // Python source), same "template layer never compares against
-                // a string-with-quotes" convention change_detection.notify_method
-                // already established.
+                // Plain kind for Scriban branching, apart from the quoted *_literal fields.
                 kind = (string?)null,
                 next_link_selector_literal = "None",
                 url_template_literal = "None",

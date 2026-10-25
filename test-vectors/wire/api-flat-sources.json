@@ -1,0 +1,59 @@
+{
+  "version": "1",
+  "url": "https://example.test/list",
+  "api": {
+    "urlTemplate": "https://example.test/api/cat/{p2}/{p3}/{p4}/{p5}",
+    "itemsPath": "items",
+    "fields": [
+      {
+        "name": "Name",
+        "path": "name"
+      },
+      {
+        "name": "Price",
+        "path": "price"
+      }
+    ],
+    "parameters": [
+      {
+        "name": "p2",
+        "source": {
+          "kind": "discovery",
+          "urlTemplate": "https://example.test/api/categories",
+          "itemsPath": "categories",
+          "valuePath": "slug"
+        }
+      },
+      {
+        "name": "p3",
+        "source": {
+          "kind": "range",
+          "type": "IsoWeek",
+          "from": "2026-W01",
+          "to": "2026-W03"
+        }
+      },
+      {
+        "name": "p4",
+        "source": {
+          "kind": "range",
+          "type": "Number",
+          "from": "1",
+          "to": "3"
+        }
+      },
+      {
+        "name": "p5",
+        "source": {
+          "kind": "range",
+          "type": "Date",
+          "from": "20260101",
+          "to": "20260103",
+          "format": "{yyyy}{mm}{dd}"
+        }
+      }
+    ]
+  },
+  "scriptFileName": null,
+  "outputFileName": null
+}

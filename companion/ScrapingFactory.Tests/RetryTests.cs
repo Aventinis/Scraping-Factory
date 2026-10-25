@@ -121,7 +121,7 @@ public class RetryTests
         using var flaky = new FlakyServer(2, () => Status(HttpStatusCode.ServiceUnavailable), Html);
         var script = new PythonCodeGenerator().Generate(FlatPlan(flaky.Server.BaseUrl, new RetryConfig { MaxAttempts = 3, DelayMs = 100 }));
 
-        var (exitCode, stdout, _) = await RunScriptAsync(script);
+        var (exitCode, stdout, _) = await ScriptRunner.RunScriptTextAsync(script, timeout: TimeSpan.FromSeconds(60));
 
         Assert.Equal(0, exitCode);
         Assert.Equal(3, flaky.Requests.Count);
@@ -135,7 +135,7 @@ public class RetryTests
         using var flaky = new FlakyServer(1, () => Status((HttpStatusCode)429, new Dictionary<string, string> { ["Retry-After"] = "1" }), Html);
         var script = new PythonCodeGenerator().Generate(FlatPlan(flaky.Server.BaseUrl, new RetryConfig { MaxAttempts = 2, DelayMs = 0 }));
 
-        var (exitCode, stdout, _) = await RunScriptAsync(script);
+        var (exitCode, stdout, _) = await ScriptRunner.RunScriptTextAsync(script, timeout: TimeSpan.FromSeconds(60));
 
         Assert.Equal(0, exitCode);
         var times = flaky.Requests.Select(r => r.AtMs).ToList();
@@ -149,7 +149,7 @@ public class RetryTests
         using var flaky = new FlakyServer(1, () => Status(HttpStatusCode.Forbidden), Html);
         var script = new PythonCodeGenerator().Generate(FlatPlan(flaky.Server.BaseUrl, new RetryConfig { MaxAttempts = 3, DelayMs = 100 }));
 
-        var (_, stdout, _) = await RunScriptAsync(script);
+        var (_, stdout, _) = await ScriptRunner.RunScriptTextAsync(script, timeout: TimeSpan.FromSeconds(60));
 
         Assert.Single(flaky.Requests);
         Assert.DoesNotContain("Retrying in", stdout);
@@ -159,9 +159,9 @@ public class RetryTests
     public async Task ExhaustedRetries_FailExactlyLikeWithoutRetries()
     {
         using var flaky = new FlakyServer(int.MaxValue, () => Status(HttpStatusCode.ServiceUnavailable), Html);
-        var withRetry = await RunScriptAsync(new PythonCodeGenerator().Generate(FlatPlan(flaky.Server.BaseUrl, new RetryConfig { MaxAttempts = 2, DelayMs = 50 })));
+        var withRetry = await ScriptRunner.RunScriptTextAsync(new PythonCodeGenerator().Generate(FlatPlan(flaky.Server.BaseUrl, new RetryConfig { MaxAttempts = 2, DelayMs = 50 })), timeout: TimeSpan.FromSeconds(60));
         var requestsWithRetry = flaky.Requests.Count;
-        var withoutRetry = await RunScriptAsync(new PythonCodeGenerator().Generate(FlatPlan(flaky.Server.BaseUrl, null)));
+        var withoutRetry = await ScriptRunner.RunScriptTextAsync(new PythonCodeGenerator().Generate(FlatPlan(flaky.Server.BaseUrl, null)), timeout: TimeSpan.FromSeconds(60));
 
         Assert.Equal(2, requestsWithRetry);
         Assert.Equal(withoutRetry.ExitCode, withRetry.ExitCode);
@@ -186,7 +186,7 @@ public class RetryTests
             Retry = new RetryConfig { MaxAttempts = 2, DelayMs = 100 },
         };
 
-        var (exitCode, stdout, stderr) = await RunScriptAsync(new PythonApiCodeGenerator().Generate(plan));
+        var (exitCode, stdout, stderr) = await ScriptRunner.RunScriptTextAsync(new PythonApiCodeGenerator().Generate(plan), timeout: TimeSpan.FromSeconds(60));
 
         Assert.Equal(7, exitCode); // EXIT_REQUEST_FAILED — the clean API error once retries are exhausted
         Assert.Contains("Retrying in 0.1 s (attempt 2 of 2) after ConnectionError:", stdout);
@@ -218,7 +218,7 @@ public class RetryTests
             Retry = new RetryConfig { MaxAttempts = 3, DelayMs = 100 },
         };
 
-        var (exitCode, stdout, _) = await RunScriptAsync(new PythonApiCodeGenerator().Generate(plan));
+        var (exitCode, stdout, _) = await ScriptRunner.RunScriptTextAsync(new PythonApiCodeGenerator().Generate(plan), timeout: TimeSpan.FromSeconds(60));
 
         Assert.Equal(0, exitCode);
         Assert.Equal(2, flaky.Requests.Count);
@@ -232,7 +232,7 @@ public class RetryTests
         using var flaky = new FlakyServer(1, () => Status(HttpStatusCode.BadGateway), Html);
         var script = new PythonPlaywrightCodeGenerator().Generate(FlatPlan(flaky.Server.BaseUrl, new RetryConfig { MaxAttempts = 3, DelayMs = 100 }, ScrapingEngine.Browser));
 
-        var (exitCode, stdout, stderr) = await RunScriptAsync(script);
+        var (exitCode, stdout, stderr) = await ScriptRunner.RunScriptTextAsync(script, timeout: TimeSpan.FromSeconds(60));
 
         Assert.True(exitCode == 0, stderr);
         Assert.Equal(2, flaky.Requests.Count);
@@ -249,7 +249,7 @@ public class RetryTests
         var plan = FlatPlan(flaky.Server.BaseUrl, new RetryConfig { MaxAttempts = 2, DelayMs = 100 });
         var paced = new ScrapingPlan { Steps = plan.Steps, Retry = plan.Retry, RequestDelay = new RequestDelayConfig { MinMs = 1000, MaxMs = 1000 } };
 
-        var (exitCode, _, stderr) = await RunScriptAsync(new PythonCodeGenerator().Generate(paced));
+        var (exitCode, _, stderr) = await ScriptRunner.RunScriptTextAsync(new PythonCodeGenerator().Generate(paced), timeout: TimeSpan.FromSeconds(60));
 
         Assert.True(exitCode == 0, stderr);
         var times = flaky.Requests.Select(r => r.AtMs).ToList();
@@ -269,41 +269,4 @@ public class RetryTests
         Assert.Equal(3, flaky.Requests.Count);
     }
 
-    private static async Task<(int ExitCode, string Stdout, string Stderr)> RunScriptAsync(string script)
-    {
-        var workDir = Directory.CreateTempSubdirectory("scrapingfactory-retry-").FullName;
-        try
-        {
-            var scriptPath = Path.Combine(workDir, "scraper.py");
-            await File.WriteAllTextAsync(scriptPath, script);
-            foreach (var candidate in new[] { "python3", "python" })
-            {
-                var psi = new ProcessStartInfo
-                {
-                    FileName = candidate, WorkingDirectory = workDir,
-                    RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,
-                };
-                psi.ArgumentList.Add(scriptPath);
-                try
-                {
-                    using var process = new Process { StartInfo = psi };
-                    process.Start();
-                    var stderrTask = process.StandardError.ReadToEndAsync();
-                    var stdoutTask = process.StandardOutput.ReadToEndAsync();
-                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-                    await process.WaitForExitAsync(cts.Token);
-                    return (process.ExitCode, await stdoutTask, await stderrTask);
-                }
-                catch (System.ComponentModel.Win32Exception)
-                {
-                    // executable not found — try the next candidate
-                }
-            }
-            throw new InvalidOperationException("No python3/python executable found.");
-        }
-        finally
-        {
-            Directory.Delete(workDir, recursive: true);
-        }
-    }
 }

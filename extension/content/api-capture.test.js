@@ -1,7 +1,7 @@
-// api-capture.js is injected in the MAIN world in the real extension, but
+// api-capture.ts is injected in the MAIN world in the real extension, but
 // its buffering/truncation logic (buildEntry, truncateBody, recordEntry,
 // startRecording/stopRecording) is plain JS with no chrome/DOM dependency —
-// exported for testing the same way content-script.js exports its pure
+// exported for testing the same way content-script.ts exports its pure
 // functions. The actual fetch/XHR monkey-patching is skipped under Jest
 // (guarded by `process.env.NODE_ENV !== 'test'`, see the file) so these tests
 // exercise the buffer/cap behavior directly instead.

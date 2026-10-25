@@ -4,38 +4,22 @@ public sealed class ScriptVerificationResult
 {
     public bool Success { get; init; }
 
-    // Set whenever Success is false: process crash (with stderr excerpt),
-    // timeout, missing/unparsable output.csv, or zero data rows.
+    // Set whenever Success is false: crash (with stderr), timeout, missing or unparsable output, or zero rows.
     public string? Error { get; init; }
 
     public int RowCount { get; init; }
 
-    // Issue #122: only set when the caller opted in (VerifyAsync's
-    // includePreview parameter) and Success is true — see ScriptPreviewData.
+    // Only when requested and successful.
     public ScriptPreviewData? Preview { get; init; }
 
-    // Issue #161: only set when the caller opted in (VerifyAsync's
-    // includeOutputFile parameter) and Success is true — the complete,
-    // uncapped content of the trial run's own output.csv/.xml/.json,
-    // read raw (not re-derived from Preview's capped/re-serialized sample)
-    // so what the user downloads is byte-for-byte what the script wrote.
+    // Only when requested and successful: the complete output file as the script wrote it (read raw, not rebuilt
+    // from Preview), so a download is byte-identical.
     public string? OutputFileContent { get; init; }
-
-    // The output file's own name (e.g. "output.csv") — mirrors whichever
-    // ScrapingPlan.OutputFileBaseName/OutputFormat combination VerifyAsync
-    // was called with, so the extension can offer the same filename back to
-    // the user without re-deriving the extension itself.
     public string? OutputFileName { get; init; }
 
-    // Issue #229: null for the text formats (the content is the file's own
-    // text); "base64" for the binary table formats (.sqlite/.xlsx), whose
-    // bytes cannot travel as a JSON string otherwise.
+    // null for text formats; "base64" for the binary table formats (.sqlite/.xlsx).
     public string? OutputFileEncoding { get; init; }
 
-    // Issue #182: only set by VerifyBlocksAsync (never by VerifyAsync) when
-    // Success is true — one entry per block, in the same order the caller's
-    // own block list was given in. RowCount/Preview/OutputFileContent/
-    // OutputFileName above stay unset on the outer result in this case;
-    // they only ever describe a single-shape run's one output file.
+    // VerifyBlocksAsync only: one entry per block in the caller's order. The single-file members above stay unset.
     public IReadOnlyList<BlockVerificationResult>? Blocks { get; init; }
 }

@@ -480,13 +480,9 @@ public class EmailEndpointTests : IDisposable
 
     private WebApplicationFactory<Program> Factory(Dictionary<string, string?>? extra = null, bool smtp = true)
     {
-        string Db(string name) { var p = Path.Combine(Path.GetTempPath(), $"sf-mail-ep-{name}-{Guid.NewGuid():N}.db"); _files.Add(p); return p; }
-        var settings = new Dictionary<string, string?>
-        {
-            [AuthOptions.EnabledKey] = "true", [AuthOptions.RegistrationKey] = "Open",
-            ["Companion:SavedConfigsDbPath"] = Db("configs"), ["Companion:OutputBlueprintsDbPath"] = Db("blueprints"),
-            ["Companion:TransformPresetsDbPath"] = Db("presets"), ["Companion:UsersDbPath"] = Db("users"),
-        };
+        var settings = TestCompanionFactory.TempDatabaseSettings("mail-ep", _files);
+        settings[AuthOptions.EnabledKey] = "true";
+        settings[AuthOptions.RegistrationKey] = "Open";
         if (smtp)
         {
             settings[EmailOptions.SmtpHostKey] = "127.0.0.1";
@@ -494,19 +490,15 @@ public class EmailEndpointTests : IDisposable
             settings["Companion:Email:Smtp:From"] = "noreply@example.com";
         }
         foreach (var (key, value) in extra ?? []) settings[key] = value;
-        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-        {
-            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(settings));
-            builder.ConfigureTestServices(services => services.AddSingleton<IEmailSender>(_mail));
-        });
+        _factory = TestCompanionFactory.Create(settings, builder =>
+            builder.ConfigureTestServices(services => services.AddSingleton<IEmailSender>(_mail)));
         return _factory;
     }
 
     public void Dispose()
     {
         _factory?.Dispose();
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-        foreach (var file in _files) if (File.Exists(file)) File.Delete(file);
+        TestCompanionFactory.DeleteDatabases(_files);
     }
 
     private static StringContent Json(object payload) => new(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");

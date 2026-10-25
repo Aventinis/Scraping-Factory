@@ -84,20 +84,20 @@ async function openPopup(context, extensionId) {
 // a genuine side panel: a side panel doesn't occupy a tab slot at all, so
 // chrome.tabs.query({active:true}) called from it correctly returns whatever
 // regular page the user is looking at. Opening popup.html as a second tab
-// makes IT the active tab the instant it's opened — popup.js would then see
+// makes IT the active tab the instant it's opened — popup.ts would then see
 // itself (a chrome-extension:// URL) as "the current page" instead of the
 // fixture. Confirmed via a live spike that Playwright's page.bringToFront()
 // on the fixture page fixes this: it doesn't close/hide the popup tab, it
 // only changes which tab Chrome itself considers active, which is exactly
 // what chrome.tabs.query reads. Call this right before any action that
-// depends on popup.js reading the correct current-tab URL (initial load,
+// depends on popup.ts reading the correct current-tab URL (initial load,
 // "Check robots.txt", a fresh element-selection round, etc.).
 async function focusFixture(fixturePage) {
   await fixturePage.bringToFront();
   await fixturePage.waitForTimeout(150);
 }
 
-// Waits for popup.js's init() (companion health check + chrome.tabs.query)
+// Waits for popup.ts's init() (companion health check + chrome.tabs.query)
 // to finish and land on the idle screen — the point at which #url-display
 // reflects whatever tab focusFixture last made active. Throws instead of
 // silently timing out on the companion-unreachable screen, since that's a
