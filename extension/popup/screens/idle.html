@@ -138,10 +138,12 @@
       </div>
 
       <!-- Shown once "Übernehmen" was clicked on the API_CONFIG screen;
-           "Verwerfen" just clears it so a bad config isn't stuck. -->
+           "Bearbeiten" reopens it (api-config-reopen.ts), "Verwerfen" just clears it so a bad config isn't stuck. -->
       <div id="api-config-panel" class="api-candidates-panel hidden">
         <p id="api-config-summary" class="api-candidates-target"></p>
+        <p id="api-config-not-editable" class="match-count-hint hidden" data-i18n="idle.apiConfigNotEditable"></p>
         <div class="actions">
+          <button id="btn-api-config-edit" class="btn-secondary btn-tiny hidden" type="button" data-i18n="common.edit"></button>
           <button id="btn-api-config-discard" class="btn-secondary btn-tiny" type="button" data-i18n="common.discard"></button>
         </div>
       </div>

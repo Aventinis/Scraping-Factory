@@ -86,6 +86,7 @@
     "apiEntriesEmpty": "Aún no se han grabado solicitudes.",
     "apiEntriesBodyNotCaptured": "[no capturado]",
     "apiConfigSummary": "Configuración de API lista: {fields} campo(s), {parameters} parámetro(s){headers}.",
+    "apiConfigNotEditable": "Esta configuración se cargó, así que no se puede reabrir aquí. Descártala y vuelve a elegir para cambiarla.",
     "apiConfigSummaryHeaders": ", {count} cabecera(s)",
     "previewShowBtn": "Mostrar vista previa",
     "previewHideBtn": "Detener vista previa",

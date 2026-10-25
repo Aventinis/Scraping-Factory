@@ -5,6 +5,7 @@ import type { Mode, PopupBridge, StatePatch } from '../types/popup';
 import { createLogger } from '../shared/logger';
 import { t } from '../i18n/i18n';
 import { countApiConfigFields } from './api-config';
+import { reopenableDraft } from './api-config-reopen';
 import { renderApiEntriesList, renderApiCandidates, toggleApiCapture } from './api-config-ui';
 import { renderGroupTree } from './container-tree-ui';
 import { renderFields } from './flat-mode-ui';
@@ -45,11 +46,11 @@ const OUTPUT_BLUEPRINT_RESET: StatePatch = {
 
 // A Record over every mode: a new mode is a compile error until its row is added here.
 const MODE_SWITCH_CLEARS: Record<Mode, StatePatch> = {
-  flat:      { groups: [], apiConfig: null, apiConfigDraft: null, combinedComponents: [], ...BLOCKS_DRAFT_RESET, ...OUTPUT_BLUEPRINT_RESET },
-  container: { fields: [], apiConfig: null, apiConfigDraft: null, combinedComponents: [], ...BLOCKS_DRAFT_RESET, ...OUTPUT_BLUEPRINT_RESET },
+  flat:      { groups: [], apiConfig: null, apiConfigApplied: null, apiConfigDraft: null, combinedComponents: [], ...BLOCKS_DRAFT_RESET, ...OUTPUT_BLUEPRINT_RESET },
+  container: { fields: [], apiConfig: null, apiConfigApplied: null, apiConfigDraft: null, combinedComponents: [], ...BLOCKS_DRAFT_RESET, ...OUTPUT_BLUEPRINT_RESET },
   api:       { fields: [], groups: [], combinedComponents: [], ...BLOCKS_DRAFT_RESET, ...OUTPUT_BLUEPRINT_RESET },
-  combined:  { fields: [], groups: [], apiConfig: null, apiConfigDraft: null, ...BLOCKS_DRAFT_RESET, ...OUTPUT_BLUEPRINT_RESET },
-  blocks:    { fields: [], groups: [], apiConfig: null, apiConfigDraft: null, combinedComponents: [], ...BLOCKS_DRAFT_RESET },
+  combined:  { fields: [], groups: [], apiConfig: null, apiConfigApplied: null, apiConfigDraft: null, ...BLOCKS_DRAFT_RESET, ...OUTPUT_BLUEPRINT_RESET },
+  blocks:    { fields: [], groups: [], apiConfig: null, apiConfigApplied: null, apiConfigDraft: null, combinedComponents: [], ...BLOCKS_DRAFT_RESET },
 };
 
 export function switchMode(bridge: PopupBridge, mode: Mode): void {
@@ -247,6 +248,9 @@ export function renderIdleScreen(bridge: PopupBridge): void {
           headers: headers ? t('idle.apiConfigSummaryHeaders', { count: headers.length }) : '',
         });
       }
+      const reopenable = !!reopenableDraft(state);
+      byIdOrNull('btn-api-config-edit')?.classList.toggle('hidden', !reopenable);
+      byIdOrNull('api-config-not-editable')?.classList.toggle('hidden', reopenable);
       apiConfigPanel.classList.remove('hidden');
     } else {
       apiConfigPanel.classList.add('hidden');

@@ -86,6 +86,7 @@
     "apiEntriesEmpty": "Keine aufgezeichneten Anfragen.",
     "apiEntriesBodyNotCaptured": "[nicht erfasst]",
     "apiConfigSummary": "API-Konfiguration bereit: {fields} Feld(er), {parameters} Parameter{headers}.",
+    "apiConfigNotEditable": "Diese Konfiguration wurde geladen und lässt sich hier nicht erneut öffnen. Verwirf sie und wähle neu, um sie zu ändern.",
     "apiConfigSummaryHeaders": ", {count} Header",
     "previewShowBtn": "Vorschau anzeigen",
     "previewHideBtn": "Vorschau beenden",

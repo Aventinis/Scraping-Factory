@@ -23,7 +23,7 @@ export type StoredSession = Partial<Pick<State,
   | 'respectRobotsDelay' | 'robotsDisallow' | 'appendOutput' | 'hardening' | 'scriptFileName' | 'outputFileName' | 'selectionKind'
   | 'pendingParentPath' | 'pendingNewContainer' | 'pendingBrowserActionIndex' | 'pendingBrowserActionField'
   | 'pendingApiDiscoveryPartId' | 'pendingApiDiscoveryActionIndex' | 'pendingApiDiscoveryActionField' | 'apiSearchTarget'
-  | 'apiConfigDraft' | 'apiConfig' | 'combinedComponents' | 'blocks' | 'blocksDraftShape' | 'blocksDraftName'
+  | 'apiConfigDraft' | 'apiConfigApplied' | 'apiConfig' | 'combinedComponents' | 'blocks' | 'blocksDraftShape' | 'blocksDraftName'
   | 'blocksDraftOutputFileName' | 'blocksEditingIndex' | 'selectedOutputBlueprintId' | 'selectedOutputBlueprintFieldNames'
   | 'outputBlueprintMapping' | 'pendingElementAttributes' | 'pendingFramePath' | 'pendingSelector'>> & {
   // Written by the service worker from the page, so only checked with typeof where they are read.
@@ -85,6 +85,7 @@ export function applyStoredSessionState(state: State, stored: StoredSession): St
   if (stored.pendingApiDiscoveryActionIndex !== undefined) next = { ...next, pendingApiDiscoveryActionIndex: stored.pendingApiDiscoveryActionIndex };
   if (stored.pendingApiDiscoveryActionField) next = { ...next, pendingApiDiscoveryActionField: stored.pendingApiDiscoveryActionField };
   if (stored.apiConfigDraft)        next = { ...next, apiConfigDraft: stored.apiConfigDraft };
+  if (stored.apiConfigApplied)      next = { ...next, apiConfigApplied: stored.apiConfigApplied };
   if (stored.apiConfig)             next = { ...next, apiConfig: stored.apiConfig };
   if (Array.isArray(stored.combinedComponents)) next = { ...next, combinedComponents: stored.combinedComponents };
   if (Array.isArray(stored.blocks))          next = { ...next, blocks: stored.blocks };
