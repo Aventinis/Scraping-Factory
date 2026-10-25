@@ -1,4 +1,4 @@
-<!-- source: 7caa3997b8ca -->
+<!-- source: f2902344119d -->
 # Scraping-Modi
 
 Die Schaltflächen oben auf dem Startbildschirm legen fest, *wie* die Daten
@@ -107,6 +107,20 @@ schreiben. Der API-Modus findet diese Anfrage für dich:
 3. Entscheide auf dem API-Bildschirm für jeden Teil der Anfrage-Adresse, ob er fest
    oder **variabel** ist (eine Werteliste, ein zweiter Endpunkt, der die Werte
    liefert, oder ein Bereich wie ISO-Wochen), und benenne deine Felder.
+
+Nach **Übernehmen** zeigt der Hauptbildschirm das API-Panel. **Bearbeiten** öffnet den
+Bildschirm genau so, wie du ihn übernommen hast — ein Feld umbenennen, eine
+Transformation ändern, ein Feld oder eine Gruppe aus der Aufzeichnung mit
+**+ Datenfeld** / **+ Gruppe** ergänzen — und **Übernehmen** bestätigt erneut.
+**Abbrechen** verwirft die Änderungen und behält die vorherige Konfiguration.
+**Verwerfen** entfernt die Konfiguration komplett.
+
+![Das API-Panel nach Übernehmen, mit Bearbeiten und Verwerfen](images/modes-api-edit.png)
+
+**Bearbeiten** gibt es nur für eine Konfiguration, die du in dieser Sitzung übernommen
+hast. Eine aus **Gespeicherten Konfigurationen** geladene oder importierte
+Konfiguration zeigt stattdessen einen Hinweis: verwirf sie und wähle neu, um sie zu
+ändern.
 
 Jedes **?** auf diesem Bildschirm erklärt das Konzept an Ort und Stelle: was ein
 **variabler** URL-Teil ist, was jede Wertquelle tut (mit Beispiel), was **→ Variabel**

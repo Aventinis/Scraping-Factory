@@ -98,6 +98,18 @@ HTML. API mode finds that request for you:
    fixed or **variable** (a list of values, a second endpoint that supplies the
    values, or a range such as ISO weeks), and name your fields.
 
+After **Apply** the main screen shows the API panel. **Edit** reopens the screen
+exactly as you applied it — rename a field, change a transform, add a field or a
+group from the recording with **+ Data field** / **+ Group** — and **Apply** confirms
+again. **Cancel** drops the changes and keeps the previous configuration.
+**Discard** removes the configuration completely.
+
+![The API panel after Apply, with Edit and Discard](images/modes-api-edit.png)
+
+**Edit** is only there for a configuration you applied in this session. A
+configuration you loaded from **Saved configurations** or imported shows a note
+instead: discard it and pick again to change it.
+
 Each **?** on that screen explains the concept in place: what a **variable** URL
 part is, what each value source does (with an example), what **→ Variable** does to
 a request-body value. The everyday value sources — **Value list**, **List from

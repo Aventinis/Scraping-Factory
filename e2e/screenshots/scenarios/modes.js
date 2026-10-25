@@ -99,4 +99,28 @@ module.exports = [
       await s.shot('modes-api-use-name', '#api-candidates-list .api-candidate >> nth=0');
     },
   },
+  {
+    // Issue #506: the API panel after Apply, with Edit next to Discard.
+    id: 'modes-api-edit',
+    fixture: 'api-nested-and-post',
+    async run(s) {
+      const { popupPage, fixturePage } = s;
+      await s.waitForIdle();
+      await popupPage.click('#btn-mode-api');
+      await popupPage.click('#btn-api-capture');
+      await fixturePage.click('#btn-reload-search');
+      await fixturePage.waitForSelector('#result-search .product-title');
+      await popupPage.click('#btn-api-capture');
+      await fixturePage.bringToFront();
+      await fixturePage.waitForTimeout(150);
+      await popupPage.click('#btn-api-search');
+      await fixturePage.click('#result-search .product-title >> nth=0');
+      await popupPage.waitForSelector('.api-candidate-confirm', { state: 'visible' });
+      await popupPage.click('.api-candidate-confirm');
+      await popupPage.waitForSelector('#screen-api-config:not(.hidden)');
+      await popupPage.click('#btn-api-config-confirm');
+      await s.waitForIdle();
+      await s.shot('modes-api-edit', '#api-config-panel');
+    },
+  },
 ];

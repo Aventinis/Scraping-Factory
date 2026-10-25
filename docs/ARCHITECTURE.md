@@ -736,6 +736,21 @@ docs/design-notes/extension.md for the details.
 - Tests: `popup/hardening-presets.test.js`, `popup/hardening-presets-ui.test.js`,
   real-browser check `e2e/examples/issue-399-hardening-plain-language-check.js`
 
+### 2.10p Reopening an applied API configuration (Issue #506)
+
+**Apply** keeps the draft it built the wire `apiConfig` from (`State.apiConfigApplied`, persisted in the
+session with `apiConfig`); **Edit** on the main screen's API panel hands a deep copy back to the
+API_CONFIG screen. The snapshot counts only while it still builds exactly the confirmed `apiConfig`
+(`reopenableDraft`), so a loaded, imported or replaced configuration simply has no Edit button. See
+docs/design-notes/extension.md for the rules.
+
+- Extension: `popup/api-config-reopen.ts` (pure: `buildApiConfigFromDraft`, moved out of `confirmApiConfig`;
+  `reopenableDraft`, `reopenPatch`), `popup/api-config-reopen-ui.ts` (`openApiConfigEdit`, the button wiring),
+  `api-config-ui.ts` (`confirmApiConfig` stores the snapshot), `idle-screen-ui.ts` (Edit button / hint),
+  `session-restore.ts` + `popup.ts` (persistence), `idle.html` (`btn-api-config-edit`)
+- Tests: `popup/api-config-reopen.test.js`, `popup/api-config-reopen-popup.test.js`, real-browser check
+  `e2e/examples/issue-506-api-reopen-config-check.js` (fixtures `api-nested-and-post`, `embedded-json-menu`)
+
 ### 2.10o Editing a field after it was created (Issue #505)
 
 Flat and Container fields get an **Edit** button. It reopens the creation dialogs
