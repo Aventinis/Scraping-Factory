@@ -9,6 +9,7 @@ export interface OutputNameSettings {
 
 // typed name → else the chosen default → else null (today's `output`). The default passes through the same sanitizing as a typed name,
 // reserved names and an empty result included, so a stored "CON" or "!!!" ends up as the fallback instead of an invalid file name.
+// `scriptFileName` is the script name the run uses (typed or default, see name-defaults.ts).
 export function resolveOutputFileName(typed: string | null | undefined, scriptFileName: string, settings: OutputNameSettings): string | null {
   if (typed && typed.trim()) return typed;
   if (settings.outputNameMode === 'script') return sanitizeFileNameBase(scriptFileName, 'scraper');

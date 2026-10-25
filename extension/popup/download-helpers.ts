@@ -7,7 +7,8 @@
 import type * as SFDraft from '../types/drafts';
 import { createLogger } from '../shared/logger';
 import { t } from '../i18n/i18n';
-import { sanitizeFileNameBase, buildConfigExport, configOptionsFromState } from './scraping-config-builder';
+import { buildConfigExport, configOptionsFromState } from './scraping-config-builder';
+import { scriptFileBase } from './name-defaults';
 import type { ConfigState } from './scraping-config-builder';
 import type { CombinedComponentRef } from './combined-config';
 import { resolveCombinedComponents } from './companion-client';
@@ -28,7 +29,7 @@ export interface DownloadBridge {
 
 export function triggerDownload(bridge: DownloadBridge): void {
   const state = bridge.getState();
-  const fileName = `${sanitizeFileNameBase(state.scriptFileName, 'scraper')}.py`;
+  const fileName = `${scriptFileBase(state.scriptFileName, state.url, getGlobalSettings())}.py`;
   log('DOWNLOAD', fileName);
   const blob = new Blob([state.scriptText], { type: 'text/plain' });
   const objectUrl = URL.createObjectURL(blob);

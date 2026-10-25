@@ -14,7 +14,8 @@ import {
 import { STATES } from './api-config';
 import { showToast, showErrorToast, hideToast, setLastError } from './toast';
 import { resolveOutputFileName } from './output-name';
-import { buildScrapingConfig, buildVerificationValues, computeScriptFileNamePatch, configOptionsFromState } from './scraping-config-builder';
+import { buildScrapingConfig, buildVerificationValues, configOptionsFromState, sanitizeFileNameBase } from './scraping-config-builder';
+import { resolveScriptFileName } from './name-defaults';
 import type { CombinedComponentRef } from './combined-config';
 import { buildHeaderVerificationValues } from './request-headers';
 import { buildBootstrapVerificationValues } from './api-bootstrap';
@@ -130,11 +131,7 @@ export async function checkCompanion(bridge: PopupBridge): Promise<void> {
     );
     const url = tabs[0]?.url ?? '';
     log('TAB_URL', url);
-    // Issue-driven follow-up: the default-script-name preference — see
-    // computeScriptFileNamePatch's own doc comment for the 'hostname'-vs-
-    // 'fixed' mode rule.
-    const scriptFileNamePatch = computeScriptFileNamePatch(bridge.getState().scriptFileName, url, getGlobalSettings());
-    bridge.setState(STATES.IDLE, { url, ...scriptFileNamePatch });
+    bridge.setState(STATES.IDLE, { url });
     // Issue #141: fire-and-forget — fetchSavedConfigs patches state itself
     // once (or if) it resolves, no need to await/block the IDLE transition
     // on it.
@@ -249,9 +246,11 @@ export async function generate(bridge: PopupBridge): Promise<void> {
   // externalConfig moved from per-scrape _state to the cross-session global
   // Settings tab (shared/global-settings.ts) — read from there now.
   const globalSettings = getGlobalSettings();
-  // Issue #509: only a real run takes the default output file name; a saved or exported configuration keeps what the user typed.
-  const outputFileName = resolveOutputFileName(state.outputFileName, state.scriptFileName, globalSettings);
-  const config = buildScrapingConfig(configOptionsFromState(state, globalSettings, { combinedComponents, outputFileName }));
+  // Issues #509/#510: only a real run takes the defaults of the script and output file names (the fields stay empty until typed); a
+  // saved or exported configuration keeps what the user typed.
+  const scriptFileName = resolveScriptFileName(state.scriptFileName, state.url, globalSettings);
+  const outputFileName = resolveOutputFileName(state.outputFileName, sanitizeFileNameBase(scriptFileName, 'scraper'), globalSettings);
+  const config = buildScrapingConfig(configOptionsFromState(state, globalSettings, { combinedComponents, scriptFileName, outputFileName }));
   // One-time test values (Fill, bootstrap, request headers) go only in this request body, deliberately out of `config` and so
   // out of the log line, the export and bug reports. A bad environment-variable name is reported up front, naming it.
   const invalidEnvVars = findInvalidEnvVarNames(config);

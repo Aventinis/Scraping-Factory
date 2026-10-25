@@ -6,6 +6,7 @@ import { createLogger } from '../shared/logger';
 import { t } from '../i18n/i18n';
 import { countApiConfigFields } from './api-config';
 import { reopenableDraft } from './api-config-reopen';
+import { defaultScriptName, defaultOutputName } from './name-defaults';
 import { renderApiEntriesList, renderApiCandidates, toggleApiCapture } from './api-config-ui';
 import { renderGroupTree } from './container-tree-ui';
 import { renderFields } from './flat-mode-ui';
@@ -257,10 +258,18 @@ export function renderIdleScreen(bridge: PopupBridge): void {
   // Only overwrite an input's value while it isn't the one the user is
   // currently typing in — otherwise every keystroke's setState()/render()
   // round-trip would reset the cursor to the end of the field.
+  // Issue #510: both fields hold only what the user typed; the default that an empty field falls back to is the placeholder.
+  const nameSettings = getGlobalSettings();
   const scriptNameInput = byIdOrNull<HTMLInputElement>('input-script-filename');
-  if (scriptNameInput && document.activeElement !== scriptNameInput) scriptNameInput.value = state.scriptFileName;
+  if (scriptNameInput) {
+    scriptNameInput.placeholder = defaultScriptName(state.url, nameSettings);
+    if (document.activeElement !== scriptNameInput) scriptNameInput.value = state.scriptFileName;
+  }
   const outputNameInput = byIdOrNull<HTMLInputElement>('input-output-filename');
-  if (outputNameInput && document.activeElement !== outputNameInput) outputNameInput.value = state.outputFileName;
+  if (outputNameInput) {
+    outputNameInput.placeholder = defaultOutputName(state.scriptFileName, state.url, nameSettings);
+    if (document.activeElement !== outputNameInput) outputNameInput.value = state.outputFileName;
+  }
   // Issue #182: no single output file to name for Blocks mode — each
   // block names its own (see #blocks-mode-section's own input).
   byIdOrNull('output-filename-row')?.classList.toggle('hidden', state.mode === 'blocks');

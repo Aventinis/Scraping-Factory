@@ -8,8 +8,7 @@ import { createLogger } from '../shared/logger';
 import { t } from '../i18n/i18n';
 import { STATES } from './api-config';
 import { buildGroupNode, insertContainerNode } from './container-tree';
-import { updateBrowserAction, computeScriptFileNamePatch } from './scraping-config-builder';
-import { getGlobalSettings } from '../shared/global-settings';
+import { updateBrowserAction } from './scraping-config-builder';
 import { resolveLinkHref } from './pagination-template';
 import { showToast, showMatchCountToast, setLastError } from './toast';
 import { markPickHandled, withDiscoveryActionPatch } from './session-restore';
@@ -66,9 +65,7 @@ export function wireMessageListener(bridge: PopupBridge): void {
       // page ending in a confusing "no data".
       if (typeof message.url === 'string' && message.url && message.url !== state.url) {
         log('ELEMENT_SELECTED page changed since last sync', { from: state.url, to: message.url });
-        // The default-script-name preference applies here too: a new site mid-session counts like the initial detection.
-        const scriptFileNamePatch = computeScriptFileNamePatch(state.scriptFileName, message.url, getGlobalSettings());
-        bridge.setState(STATES.SELECTING, { url: message.url, ...scriptFileNamePatch });
+        bridge.setState(STATES.SELECTING, { url: message.url });
         showToast(t('toast.trackedUrlUpdated', { url: message.url }), null, 'info');
       }
       const framePath = message.framePath || null;

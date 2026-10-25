@@ -10,7 +10,6 @@ const {
   configOptionsFromState,
   sanitizeFileNameBase,
   deriveScriptFileNameFromHostname,
-  computeScriptFileNamePatch,
   parseAdditionalUrls,
   addField,
   removeField,
@@ -157,10 +156,8 @@ describe('sanitizeFileNameBase (shared vectors)', () => {
   });
 });
 
-// ── deriveScriptFileNameFromHostname / computeScriptFileNamePatch ───────────
-// Issue-driven follow-up: the global Settings tab's default-script-name
-// preference — 'hostname' mode derives the name from the current site,
-// 'fixed' mode only ever fills a still-blank name.
+// ── deriveScriptFileNameFromHostname ────────────────────────────────────────
+// The default script name itself (host name or fixed name, shown as the placeholder) is name-defaults.test.js.
 
 describe('deriveScriptFileNameFromHostname', () => {
   test('sanitizes the URL\'s own hostname', () => {
@@ -170,27 +167,6 @@ describe('deriveScriptFileNameFromHostname', () => {
   test('falls back for a malformed/relative URL', () => {
     expect(deriveScriptFileNameFromHostname('not a url', 'scraper')).toBe('scraper');
     expect(deriveScriptFileNameFromHostname('', 'scraper')).toBe('scraper');
-  });
-});
-
-describe('computeScriptFileNamePatch', () => {
-  test('hostname mode always recomputes/overwrites, regardless of the current name', () => {
-    const settings = { scriptNameMode: 'hostname', scriptNameFixed: 'scraper' };
-    expect(computeScriptFileNamePatch('', 'https://shop.example.com/', settings))
-      .toEqual({ scriptFileName: 'shop_example_com' });
-    expect(computeScriptFileNamePatch('already-set', 'https://shop.example.com/', settings))
-      .toEqual({ scriptFileName: 'shop_example_com' });
-  });
-
-  test('hostname mode falls back to scriptNameFixed for a malformed URL', () => {
-    const settings = { scriptNameMode: 'hostname', scriptNameFixed: 'myfallback' };
-    expect(computeScriptFileNamePatch('', 'not a url', settings)).toEqual({ scriptFileName: 'myfallback' });
-  });
-
-  test('fixed mode only fills a blank name, never stomps a manual edit', () => {
-    const settings = { scriptNameMode: 'fixed', scriptNameFixed: 'scraper' };
-    expect(computeScriptFileNamePatch('', 'https://example.com/', settings)).toEqual({ scriptFileName: 'scraper' });
-    expect(computeScriptFileNamePatch('my-custom-name', 'https://example.com/', settings)).toEqual({});
   });
 });
 

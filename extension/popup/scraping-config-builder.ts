@@ -139,23 +139,6 @@ export function deriveScriptFileNameFromHostname(url: string, fallback: string):
 }
 
 /**
- * The scriptFileName patch to apply whenever a fresh site is detected (the health check, the stale-tracked-URL self-correction),
- * shared by every call site. In 'hostname' mode the name is always recomputed, tracking the current site; in 'fixed' mode it is only
- * filled while still blank, so a manual edit is never overwritten. {} when neither applies.
- */
-export function computeScriptFileNamePatch(
-  currentScriptFileName: string, url: string, globalSettings: SFDraft.GlobalSettings,
-): { scriptFileName?: string } {
-  if (globalSettings.scriptNameMode === 'hostname') {
-    return { scriptFileName: deriveScriptFileNameFromHostname(url, globalSettings.scriptNameFixed) };
-  }
-  if (!currentScriptFileName) {
-    return { scriptFileName: globalSettings.scriptNameFixed };
-  }
-  return {};
-}
-
-/**
  * One URL per line from the additional-start-urls textarea. Blank lines are a formatting artifact and dropped; a genuinely malformed
  * non-blank entry is left as it is and rejected by the companion like a malformed primary `url`.
  */
