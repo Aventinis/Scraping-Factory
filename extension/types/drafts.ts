@@ -31,6 +31,8 @@ export interface FieldNode {
   maxDownloadSizeBytes: number | null;
   allowedContentTypes: string[];
   hiddenFromOutput: boolean;
+  /** UI only, never sent: the raw value the transform chain runs on, for its live preview. */
+  sampleValue?: string | null;
 }
 
 // ── Flat mode (scraping-config-builder.ts) ───────────────────────────────
@@ -49,6 +51,8 @@ export interface Field {
   maxDownloadSizeBytes: number | null;
   allowedContentTypes: string[];
   hiddenFromOutput: boolean;
+  /** UI only, never sent: the raw value the transform chain runs on, for its live preview. */
+  sampleValue?: string | null;
 }
 
 // ── Browser actions (scraping-config-builder.ts) ─────────────────────────

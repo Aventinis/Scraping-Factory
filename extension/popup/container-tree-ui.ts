@@ -29,6 +29,7 @@ import { resetTextFilter, effectiveMatchCount, wireTextFilter } from './selector
 import { renderTransformList, renderTransformPreview, wireTransformList } from './field-transforms-ui';
 import { openCombineFieldModal, openSplitFieldModal } from './combine-split-fields-ui';
 import { renderMatchCountHint, populateAttributeSelect } from './field-modal';
+import { openFieldEdit, confirmFieldEdit, cancelFieldEdit, renderFieldEditChrome } from './field-edit-ui';
 import { byIdOrNull, parseDataPath, TREE_TOGGLE_CHEVRON_SVG } from './dom';
 
 const log = createLogger('SF:ContainerTreeUI');
@@ -148,6 +149,13 @@ export function buildGroupTreeNodeEl(node: SFDraft.ContainerNode, path: number[]
     row.appendChild(addSplitFieldBtn);
   }
 
+  if (node.kind === 'field') {
+    const editBtn = document.createElement('button');
+    editBtn.className = 'btn-secondary btn-tiny btn-edit-field';
+    editBtn.textContent = t('common.edit');
+    row.appendChild(editBtn);
+  }
+
   const removeBtn = document.createElement('button');
   removeBtn.className = 'btn-danger btn-remove-group-node';
   removeBtn.textContent = t('common.remove');
@@ -242,6 +250,7 @@ export function startFieldSelection(bridge: PopupBridge, parentPath: number[]): 
 }
 
 export function confirmExtendedField(bridge: PopupBridge): void {
+  if (bridge.getState().editingField) { confirmFieldEdit(bridge); return; }
   const name = byIdOrNull<HTMLInputElement>('input-field-extended-name')?.value.trim();
   if (!name) return;
   // The mode select only offers the four FieldMode values.
@@ -259,7 +268,7 @@ export function confirmExtendedField(bridge: PopupBridge): void {
   const selector = appendTextFilter(state.pendingSelector as string, byIdOrNull<HTMLInputElement>('input-field-text-filter')?.value);
   const node = buildFieldNode(
     name, selector, mode, attribute ?? null, state.pendingFramePath, state.pendingTransforms, download,
-    maxDownloadSizeBytes, allowedContentTypes,
+    maxDownloadSizeBytes, allowedContentTypes, false, resolveExtendedRawValue(state),
   );
   log('FIELD_ADD(container) confirm', node);
   bridge.setState(STATES.IDLE, {
@@ -276,6 +285,7 @@ export function confirmExtendedField(bridge: PopupBridge): void {
 }
 
 export function cancelExtendedField(bridge: PopupBridge): void {
+  if (bridge.getState().editingField) { cancelFieldEdit(bridge); return; }
   log('FIELD_ADD(container) cancel');
   bridge.setState(STATES.IDLE, {
     pendingSelector: null, pendingFramePath: null, pendingMatchCount: null,
@@ -296,6 +306,7 @@ export function cancelExtendedField(bridge: PopupBridge): void {
 // collectOwnText — no DOM input to wait on, unlike attribute mode's
 // attribute-name field.
 function resolveExtendedRawValue(state: State): string | null {
+  if (state.editingField) return state.pendingRawText; // the stored sample; the pick controls are hidden then
   const mode = byIdOrNull<HTMLSelectElement>('select-field-mode')?.value ?? 'text';
   let rawValue: string | null = null;
   if (mode === 'text') {
@@ -316,8 +327,9 @@ export function refreshExtendedTransformPreview(bridge: PopupBridge): void {
 
 export function renderContainerFieldModal(bridge: PopupBridge, isNewPick: boolean): void {
   const state = bridge.getState();
+  const editing = !!state.editingField;
   byIdOrNull('modal-field-extended')?.classList.remove('hidden');
-  if (isNewPick) {
+  if (isNewPick && !editing) {
     const nameInput = byIdOrNull<HTMLInputElement>('input-field-extended-name');
     if (nameInput) { nameInput.value = ''; nameInput.focus(); }
     const modeSelect = byIdOrNull<HTMLSelectElement>('select-field-mode');
@@ -334,7 +346,8 @@ export function renderContainerFieldModal(bridge: PopupBridge, isNewPick: boolea
     if (allowedTypesInput) allowedTypesInput.value = '';
     resetTextFilter('input-field-text-filter', 'btn-field-use-text', state.pendingRawText);
   }
-  renderMatchCountHint('field-extended-match-count', effectiveMatchCount('input-field-text-filter', state.pendingMatchCount));
+  renderFieldEditChrome(bridge, 'container', isNewPick);
+  if (!editing) renderMatchCountHint('field-extended-match-count', effectiveMatchCount('input-field-text-filter', state.pendingMatchCount));
   renderTransformList('field-extended-transform-list', state.pendingTransforms, () => resolveExtendedRawValue(bridge.getState()));
   refreshExtendedTransformPreview(bridge);
 }
@@ -354,6 +367,7 @@ export function wireContainerModeEvents(bridge: PopupBridge): void {
     if (!li) return;
     const path = parseDataPath(li);
 
+    if (target.closest('.btn-edit-field')) { openFieldEdit(bridge, { mode: 'container', path }); return; }
     if (target.closest('.btn-add-subcontainer')) { openContainerModal(bridge, path); return; }
     if (target.closest('.btn-add-subfield')) { startFieldSelection(bridge, path); return; }
     // Issue #206 follow-up: no click-based selection — opens the shared

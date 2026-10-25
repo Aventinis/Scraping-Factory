@@ -570,6 +570,7 @@ interface FieldExtras {
   maxDownloadSizeBytes?: number | null;
   allowedContentTypes?: string[];
   hiddenFromOutput?: boolean;
+  sampleValue?: string | null;
 }
 
 /**
@@ -580,7 +581,7 @@ interface FieldExtras {
 export function addField(fields: SFDraft.Field[], name: string, selector: string | null, extras: FieldExtras = {}): SFDraft.Field[] {
   const {
     framePath = null, transforms = [], attribute = null, download = false,
-    maxDownloadSizeBytes = null, allowedContentTypes = [], hiddenFromOutput = false,
+    maxDownloadSizeBytes = null, allowedContentTypes = [], hiddenFromOutput = false, sampleValue = null,
   } = extras;
   const isDownload = !!attribute && !!download;
   return [...fields, {
@@ -590,6 +591,7 @@ export function addField(fields: SFDraft.Field[], name: string, selector: string
     maxDownloadSizeBytes: isDownload ? (maxDownloadSizeBytes || null) : null,
     allowedContentTypes: isDownload && allowedContentTypes.length > 0 ? allowedContentTypes : [],
     hiddenFromOutput,
+    ...(sampleValue !== null ? { sampleValue } : {}),
   }];
 }
 

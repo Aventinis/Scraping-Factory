@@ -600,6 +600,10 @@
     "connectionTitle": "Conexión con el companion"
   },
   "modals": {
+    "fieldEdit": {
+      "renameLocked": "Este campo es la fuente de un campo combinado o dividido, por eso aquí no se puede cambiar su nombre.",
+      "confirm": "Guardar"
+    },
     "fieldName": {
       "label": "Nombre del campo (p. ej. \"Título del producto\")",
       "placeholder": "Nombre del campo"

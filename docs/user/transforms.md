@@ -19,6 +19,26 @@ Add a field, click the first price (`6,90 €`) and name it **Price**. Then clic
 The line **Preview: 6.90** shows what the chain produces for the element you
 clicked, live, as you edit. The result in the output is `6.90`.
 
+## Changing a field later
+
+Every field row has an **Edit** button (in container mode, on the field's row in the
+tree). It reopens the field's dialog with its name and chain filled in, so you can
+add, remove, reorder or change steps without picking the element again. **Save**
+changes the field in place; **Cancel** leaves it as it was.
+
+![Editing a field's chain after it was created](images/transforms-edit-field.png)
+
+- The **Preview** works as when the field was created, because the extension keeps
+  the value of the element you picked. A configuration you loaded from **Saved
+  configurations** or imported has no such value, so it shows no preview.
+- Only the name and the chain are editable. The element, its type (text or
+  attribute), downloads and the "contains text" filter belong to the pick: to change
+  them, remove the field and pick the element again.
+- A **combined** or **split** field opens its own dialog, prefilled. It can only
+  read fields listed above it, so only those are offered as sources.
+- A field that a combined or split field reads from keeps its name (the dialog says
+  so), because renaming it would break that field.
+
 ## The steps
 
 | Step | Does |

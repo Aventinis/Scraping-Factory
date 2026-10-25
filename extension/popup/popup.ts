@@ -36,6 +36,7 @@ import {
 } from './container-tree';
 
 import { buildCombineFieldsTransform, buildSplitFieldTransform } from './combine-split-fields';
+import { derivedEditAvailableNames, applyDerivedFieldEdit } from './field-edit';
 
 import {
   renderCombineFieldModal, renderSplitFieldModal, wireCombineSplitFieldsEvents,
@@ -387,6 +388,7 @@ let _state: State = {
   // itself already gets). Written onto the resulting field/node once
   // confirmed (see confirmField/confirmExtendedField).
   pendingTransforms:   [],
+  editingField:        null, // not persisted: the field dialog edits an existing field (field-edit.ts)
   selectionKind:       null,  // 'field' | 'container' | 'browserAction' | 'pagination' | 'paginationPageLink' | 'apiDiscoveryAction' | null — which kind the current SELECTING round is for
   pendingParentPath:   null,  // number[] | null — where the next inserted group-tree node goes; null = root level
   pendingNewContainer: null,  // {name, repeating} captured by modal-container-new before element-selection starts
@@ -493,6 +495,7 @@ let _state: State = {
   combineFieldModalOpen: false,
   splitFieldModalOpen: false,
   pendingDerivedFieldScope: null,
+  pendingDerivedFieldEdit: null,
   apiConfigDraft:     null, // set once a candidate is confirmed as the primary field — the in-progress ApiConfig being built, see buildApiConfig/confirmApiFieldCandidate
   apiConfig:          null, // the "Apply"-confirmed ApiConfig wire object — Phase 6 will read this; persisted like fields/groups
   robotsTxtChecking: false, // not persisted, always off on popup reopen (like previewActive/apiCaptureActive)
@@ -765,6 +768,7 @@ function applyStaticTranslations(): void {
 // { mode: 'flat' } | { mode: 'container', parentPath } | { mode: 'api', groupPath }
 function computeDerivedFieldAvailableNames(state: State, scope: DerivedFieldScope | null): string[] {
   if (!scope) return [];
+  if (state.pendingDerivedFieldEdit) return derivedEditAvailableNames(state, state.pendingDerivedFieldEdit);
   if (scope.mode === 'flat') return (state.fields || []).map(f => f.name);
   if (scope.mode === 'container') return collectSiblingFieldNames(state.groups, scope.parentPath);
   if (scope.mode === 'api') return collectApiGroupFieldNames(state.apiConfigDraft?.groups || [], scope.groupPath);
@@ -823,6 +827,10 @@ function insertDerivedField(
 
 function onConfirmCombineField(scope: DerivedFieldScope, name: string, sourceFieldNames: string[], separator: string, removeOriginals: boolean): boolean {
   const transform = buildCombineFieldsTransform(sourceFieldNames, separator);
+  if (_state.pendingDerivedFieldEdit) {
+    setState(STATES.IDLE, applyDerivedFieldEdit(_state, _state.pendingDerivedFieldEdit, name, transform));
+    return true;
+  }
   const patch = insertDerivedField(_state, scope, name, transform, sourceFieldNames, removeOriginals);
   setState(scope.mode === 'api' ? STATES.API_CONFIG : STATES.IDLE, patch);
   return true;
@@ -830,6 +838,10 @@ function onConfirmCombineField(scope: DerivedFieldScope, name: string, sourceFie
 
 function onConfirmSplitField(scope: DerivedFieldScope, name: string, sourceFieldName: string, separator: string, index: number, removeOriginal: boolean): boolean {
   const transform = buildSplitFieldTransform(sourceFieldName, separator, index);
+  if (_state.pendingDerivedFieldEdit) {
+    setState(STATES.IDLE, applyDerivedFieldEdit(_state, _state.pendingDerivedFieldEdit, name, transform));
+    return true;
+  }
   const patch = insertDerivedField(_state, scope, name, transform, [sourceFieldName], removeOriginal);
   setState(scope.mode === 'api' ? STATES.API_CONFIG : STATES.IDLE, patch);
   return true;
@@ -958,13 +970,19 @@ function render(): void {
   // name/mode the user already typed on every transform edit. See
   // lastFieldModalSelector's own doc comment for why this can't just check
   // the modal's current DOM visibility instead.
-  if (_state.current === STATES.SELECTING && _state.pendingSelector !== null) {
-    const isNewPick = _state.pendingSelector !== lastFieldModalSelector;
-    lastFieldModalSelector = _state.pendingSelector;
+  // Issue #505: the same dialogs also open on an existing field (editingField), without a pick.
+  const editTarget = _state.editingField;
+  if ((_state.current === STATES.SELECTING && _state.pendingSelector !== null) || editTarget) {
+    const modalKey = editTarget ? `edit:${JSON.stringify(editTarget)}` : _state.pendingSelector;
+    const isNewPick = modalKey !== lastFieldModalSelector;
+    lastFieldModalSelector = modalKey;
 
     // Issue #182: Blocks mode's group-shaped draft reuses the container
     // field modal exactly like container mode itself does.
-    if (_state.mode === 'container' || (_state.mode === 'blocks' && _state.blocksDraftShape === 'group')) {
+    const containerDialog = editTarget
+      ? editTarget.mode === 'container'
+      : _state.mode === 'container' || (_state.mode === 'blocks' && _state.blocksDraftShape === 'group');
+    if (containerDialog) {
       renderContainerFieldModal(bridge, isNewPick);
     } else {
       renderFlatFieldModal(bridge, isNewPick);

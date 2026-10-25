@@ -736,6 +736,24 @@ docs/design-notes/extension.md for the details.
 - Tests: `popup/hardening-presets.test.js`, `popup/hardening-presets-ui.test.js`,
   real-browser check `e2e/examples/issue-399-hardening-plain-language-check.js`
 
+### 2.10o Editing a field after it was created (Issue #505)
+
+Flat and Container fields get an **Edit** button. It reopens the creation dialogs
+(`modal-field-name`, `modal-field-extended`) on the existing field with only the name and the
+transformation chain editable; combine / split fields reopen their own dialogs. The edit target is
+UI state (`State.editingField`, `State.pendingDerivedFieldEdit`, never persisted); the chain reuses
+`pendingTransforms`, and the stored `sampleValue` of the field feeds the live preview through
+`pendingRawText`. See docs/design-notes/extension.md for the rules.
+
+- Extension: `popup/field-edit.ts` (pure: resolve the target, rename lock, apply the edit),
+  `popup/field-edit-ui.ts` (open / confirm / cancel, `renderFieldEditChrome`),
+  `flat-mode-ui.ts`/`container-tree-ui.ts` (Edit buttons, confirm/cancel dispatch),
+  `combine-split-fields-ui.ts` (`openDerivedFieldEdit`), `popup.ts` (`render()` shows the dialog for
+  `editingField`), `Field.sampleValue`/`FieldNode.sampleValue` in `types/drafts.ts` (UI only, never
+  serialized: `serializeGroupTree` and the flat builder map fields explicitly)
+- Tests: `popup/field-edit.test.js`, `popup/field-edit-popup.test.js`, real-browser check
+  `e2e/examples/issue-505-edit-field-transforms-check.js` (fixture `test-pages/transform-helpers`)
+
 ### 2.10n German documentation (Issue #436)
 
 `docs/user/de/*.md` is the German version of the user documentation (same file names, same heading

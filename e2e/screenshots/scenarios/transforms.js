@@ -54,4 +54,26 @@ module.exports = [
       await s.shot('transforms-chain');
     },
   },
+  {
+    // Issue #505: a field's chain edited after the field was created.
+    id: 'transforms-edit-field',
+    fixture: 'speisekarte',
+    async run(s) {
+      const { popupPage, fixturePage } = s;
+      await s.waitForIdle();
+      await popupPage.click('#btn-add-field');
+      await fixturePage.click('li.menu-item >> nth=0 >> .item-price');
+      await popupPage.waitForSelector('#modal-field-name:not(.hidden)');
+      await popupPage.fill('#input-field-name', s.word('Price'));
+      await popupPage.click('#btn-field-confirm');
+      await s.waitForIdle();
+
+      await popupPage.locator('#fields-list .btn-edit-field').first().click();
+      await popupPage.waitForSelector('#modal-field-name:not(.hidden)');
+      await popupPage.click('#btn-field-transform-add');
+      await popupPage.locator('.transform-kind-select').first().selectOption('toCurrency');
+      await popupPage.waitForSelector('#field-transform-preview:not(.hidden)');
+      await s.shot('transforms-edit-field', '#modal-field-name .modal-inner');
+    },
+  },
 ];

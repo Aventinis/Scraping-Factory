@@ -50,6 +50,8 @@ export interface ApiCandidatesResult {
 // group (null) or a sub-field under an existing ApiGroup.
 export type ApiSearchTarget = 'field' | { parameter: string } | { treeParentPath: number[] | null };
 
+export type FieldEditTarget = { mode: 'flat'; index: number } | { mode: 'container'; path: number[] };
+
 export type DerivedFieldScope =
   | { mode: 'flat' }
   | { mode: 'container'; parentPath: number[] | null }
@@ -186,6 +188,8 @@ export interface State {
   pendingElementAttributes: Record<string, string> | null;
   pendingOwnText: string | null;
   pendingTransforms: SFWire.FieldTransform[];
+  /** The existing field whose name and transforms the field dialog is editing, or null while it creates one. */
+  editingField: FieldEditTarget | null;
   selectionKind: SelectionKind | null;
   pendingParentPath: number[] | null;
   pendingNewContainer: { name: string; repeating: boolean } | null;
@@ -229,6 +233,8 @@ export interface State {
   combineFieldModalOpen: boolean;
   splitFieldModalOpen: boolean;
   pendingDerivedFieldScope: DerivedFieldScope | null;
+  /** The existing combine / split field the open dialog edits (Issue #505), or null while it creates one. */
+  pendingDerivedFieldEdit: FieldEditTarget | null;
   apiConfigDraft: ApiConfigDraft | null;
   apiConfig: SFWire.ApiConfig | null;
 

@@ -22,7 +22,7 @@ export function buildGroupNode(name: string, selector: string, repeating: boolea
 export function buildFieldNode(
   name: string, selector: string | null, mode: SFDraft.FieldMode, attribute: string | null, framePath: string[] | null = null,
   transforms: SFWire.FieldTransform[] = [], download = false, maxDownloadSizeBytes: number | null = null,
-  allowedContentTypes: string[] = [], hiddenFromOutput = false,
+  allowedContentTypes: string[] = [], hiddenFromOutput = false, sampleValue: string | null = null,
 ): SFDraft.FieldNode {
   const isDownload = mode === 'attribute' && !!download;
   return {
@@ -36,6 +36,7 @@ export function buildFieldNode(
     maxDownloadSizeBytes: isDownload ? (maxDownloadSizeBytes || null) : null,
     allowedContentTypes: isDownload && allowedContentTypes.length > 0 ? allowedContentTypes : [],
     hiddenFromOutput,
+    ...(sampleValue !== null ? { sampleValue } : {}),
   };
 }
 
