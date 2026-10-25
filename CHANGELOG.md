@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.21.4](https://github.com/Aventinis/Scraping-Factory/compare/v1.21.3...v1.21.4) (2026-10-25)
+
+
+### Features
+
+* **extension:** API mode — one data-point search for recorded requests and embedded JSON ([9757293](https://github.com/Aventinis/Scraping-Factory/commit/97572939430fca2eabf815782d7ea35e4033e4ab))
+* **extension:** one data-point search for recorded requests and embedded JSON ([#507](https://github.com/Aventinis/Scraping-Factory/issues/507)) ([cba9b3d](https://github.com/Aventinis/Scraping-Factory/commit/cba9b3dff7c7dd9b8672ed511d3793689af15f10))
+
 ## [1.21.3](https://github.com/Aventinis/Scraping-Factory/compare/v1.21.2...v1.21.3) (2026-10-25)
 
 
