@@ -53,6 +53,22 @@
     <label for="input-script-name-fixed" data-i18n="settings.scriptNameFixedLabel"></label>
     <input type="text" id="input-script-name-fixed" data-i18n-placeholder="idle.scriptFilenamePlaceholder" autocomplete="off" />
   </div>
+
+  <!-- Issue #509: the output file name used when the per-scrape "Output file name" field is empty. Applies to runs only; it is never
+       part of a saved configuration. -->
+  <div id="output-name-setting">
+  <p class="row-label" data-help-anchor><span data-i18n="settings.outputNameModeLabel"></span><span class="help-host" data-help="help.outputName.overview" data-doc="outputName"></span></p>
+  <div class="mode-toggle" id="output-name-mode-toggle">
+    <div class="mode-toggle-thumb"></div>
+    <button id="btn-output-name-mode-script" class="mode-btn" type="button" data-i18n="settings.outputNameModeScript"></button>
+    <button id="btn-output-name-mode-fixed" class="mode-btn" type="button" data-i18n="settings.outputNameModeFixed"></button>
+  </div>
+  <div id="output-name-fixed-row" class="output-settings-row">
+    <label for="input-output-name-fixed" data-i18n="settings.outputNameFixedLabel"></label>
+    <input type="text" id="input-output-name-fixed" data-i18n-placeholder="idle.outputFilenamePlaceholder" autocomplete="off" />
+  </div>
+  <p class="preview-summary" data-i18n="settings.outputNameHint"></p>
+  </div>
 </div>
 
 <!-- Output Blueprint management — moved here from modal-manage-blueprints

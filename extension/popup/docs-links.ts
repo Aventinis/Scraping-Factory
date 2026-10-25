@@ -29,6 +29,7 @@ export const DOC_TARGETS: Readonly<Record<string, string>> = Object.freeze({
   outputFormat: 'output#output-format',
   skipTrialRun: 'output#skip-the-trial-run',
   editableConfig: 'output#editable-config-file',
+  outputName: 'output#default-output-file-name',
   appendOutput: 'output#append-instead-of-replace',
   dedup: 'output#remove-duplicates',
   outputLayouts: 'output#output-layouts',

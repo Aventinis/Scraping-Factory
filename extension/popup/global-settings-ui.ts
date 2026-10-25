@@ -46,6 +46,13 @@ export function renderSettingsScreen(bridge: PopupBridge): void {
   const fixedNameInput = byIdOrNull<HTMLInputElement>('input-script-name-fixed');
   if (fixedNameInput && document.activeElement !== fixedNameInput) fixedNameInput.value = settings.scriptNameFixed;
 
+  const isScriptOutputName = settings.outputNameMode === 'script';
+  byIdOrNull('btn-output-name-mode-script')?.classList.toggle('active', isScriptOutputName);
+  byIdOrNull('btn-output-name-mode-fixed')?.classList.toggle('active', !isScriptOutputName);
+  byIdOrNull('output-name-fixed-row')?.classList.toggle('hidden', isScriptOutputName);
+  const outputNameInput = byIdOrNull<HTMLInputElement>('input-output-name-fixed');
+  if (outputNameInput && document.activeElement !== outputNameInput) outputNameInput.value = settings.outputNameFixed;
+
   // Issue #278: the access key input (never overwritten while being typed in).
   const accessKeyInput = byIdOrNull<HTMLInputElement>('input-access-key');
   if (accessKeyInput && document.activeElement !== accessKeyInput) accessKeyInput.value = getAccessKey();
@@ -123,6 +130,15 @@ export function wireSettingsScreenEvents(bridge: PopupBridge): void {
   });
   byIdOrNull('btn-script-name-mode-hostname')?.addEventListener('click', () => {
     updateAndRerender(bridge, { scriptNameMode: 'hostname' });
+  });
+  byIdOrNull('btn-output-name-mode-script')?.addEventListener('click', () => {
+    updateAndRerender(bridge, { outputNameMode: 'script' });
+  });
+  byIdOrNull('btn-output-name-mode-fixed')?.addEventListener('click', () => {
+    updateAndRerender(bridge, { outputNameMode: 'fixed' });
+  });
+  byIdOrNull('input-output-name-fixed')?.addEventListener('change', (e) => {
+    updateAndRerender(bridge, { outputNameFixed: (e.target as HTMLInputElement).value });
   });
   byIdOrNull('btn-access-key-save')?.addEventListener('click', async () => {
     log('BTN access-key-save');

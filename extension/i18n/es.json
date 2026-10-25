@@ -526,6 +526,11 @@
     "scriptNameModeFixed": "Nombre fijo",
     "scriptNameModeHostname": "Desde el sitio web",
     "scriptNameFixedLabel": "Nombre de script fijo",
+    "outputNameModeLabel": "Nombre predeterminado del archivo de salida",
+    "outputNameModeScript": "Igual que el nombre del script",
+    "outputNameModeFixed": "Nombre propio",
+    "outputNameFixedLabel": "Nombre propio del archivo de salida",
+    "outputNameHint": "Se usa cuando el campo Nombre del archivo de salida queda vacío.",
     "allConfigsTitle": "Todas las configuraciones guardadas",
     "allConfigsEmpty": "Todavía no hay configuraciones guardadas.",
     "outputFormatLabel": "Formato de salida",
@@ -1049,6 +1054,11 @@
     "scriptName": {
       "overview": {
         "text": "Nombre fijo: rellena el nombre del script de cada scraper nuevo. Desde el sitio web: el nombre se deriva cada vez de la dirección del sitio actual. Puedes seguir cambiándolo en cada scraper."
+      }
+    },
+    "outputName": {
+      "overview": {
+        "text": "Igual que el nombre del script: un nombre de archivo de salida vacío usa el nombre del script, así shop-example-com.py escribe shop-example-com.csv. Nombre propio: se usa ese nombre; vacío sigue siendo output. Un nombre escrito para un scraper siempre prevalece."
       }
     },
     "account": {

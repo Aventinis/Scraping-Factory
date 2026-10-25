@@ -526,6 +526,11 @@
     "scriptNameModeFixed": "Fester Name",
     "scriptNameModeHostname": "Von der Webseite",
     "scriptNameFixedLabel": "Fester Skriptname",
+    "outputNameModeLabel": "Standard-Ausgabedateiname",
+    "outputNameModeScript": "Wie der Skriptname",
+    "outputNameModeFixed": "Eigener Name",
+    "outputNameFixedLabel": "Eigener Ausgabedateiname",
+    "outputNameHint": "Gilt, wenn das Feld Ausgabedateiname leer bleibt.",
     "allConfigsTitle": "Alle gespeicherten Konfigurationen",
     "allConfigsEmpty": "Noch keine gespeicherten Konfigurationen.",
     "outputFormatLabel": "Ausgabeformat",
@@ -1049,6 +1054,11 @@
     "scriptName": {
       "overview": {
         "text": "Fester Name: füllt den Skriptnamen jedes neuen Scrapers vor. Von der Website: Der Name wird jedes Mal aus der Adresse der aktuellen Seite abgeleitet. Du kannst ihn pro Scraper weiterhin ändern."
+      }
+    },
+    "outputName": {
+      "overview": {
+        "text": "Wie der Skriptname: Ein leerer Ausgabedateiname nimmt den Namen des Skripts, aus shop-example-com.py wird also shop-example-com.csv. Eigener Name: Stattdessen wird dieser Name genutzt; leer bleibt es output. Ein für einen Scraper getippter Name gewinnt immer."
       }
     },
     "account": {
