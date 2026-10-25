@@ -17,8 +17,10 @@
 // one place that already imports every mode's own insert/update helpers) —
 // this file only ever decides *whether* the input is complete enough to
 // call that callback at all, never *where* the result goes.
-import type { DerivedFieldScope, PopupBridge } from '../types/popup';
+import type { DerivedFieldScope, FieldEditTarget, PopupBridge } from '../types/popup';
+import type * as SFWire from '../types/wire';
 import { t } from '../i18n/i18n';
+import { resolveEditedField, isRenameLocked, derivedEditScope } from './field-edit';
 import { combineFieldsIsValid, splitFieldIsValid, partNumberToIndex, indexToPartNumber } from './combine-split-fields';
 import { byIdOrNull, qsa } from './dom';
 
@@ -37,12 +39,44 @@ export function openSplitFieldModal(bridge: PopupBridge, scope: DerivedFieldScop
   bridge.patchState({ splitFieldModalOpen: true, pendingDerivedFieldScope: scope });
 }
 
+// Issue #505: reopens the matching dialog on an existing combine / split field, prefilled; confirming replaces the field in place.
+export function openDerivedFieldEdit(bridge: PopupBridge, target: FieldEditTarget): void {
+  const field = resolveEditedField(bridge.getState(), target);
+  const kind = field?.transforms?.[0]?.kind;
+  if (kind !== 'combineFields' && kind !== 'splitField') return;
+  bridge.patchState({
+    [kind === 'combineFields' ? 'combineFieldModalOpen' : 'splitFieldModalOpen']: true,
+    pendingDerivedFieldScope: derivedEditScope(target), pendingDerivedFieldEdit: target,
+  });
+}
+
 export function cancelCombineFieldModal(bridge: PopupBridge): void {
-  bridge.patchState({ combineFieldModalOpen: false, pendingDerivedFieldScope: null });
+  bridge.patchState({ combineFieldModalOpen: false, pendingDerivedFieldScope: null, pendingDerivedFieldEdit: null });
 }
 
 export function cancelSplitFieldModal(bridge: PopupBridge): void {
-  bridge.patchState({ splitFieldModalOpen: false, pendingDerivedFieldScope: null });
+  bridge.patchState({ splitFieldModalOpen: false, pendingDerivedFieldScope: null, pendingDerivedFieldEdit: null });
+}
+
+// What differs when the dialog edits an existing field: the "remove original" option is creation-only, the confirm button says Save,
+// and a name other derived fields read from is locked. Returns the edited transform, or null while creating.
+function applyDerivedEditChrome(
+  bridge: PopupBridge, ids: { nameInput: string; hint: string; removeRow: string; confirmBtn: string },
+): SFWire.FieldTransform | null {
+  const state = bridge.getState();
+  const target = state.pendingDerivedFieldEdit;
+  const field = target ? resolveEditedField(state, target) : null;
+  byIdOrNull(ids.removeRow)?.classList.toggle('hidden', !!field);
+  const confirmBtn = byIdOrNull(ids.confirmBtn);
+  if (confirmBtn) confirmBtn.textContent = t(field ? 'modals.fieldEdit.confirm' : 'common.add');
+  const nameInput = byIdOrNull<HTMLInputElement>(ids.nameInput);
+  const locked = !!target && !!field && isRenameLocked(state, target);
+  byIdOrNull(ids.hint)?.classList.toggle('hidden', !locked);
+  if (nameInput) {
+    nameInput.disabled = locked;
+    if (field) nameInput.value = field.name;
+  }
+  return field?.transforms?.[0] ?? null;
 }
 
 // Reset to defaults and rebuilt fresh on every call while the modal is
@@ -81,6 +115,15 @@ export function renderCombineFieldModal(bridge: PopupBridge, availableFieldNames
       list.appendChild(li);
     });
   }
+
+  const edited = applyDerivedEditChrome(bridge, {
+    nameInput: 'input-combine-field-name', hint: 'combine-field-edit-hint',
+    removeRow: 'combine-field-remove-toggle-row', confirmBtn: 'btn-combine-field-confirm',
+  });
+  if (edited?.kind === 'combineFields') {
+    if (separatorInput) separatorInput.value = edited.separator ?? '';
+    qsa('.combine-field-source-checkbox').forEach((cb) => { (cb as HTMLInputElement).checked = edited.sourceFieldNames.includes(cb.dataset.fieldName as string); });
+  }
 }
 
 export function renderSplitFieldModal(bridge: PopupBridge, availableFieldNames: string[] | null | undefined): void {
@@ -112,6 +155,16 @@ export function renderSplitFieldModal(bridge: PopupBridge, availableFieldNames: 
       select.appendChild(option);
     });
   }
+
+  const edited = applyDerivedEditChrome(bridge, {
+    nameInput: 'input-split-field-name', hint: 'split-field-edit-hint',
+    removeRow: 'split-field-remove-toggle-row', confirmBtn: 'btn-split-field-confirm',
+  });
+  if (edited?.kind === 'splitField') {
+    if (select) select.value = edited.sourceFieldName;
+    if (separatorInput) separatorInput.value = edited.separator ?? '';
+    if (indexInput) indexInput.value = String(indexToPartNumber(edited.index ?? 0));
+  }
 }
 
 export function wireCombineSplitFieldsEvents(bridge: PopupBridge, handlers: CombineSplitHandlers): void {
@@ -129,7 +182,7 @@ export function wireCombineSplitFieldsEvents(bridge: PopupBridge, handlers: Comb
     const separator = byIdOrNull<HTMLInputElement>('input-combine-field-separator')?.value ?? ' ';
     const removeOriginals = byIdOrNull<HTMLInputElement>('toggle-combine-field-remove-originals')?.checked ?? false;
     if (handlers.onConfirmCombine(scope, name, sourceFieldNames, separator, removeOriginals)) {
-      bridge.patchState({ combineFieldModalOpen: false, pendingDerivedFieldScope: null });
+      bridge.patchState({ combineFieldModalOpen: false, pendingDerivedFieldScope: null, pendingDerivedFieldEdit: null });
     }
   });
 
@@ -145,7 +198,7 @@ export function wireCombineSplitFieldsEvents(bridge: PopupBridge, handlers: Comb
     const index = partNumberToIndex(parseInt(byIdOrNull<HTMLInputElement>('input-split-field-index')?.value as string, 10));
     const removeOriginal = byIdOrNull<HTMLInputElement>('toggle-split-field-remove-original')?.checked ?? false;
     if (handlers.onConfirmSplit(scope, name, sourceFieldName, separator, index, removeOriginal)) {
-      bridge.patchState({ splitFieldModalOpen: false, pendingDerivedFieldScope: null });
+      bridge.patchState({ splitFieldModalOpen: false, pendingDerivedFieldScope: null, pendingDerivedFieldEdit: null });
     }
   });
 }

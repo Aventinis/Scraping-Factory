@@ -2,7 +2,7 @@
 // The dialogs are the ones used for creating a field; field-edit-ui.ts adapts them.
 import type * as SFDraft from '../types/drafts';
 import type * as SFWire from '../types/wire';
-import type { FieldEditTarget, State, StatePatch } from '../types/popup';
+import type { DerivedFieldScope, FieldEditTarget, State, StatePatch } from '../types/popup';
 import { resolveGroupNode, updateGroupTreeNode } from './container-tree';
 import { updateField } from './scraping-config-builder';
 import { isDerivedField } from './combine-split-fields';
@@ -65,4 +65,23 @@ export function applyFieldEdit(state: EditState, target: FieldEditTarget, name: 
   const chain = hasEditableTransforms(field) ? (transforms.length > 0 ? transforms : null) : field.transforms;
   if (target.mode === 'flat') return { fields: updateField(state.fields, target.index, { name, transforms: chain }) };
   return { groups: updateGroupTreeNode(state.groups, target.path, node => ({ ...node, name, transforms: chain } as SFDraft.ContainerNode)) };
+}
+
+// A combine / split field may only read fields that come before it (the companion validates the order), and it stays in place when
+// edited, so only its predecessors are offered as sources.
+export function derivedEditAvailableNames(state: EditState, target: FieldEditTarget): string[] {
+  const edited = resolveEditedField(state, target);
+  const siblings = siblingFields(state, target);
+  return siblings.slice(0, siblings.indexOf(edited as EditableField)).map(field => field.name);
+}
+
+export function derivedEditScope(target: FieldEditTarget): DerivedFieldScope {
+  return target.mode === 'flat'
+    ? { mode: 'flat' }
+    : { mode: 'container', parentPath: target.path.length > 1 ? target.path.slice(0, -1) : null };
+}
+
+export function applyDerivedFieldEdit(state: EditState, target: FieldEditTarget, name: string, transform: SFWire.FieldTransform): StatePatch {
+  if (target.mode === 'flat') return { fields: updateField(state.fields, target.index, { name, transforms: [transform] }) };
+  return { groups: updateGroupTreeNode(state.groups, target.path, node => ({ ...node, name, transforms: [transform] } as SFDraft.ContainerNode)) };
 }

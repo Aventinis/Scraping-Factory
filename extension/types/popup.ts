@@ -233,6 +233,8 @@ export interface State {
   combineFieldModalOpen: boolean;
   splitFieldModalOpen: boolean;
   pendingDerivedFieldScope: DerivedFieldScope | null;
+  /** The existing combine / split field the open dialog edits (Issue #505), or null while it creates one. */
+  pendingDerivedFieldEdit: FieldEditTarget | null;
   apiConfigDraft: ApiConfigDraft | null;
   apiConfig: SFWire.ApiConfig | null;
 

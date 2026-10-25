@@ -8,6 +8,8 @@ import { transformsAreValid } from './field-transforms';
 import {
   resolveEditedField, isRenameLocked, hasEditableTransforms, openFieldEditPatch, closeFieldEditPatch, applyFieldEdit,
 } from './field-edit';
+import { isDerivedField } from './combine-split-fields';
+import { openDerivedFieldEdit } from './combine-split-fields-ui';
 import { byIdOrNull } from './dom';
 
 const log = createLogger('SF:FieldEditUI');
@@ -30,7 +32,9 @@ const CONTAINER_IDS: ModalIds = {
 
 export function openFieldEdit(bridge: PopupBridge, target: FieldEditTarget): void {
   const state = bridge.getState();
-  if (!resolveEditedField(state, target)) return;
+  const field = resolveEditedField(state, target);
+  if (!field) return;
+  if (isDerivedField(field.transforms)) { openDerivedFieldEdit(bridge, target); return; }
   log('FIELD_EDIT open', target);
   bridge.setState(state.current, openFieldEditPatch(state, target));
 }
