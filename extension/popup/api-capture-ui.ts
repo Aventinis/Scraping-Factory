@@ -10,14 +10,17 @@ import {
   STATES, parseUrlTemplateParts, jsonValueToBodyDraft, buildApiSubtreeFromCandidate,
 } from './api-config';
 import { patchApiConfigDraft } from './api-config-shared-ui';
+import { candidateFieldName } from './api-field-name';
 import { byIdOrNull, escapeHtml } from './dom';
 
 const log = createLogger('SF:ApiConfigUI');
 
 // ids: the primary-field search panel (#api-candidates-*) and the "add group / sub-field" panel (#api-tree-search-*) render the
 // same candidate shape and differ only in the confirm action, so one function serves both.
+// takenNames: the names already in the tree, so the placeholder shows the name "Use" will really take.
 export function renderApiCandidates(
   { target, candidates }: ApiCandidatesResult, ids = { targetEl: 'api-candidates-target', listEl: 'api-candidates-list' },
+  takenNames: string[] = [],
 ): void {
   const targetEl = byIdOrNull(ids.targetEl);
   if (targetEl) targetEl.textContent = t('apiCandidates.searchedFor', { target });
@@ -78,8 +81,8 @@ export function renderApiCandidates(
       const useRow = document.createElement('div');
       useRow.className = 'api-candidate-use';
       useRow.innerHTML =
-        `<input type="text" class="api-candidate-field-name" placeholder="${escapeHtml(t('apiCandidates.useFieldNamePlaceholder'))}" data-candidate-index="${i}" />` +
-        `<button type="button" class="btn-secondary btn-tiny api-candidate-confirm" data-candidate-index="${i}" disabled>${escapeHtml(t('common.use'))}</button>`;
+        `<input type="text" class="api-candidate-field-name" placeholder="${escapeHtml(candidateFieldName(candidate, takenNames))}" data-candidate-index="${i}" />` +
+        `<button type="button" class="btn-secondary btn-tiny api-candidate-confirm" data-candidate-index="${i}">${escapeHtml(t('common.use'))}</button>`;
       li.appendChild(useRow);
     } else {
       const note = document.createElement('div');
@@ -295,9 +298,9 @@ export async function toggleApiEntriesPanel(bridge: PopupBridge): Promise<void> 
 }
 
 // Event delegation for the sibling chips and the "Use" row, shared by both candidate panels (identical markup; only
-// getCandidates / onConfirm differ).
+// getCandidates / getTakenNames / onConfirm differ).
 export function wireApiCandidateListEvents(
-  listElId: string, getCandidates: () => ApiCandidate[] | undefined,
+  listElId: string, getCandidates: () => ApiCandidate[] | undefined, getTakenNames: () => string[],
   onConfirm: (candidate: ApiCandidate, fieldName: string, siblingNames: string[]) => void,
 ): void {
   byIdOrNull(listElId)?.addEventListener('click', (e) => {
@@ -325,20 +328,12 @@ export function wireApiCandidateListEvents(
       const candidate = getCandidates()?.[index];
       if (!candidate) return;
       const li = confirmBtn.closest('.api-candidate') as HTMLElement;
-      const fieldName = li.querySelector<HTMLInputElement>('.api-candidate-field-name')?.value.trim();
-      if (!fieldName) return;
       const siblingNames = Array.from(li.querySelectorAll<HTMLElement>('.api-sibling-chip.picked')).map(c => c.dataset.siblingName as string);
+      // An empty input means "take the name from the query"; a typed name wins, even when it collides.
+      const fieldName = li.querySelector<HTMLInputElement>('.api-candidate-field-name')?.value.trim()
+        || candidateFieldName(candidate, [...getTakenNames(), ...siblingNames]);
       onConfirm(candidate, fieldName, siblingNames);
     }
-  });
-
-  // Enables "Use" once a field name has been typed for that row.
-  byIdOrNull(listElId)?.addEventListener('input', (e) => {
-    const input = (e.target as Element).closest<HTMLInputElement>('.api-candidate-field-name');
-    if (!input) return;
-    const li = input.closest('.api-candidate');
-    const confirmBtn = li?.querySelector<HTMLButtonElement>('.api-candidate-confirm');
-    if (confirmBtn) confirmBtn.disabled = input.value.trim() === '';
   });
 }
 
@@ -361,7 +356,7 @@ export function wireApiCaptureEvents(bridge: PopupBridge): void {
   // The same list serves a network and an embedded-JSON search: dispatch by candidate shape (only an embedded-JSON candidate
   // carries scriptSelector).
   wireApiCandidateListEvents(
-    'api-candidates-list', () => bridge.getState().apiCandidates?.candidates,
+    'api-candidates-list', () => bridge.getState().apiCandidates?.candidates, () => [],
     (candidate, fieldName, siblingNames) => (candidate.scriptSelector
       ? confirmEmbeddedJsonFieldCandidate(bridge, candidate, fieldName, siblingNames)
       : confirmApiFieldCandidate(bridge, candidate, fieldName, siblingNames)),

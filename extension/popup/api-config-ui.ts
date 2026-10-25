@@ -25,6 +25,7 @@ import { renderTransformList, renderTransformPreview } from './field-transforms-
 import { serializeBrowserActions } from './scraping-config-builder';
 import { renderGroupPathPicker } from './json-path-picker-ui';
 import { patchApiConfigSource } from './api-config-shared-ui';
+import { collectApiTreeNames } from './api-field-name';
 import {
   buildApiTreeNodeEl,
   renderApiTree,
@@ -195,7 +196,10 @@ export function renderApiConfigModals(bridge: PopupBridge): void {
   const apiTreeSearchPanel = byIdOrNull('api-tree-search-panel');
   if (apiTreeSearchPanel) {
     if (state.apiTreeSearchResult) {
-      renderApiCandidates(state.apiTreeSearchResult, { targetEl: 'api-tree-search-target', listEl: 'api-tree-search-list' });
+      renderApiCandidates(
+        state.apiTreeSearchResult, { targetEl: 'api-tree-search-target', listEl: 'api-tree-search-list' },
+        collectApiTreeNames(state.apiConfigDraft?.groups ?? []),
+      );
       apiTreeSearchPanel.classList.remove('hidden');
     } else {
       apiTreeSearchPanel.classList.add('hidden');
@@ -239,6 +243,7 @@ export function wireApiConfigEvents(bridge: PopupBridge): void {
   wireApiCaptureEvents(bridge);
   wireApiCandidateListEvents(
     'api-tree-search-list', () => bridge.getState().apiTreeSearchResult?.candidates,
+    () => collectApiTreeNames(bridge.getState().apiConfigDraft?.groups ?? []),
     (candidate, fieldName, siblingNames) => confirmApiTreeFieldCandidate(bridge, candidate, fieldName, siblingNames),
   );
   wireApiResponseTreeEvents(bridge);

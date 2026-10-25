@@ -304,7 +304,6 @@
     "siblingChip": "+ {name}",
     "selectAllChips": "Select all",
     "deselectAllChips": "Deselect all",
-    "useFieldNamePlaceholder": "Field name",
     "embeddedJsonSourceLabel": "Found in page script: {selector}"
   },
   "apiConfig": {
@@ -419,6 +418,7 @@
     "addSubfieldBtn": "+ Data field",
     "addRootGroupBtn": "+ New group (top level)",
     "defaultGroupName": "Group",
+    "defaultFieldName": "Field",
     "transformsBtn": "Transform",
     "transformsBtnCount": "Transform ({count})",
     "combineFieldsBtn": "+ Combine fields",
