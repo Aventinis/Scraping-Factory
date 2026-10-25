@@ -3,6 +3,7 @@
     <div class="modal-inner">
       <label for="input-field-name" data-i18n="modals.fieldName.label"></label>
       <input id="input-field-name" type="text" data-i18n-placeholder="modals.fieldName.placeholder" autocomplete="off" />
+      <p id="field-name-edit-hint" class="match-count-hint hidden" data-i18n="modals.fieldEdit.renameLocked"></p>
       <!-- Issue #214: flat mode gains the same Attribute-mode-with-Download
            capability container mode's own modal-field-extended already has
            (mode select + attribute picker + download checkbox + safety
@@ -38,7 +39,7 @@
       <!-- Issue #227: optional text the element must contain — for a button
            that only its label tells apart from its siblings. Left empty, the
            pick's selector is used as is; see selector-text-filter-ui.ts. -->
-      <div class="text-filter-row">
+      <div id="field-name-text-filter-row" class="text-filter-row">
         <label for="input-field-name-text-filter" data-help-anchor><span data-i18n="modals.textFilter.label"></span><span class="help-host" data-help="help.textFilter.overview" data-doc="textFilter"></span></label>
         <input id="input-field-name-text-filter" type="text" data-i18n-placeholder="modals.textFilter.placeholder" autocomplete="off" />
         <button type="button" id="btn-field-name-use-text" class="btn-secondary btn-tiny hidden" data-i18n="modals.textFilter.useElementText"></button>
@@ -46,7 +47,7 @@
       <!-- Issue #85: live match count for the just-picked selector -->
       <p id="field-name-match-count" class="match-count-hint hidden"></p>
       <!-- Issue #84: optional per-field transform chain -->
-      <div class="field-transforms-section">
+      <div id="field-name-transforms-section" class="field-transforms-section">
         <label data-help-anchor><span data-i18n="transforms.sectionLabel"></span><span class="help-host" data-help="help.transforms.overview" data-doc="transforms"></span></label>
         <ul id="field-transform-list" class="field-transform-list"></ul>
         <button type="button" id="btn-field-transform-add" class="btn-secondary btn-tiny" data-i18n="transforms.addBtn"></button>
@@ -130,6 +131,8 @@
     <div class="modal-inner">
       <label for="input-field-extended-name" data-i18n="modals.fieldExtended.label"></label>
       <input id="input-field-extended-name" type="text" data-i18n-placeholder="modals.fieldExtended.placeholder" autocomplete="off" />
+      <p id="field-extended-edit-hint" class="match-count-hint hidden" data-i18n="modals.fieldEdit.renameLocked"></p>
+      <div id="field-extended-mode-section">
       <label for="select-field-mode"><span data-i18n="modals.fieldExtended.typeLabel"></span><span class="help-host" data-help="help.fieldType.container"></span></label>
       <select id="select-field-mode">
         <option value="text" data-i18n="modals.fieldExtended.textOption"></option>
@@ -174,10 +177,11 @@
           </details>
         </div>
       </div>
+      </div>
       <!-- Issue #227: optional text the element must contain — for a button
            that only its label tells apart from its siblings. Left empty, the
            pick's selector is used as is; see selector-text-filter-ui.ts. -->
-      <div class="text-filter-row">
+      <div id="field-extended-text-filter-row" class="text-filter-row">
         <label for="input-field-text-filter" data-help-anchor><span data-i18n="modals.textFilter.label"></span><span class="help-host" data-help="help.textFilter.overview" data-doc="textFilter"></span></label>
         <input id="input-field-text-filter" type="text" data-i18n-placeholder="modals.textFilter.placeholder" autocomplete="off" />
         <button type="button" id="btn-field-use-text" class="btn-secondary btn-tiny hidden" data-i18n="modals.textFilter.useElementText"></button>

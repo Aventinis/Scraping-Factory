@@ -600,6 +600,10 @@
     "connectionTitle": "Verbindung zum Companion"
   },
   "modals": {
+    "fieldEdit": {
+      "renameLocked": "Dieses Feld ist die Quelle eines kombinierten oder aufgeteilten Felds, daher lässt sich der Name hier nicht ändern.",
+      "confirm": "Speichern"
+    },
     "fieldName": {
       "label": "Feldname (z. B. \"Produkttitel\")",
       "placeholder": "Feldname"

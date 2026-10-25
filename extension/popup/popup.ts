@@ -387,6 +387,7 @@ let _state: State = {
   // itself already gets). Written onto the resulting field/node once
   // confirmed (see confirmField/confirmExtendedField).
   pendingTransforms:   [],
+  editingField:        null, // not persisted: the field dialog edits an existing field (field-edit.ts)
   selectionKind:       null,  // 'field' | 'container' | 'browserAction' | 'pagination' | 'paginationPageLink' | 'apiDiscoveryAction' | null — which kind the current SELECTING round is for
   pendingParentPath:   null,  // number[] | null — where the next inserted group-tree node goes; null = root level
   pendingNewContainer: null,  // {name, repeating} captured by modal-container-new before element-selection starts
@@ -958,13 +959,19 @@ function render(): void {
   // name/mode the user already typed on every transform edit. See
   // lastFieldModalSelector's own doc comment for why this can't just check
   // the modal's current DOM visibility instead.
-  if (_state.current === STATES.SELECTING && _state.pendingSelector !== null) {
-    const isNewPick = _state.pendingSelector !== lastFieldModalSelector;
-    lastFieldModalSelector = _state.pendingSelector;
+  // Issue #505: the same dialogs also open on an existing field (editingField), without a pick.
+  const editTarget = _state.editingField;
+  if ((_state.current === STATES.SELECTING && _state.pendingSelector !== null) || editTarget) {
+    const modalKey = editTarget ? `edit:${JSON.stringify(editTarget)}` : _state.pendingSelector;
+    const isNewPick = modalKey !== lastFieldModalSelector;
+    lastFieldModalSelector = modalKey;
 
     // Issue #182: Blocks mode's group-shaped draft reuses the container
     // field modal exactly like container mode itself does.
-    if (_state.mode === 'container' || (_state.mode === 'blocks' && _state.blocksDraftShape === 'group')) {
+    const containerDialog = editTarget
+      ? editTarget.mode === 'container'
+      : _state.mode === 'container' || (_state.mode === 'blocks' && _state.blocksDraftShape === 'group');
+    if (containerDialog) {
       renderContainerFieldModal(bridge, isNewPick);
     } else {
       renderFlatFieldModal(bridge, isNewPick);

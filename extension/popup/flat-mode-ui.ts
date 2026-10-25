@@ -17,6 +17,7 @@ import { parseAllowedContentTypes, megabytesToBytes } from './container-tree';
 import { isDerivedField } from './combine-split-fields';
 import { openCombineFieldModal, openSplitFieldModal } from './combine-split-fields-ui';
 import { renderMatchCountHint, populateAttributeSelect } from './field-modal';
+import { openFieldEdit, confirmFieldEdit, cancelFieldEdit, renderFieldEditChrome } from './field-edit-ui';
 import { byIdOrNull, qsOrNull, escapeHtml } from './dom';
 
 const log = createLogger('SF:Popup');
@@ -46,6 +47,7 @@ export function renderFields(fields: SFDraft.Field[]): void {
       `<span class="field-selector" title="${escapeHtml(selectorLabel)}">${escapeHtml(selectorLabel)}</span>` +
       (field.hiddenFromOutput ? `<span class="field-hidden-badge">${escapeHtml(t('group.hiddenFromOutputBadge'))}</span>` : '') +
       frameBadgeHtml(field.framePath) +
+      `<button class="btn-secondary btn-edit-field" data-index="${i}">${escapeHtml(t('common.edit'))}</button>` +
       `<button class="btn-danger btn-remove-field" data-index="${i}">${escapeHtml(t('common.remove'))}</button>`;
     listEl.appendChild(row);
   });
@@ -54,6 +56,7 @@ export function renderFields(fields: SFDraft.Field[]): void {
 // Live preview of the chain's output, reading the live mode / attribute DOM values (not _state). The value the chain would run on now:
 // the picked element's text, or its chosen attribute (null until chosen); also read lazily by the transform editor's helpers.
 function resolveFlatRawValue(state: State): string | null {
+  if (state.editingField) return state.pendingRawText; // the stored sample; the pick controls are hidden then
   const mode = byIdOrNull<HTMLSelectElement>('select-field-name-mode')?.value ?? 'text';
   if (mode === 'attribute') {
     const attrName = byIdOrNull<HTMLSelectElement>('select-field-name-attribute')?.value.trim();
@@ -71,11 +74,12 @@ export function refreshFlatTransformPreview(bridge: PopupBridge): void {
 // name / focus) from a re-render caused by editing the transform chain (which must not wipe what is typed).
 export function renderFlatFieldModal(bridge: PopupBridge, isNewPick: boolean): void {
   const state = bridge.getState();
+  const editing = !!state.editingField;
   byIdOrNull('modal-field-name')?.classList.remove('hidden');
   // Blocks mode reuses this modal, but Download is not carried onto a block's fields: hide the whole mode / attribute / download block
   // there instead of exposing a control that silently does nothing.
-  byIdOrNull('field-name-mode-section')?.classList.toggle('hidden', state.mode === 'blocks');
-  if (isNewPick) {
+  byIdOrNull('field-name-mode-section')?.classList.toggle('hidden', state.mode === 'blocks' || editing);
+  if (isNewPick && !editing) {
     const input = byIdOrNull<HTMLInputElement>('input-field-name');
     if (input) { input.value = ''; input.focus(); }
     const modeSelect = byIdOrNull<HTMLSelectElement>('select-field-name-mode');
@@ -91,13 +95,15 @@ export function renderFlatFieldModal(bridge: PopupBridge, isNewPick: boolean): v
     if (allowedTypesInput) allowedTypesInput.value = '';
     resetTextFilter('input-field-name-text-filter', 'btn-field-name-use-text', state.pendingRawText);
   }
-  renderMatchCountHint('field-name-match-count', effectiveMatchCount('input-field-name-text-filter', state.pendingMatchCount));
+  renderFieldEditChrome(bridge, 'flat', isNewPick);
+  if (!editing) renderMatchCountHint('field-name-match-count', effectiveMatchCount('input-field-name-text-filter', state.pendingMatchCount));
   renderTransformList('field-transform-list', state.pendingTransforms, () => resolveFlatRawValue(bridge.getState()));
   refreshFlatTransformPreview(bridge);
 }
 
 export function confirmField(bridge: PopupBridge): void {
   const state = bridge.getState();
+  if (state.editingField) { confirmFieldEdit(bridge); return; }
   const name = byIdOrNull<HTMLInputElement>('input-field-name')?.value.trim();
   if (!name) return;
   const mode = byIdOrNull<HTMLSelectElement>('select-field-name-mode')?.value ?? 'text';
@@ -115,6 +121,7 @@ export function confirmField(bridge: PopupBridge): void {
     fields: addField(state.fields, name, selector, {
       framePath: state.pendingFramePath, transforms: state.pendingTransforms,
       attribute: mode === 'attribute' ? attribute : null, download, maxDownloadSizeBytes, allowedContentTypes,
+      sampleValue: resolveFlatRawValue(state),
     }),
     pendingSelector:   null,
     pendingFramePath:  null,
@@ -189,10 +196,13 @@ export function wireFlatModeEvents(bridge: PopupBridge): void {
 
   byIdOrNull('btn-field-cancel')?.addEventListener('click', () => {
     log('BTN field-cancel');
+    if (bridge.getState().editingField) { cancelFieldEdit(bridge); return; }
     bridge.setState(STATES.IDLE, { pendingSelector: null, pendingMatchCount: null, pendingRawText: null, pendingElementAttributes: null, pendingOwnText: null, pendingTransforms: [] });
   });
   // Event delegation for "Remove" buttons in the field list
   byIdOrNull('fields-list')?.addEventListener('click', (e) => {
+    const editBtn = (e.target as Element).closest<HTMLElement>('.btn-edit-field');
+    if (editBtn) { openFieldEdit(bridge, { mode: 'flat', index: parseInt(editBtn.dataset.index as string, 10) }); return; }
     const btn = (e.target as Element).closest<HTMLElement>('.btn-remove-field');
     if (!btn) return;
     const index = parseInt(btn.dataset.index as string, 10);

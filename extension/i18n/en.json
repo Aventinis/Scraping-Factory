@@ -600,6 +600,10 @@
     "connectionTitle": "Companion connection"
   },
   "modals": {
+    "fieldEdit": {
+      "renameLocked": "This field is the source of a combined or split field, so its name can't be changed here.",
+      "confirm": "Save"
+    },
     "fieldName": {
       "label": "Field name (e.g. \"Product title\")",
       "placeholder": "Field name"
