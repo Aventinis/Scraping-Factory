@@ -6,8 +6,8 @@ test('sets the side panel to open on action-icon click', () => {
 
   global.chrome = {
     runtime: { onMessage: { addListener: jest.fn() }, sendMessage: jest.fn() },
-    tabs: { query: jest.fn(), sendMessage: jest.fn() },
-    storage: { session: { set: jest.fn(), remove: jest.fn() } },
+    tabs: { query: jest.fn(), sendMessage: jest.fn(), onUpdated: { addListener: jest.fn() }, onRemoved: { addListener: jest.fn() } },
+    storage: { session: { set: jest.fn(), get: jest.fn(), remove: jest.fn() } },
     sidePanel: { setPanelBehavior },
   };
 
@@ -21,8 +21,8 @@ test('does not throw when chrome.sidePanel is unavailable (older Chrome)', () =>
 
   global.chrome = {
     runtime: { onMessage: { addListener: jest.fn() }, sendMessage: jest.fn() },
-    tabs: { query: jest.fn(), sendMessage: jest.fn() },
-    storage: { session: { set: jest.fn(), remove: jest.fn() } },
+    tabs: { query: jest.fn(), sendMessage: jest.fn(), onUpdated: { addListener: jest.fn() }, onRemoved: { addListener: jest.fn() } },
+    storage: { session: { set: jest.fn(), get: jest.fn(), remove: jest.fn() } },
   };
 
   expect(() => require('./service-worker')).not.toThrow();

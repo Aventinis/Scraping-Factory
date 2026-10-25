@@ -391,6 +391,10 @@ let _state: State = {
   selectionKind:       null,  // 'field' | 'container' | 'browserAction' | 'pagination' | 'paginationPageLink' | 'apiDiscoveryAction' | null — which kind the current SELECTING round is for
   pendingParentPath:   null,  // number[] | null — where the next inserted group-tree node goes; null = root level
   pendingNewContainer: null,  // {name, repeating} captured by modal-container-new before element-selection starts
+  stepRecordingActive: false,
+  recordedSteps: [],
+  recordedActionsPending: null,
+  stepRecordingNote: null,
   pendingBrowserActionIndex: null, // number | null — which browserActions entry the current SELECTING round's result is written into (selectionKind === 'browserAction')
   // 'selector' | 'containerSelector' | 'loadMoreButtonSelector' — which
   // property of that entry gets the picked value; only a ScrollStep action

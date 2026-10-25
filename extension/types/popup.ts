@@ -4,7 +4,7 @@ import type * as SFWire from './wire';
 import type * as SFDraft from './drafts';
 import type { ApiConfigDraft } from '../popup/api-config';
 import type { CombinedComponentRef } from '../popup/combined-config';
-import type { ApiCandidate, DomTreeNode, RobotsTxtResult } from './messages';
+import type { ApiCandidate, DomTreeNode, RecordedStep, RobotsTxtResult } from './messages';
 import type { showToast } from '../popup/toast';
 import type { CaptureEntryLike, PathTreeResult } from '../popup/json-path-picker';
 import type { SavedPreset } from '../popup/transform-presets';
@@ -193,6 +193,12 @@ export interface State {
   selectionKind: SelectionKind | null;
   pendingParentPath: number[] | null;
   pendingNewContainer: { name: string; repeating: boolean } | null;
+  /** "Record my steps" (Issue #508): in memory only, never persisted. */
+  stepRecordingActive: boolean;
+  recordedSteps: RecordedStep[];
+  /** The recorded actions waiting for the append / replace choice. */
+  recordedActionsPending: SFDraft.BrowserAction[] | null;
+  stepRecordingNote: string | null;
   pendingBrowserActionIndex: number | null;
   pendingBrowserActionField: BrowserActionField;
   pendingApiDiscoveryPartId: string | null;

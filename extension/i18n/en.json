@@ -754,6 +754,21 @@
   },
   "browserActions": {
     "title": "Browser actions",
+    "record": {
+      "startBtn": "Record my steps",
+      "stopBtn": "Stop recording",
+      "title": "Reloads the page, then records your clicks, typing and scrolling as browser actions. What you type is never recorded.",
+      "waiting": "Now do the steps on the page …",
+      "stepClick": "Click: {selector}",
+      "stepFill": "Type into: {selector}",
+      "stepScroll": "Scroll: {container}",
+      "stepScrollPage": "the page",
+      "nothingRecorded": "Nothing was recorded.",
+      "choiceLabel": "Steps recorded. What should happen to the existing list?",
+      "appendBtn": "Add to the list",
+      "replaceBtn": "Replace the list",
+      "discardBtn": "Discard"
+    },
     "addWaitBtn": "+ Wait",
     "addFillBtn": "+ Fill",
     "addClickBtn": "+ Click",

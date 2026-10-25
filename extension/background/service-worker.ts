@@ -24,6 +24,38 @@ const activeTabId = (tabs: chrome.tabs.Tab[]): number => tabs[0].id as number;
 
 const FORWARD_TO_TAB: readonly ForwardedToTabType[] = ['START_SELECTION', 'STOP_SELECTION', 'ENABLE_DOM_VIEW', 'DISABLE_DOM_VIEW', 'PREVIEW_START', 'PREVIEW_STOP', 'HOVER_HIGHLIGHT', 'HOVER_HIGHLIGHT_CLEAR', 'API_CAPTURE_START', 'API_CAPTURE_STOP'];
 
+// Issue #508: the tab a "Record my steps" session runs in. Kept in session storage: the service worker may be stopped between the
+// page's navigations, and recording has to resume in each new document (the content script starts empty there).
+const STEP_RECORDING_TAB_KEY = 'stepRecordingTabId';
+const STEP_RECORDING_ARM_ATTEMPTS = 5;
+
+function endStepRecording(reason: string): void {
+  log('STEP_RECORDING end', reason);
+  chrome.storage.session.remove(STEP_RECORDING_TAB_KEY);
+  chrome.runtime.sendMessage({ type: 'STEP_RECORDING_ENDED', reason }).catch(() => {});
+}
+
+function armStepRecording(tabId: number, attempt = 0): void {
+  chrome.tabs.sendMessage(tabId, { type: 'START_STEP_RECORDING' }).catch((err: Error) => {
+    // The content script may not be listening yet; a page without one (chrome://, the web store) never will be.
+    if (attempt + 1 < STEP_RECORDING_ARM_ATTEMPTS) setTimeout(() => armStepRecording(tabId, attempt + 1), 300);
+    else endStepRecording(err.message);
+  });
+}
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.status !== 'complete') return;
+  chrome.storage.session.get(STEP_RECORDING_TAB_KEY).then((stored) => {
+    if (stored[STEP_RECORDING_TAB_KEY] === tabId) armStepRecording(tabId);
+  });
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  chrome.storage.session.get(STEP_RECORDING_TAB_KEY).then((stored) => {
+    if (stored[STEP_RECORDING_TAB_KEY] === tabId) endStepRecording('The tab was closed.');
+  });
+});
+
 const NO_EMBEDDED_JSON: EmbeddedJsonResult = { body: '', truncated: false, found: false };
 
 chrome.runtime.onMessage.addListener((message: ServiceWorkerInboundMessage, sender: chrome.runtime.MessageSender, sendResponse: (response: unknown) => void) => {
@@ -131,7 +163,30 @@ chrome.runtime.onMessage.addListener((message: ServiceWorkerInboundMessage, send
     });
   }
 
-  if (message.type === 'HOVER_ELEMENT' || message.type === 'DOM_TREE' || message.type === 'PREVIEW_RESULT' || message.type === 'API_CAPTURE_ENTRY' || message.type === 'API_CANDIDATES') {
+  if (message.type === 'STEP_RECORDING_START') {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs.length === 0) {
+        endStepRecording('no active tab');
+        return;
+      }
+      const tabId = activeTabId(tabs);
+      // The reload gives the recording the page's start state, the same one the script starts from; armStepRecording runs once it has
+      // loaded, and again after every later navigation of the tab.
+      chrome.storage.session.set({ [STEP_RECORDING_TAB_KEY]: tabId })
+        .then(() => chrome.tabs.reload(tabId))
+        .catch((err: Error) => endStepRecording(err.message));
+    });
+  }
+
+  if (message.type === 'STEP_RECORDING_STOP') {
+    chrome.storage.session.get(STEP_RECORDING_TAB_KEY).then((stored) => {
+      const tabId = stored[STEP_RECORDING_TAB_KEY];
+      chrome.storage.session.remove(STEP_RECORDING_TAB_KEY);
+      if (typeof tabId === 'number') chrome.tabs.sendMessage(tabId, { type: 'STOP_STEP_RECORDING' }).catch(() => {});
+    });
+  }
+
+  if (message.type === 'HOVER_ELEMENT' || message.type === 'DOM_TREE' || message.type === 'PREVIEW_RESULT' || message.type === 'API_CAPTURE_ENTRY' || message.type === 'API_CANDIDATES' || message.type === 'STEP_RECORDED') {
     // Transient, side-panel-only messages — no session storage fallback,
     // since missing one while the panel is closed is harmless.
     chrome.runtime.sendMessage(message)

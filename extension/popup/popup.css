@@ -1144,3 +1144,9 @@ input.env-var-invalid, input.env-var-invalid:focus { border-color: var(--color-d
 }
 .actions select:focus { border-color: var(--color-primary); box-shadow: var(--focus-ring); }
 #browser-actions-section .actions { margin: 6px 0; }
+
+/* Issue #508: the live list of recorded steps */
+.record-steps-list { list-style: none; margin: 6px 0; padding: 0; font-size: 11px; color: var(--color-text-secondary); }
+.record-steps-list li { padding: 3px 8px; margin-bottom: 2px; background: var(--color-surface-subtle); border-radius: var(--radius-sm); overflow-wrap: anywhere; }
+.record-steps-list .record-steps-empty { font-style: italic; color: var(--color-text-muted); }
+#btn-record-steps.active { background: var(--color-danger-soft, var(--color-surface-subtle)); color: var(--color-danger); }

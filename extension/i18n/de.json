@@ -754,6 +754,21 @@
   },
   "browserActions": {
     "title": "Browser-Aktionen",
+    "record": {
+      "startBtn": "Meine Schritte aufzeichnen",
+      "stopBtn": "Aufzeichnung beenden",
+      "title": "Lädt die Seite neu und zeichnet dann deine Klicks, Eingaben und Scroll-Bewegungen als Browser-Aktionen auf. Was du tippst, wird nie aufgezeichnet.",
+      "waiting": "Führe jetzt die Schritte auf der Seite aus …",
+      "stepClick": "Klick: {selector}",
+      "stepFill": "Eingabe in: {selector}",
+      "stepScroll": "Scrollen: {container}",
+      "stepScrollPage": "die Seite",
+      "nothingRecorded": "Es wurde nichts aufgezeichnet.",
+      "choiceLabel": "Schritte aufgezeichnet. Was soll mit der bestehenden Liste passieren?",
+      "appendBtn": "An die Liste anhängen",
+      "replaceBtn": "Liste ersetzen",
+      "discardBtn": "Verwerfen"
+    },
     "addWaitBtn": "+ Warten",
     "addFillBtn": "+ Ausfüllen",
     "addClickBtn": "+ Klicken",

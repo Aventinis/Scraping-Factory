@@ -67,8 +67,16 @@ export interface ApiCandidatesMessage {
   candidates?: ApiCandidate[];
 }
 
+// One thing the user did while recording their steps (Issue #508). Never carries typed text: a fill only names the field.
+export type RecordedStep =
+  | { kind: 'click'; selector: string; framePath: string[] | null; late: boolean }
+  | { kind: 'fill'; selector: string; framePath: string[] | null; late: boolean; inputType: string }
+  | { kind: 'scroll'; containerSelector: string | null; framePath: string[] | null };
+
 export type PopupInboundMessage =
   | ElementSelectedMessage
+  | { type: 'STEP_RECORDED'; step: RecordedStep }
+  | { type: 'STEP_RECORDING_ENDED'; reason: string }
   | SelectionUnavailableMessage
   | { type: 'SELECTION_CLICK_OUT_OF_SCOPE' }
   | DomTreeMessage
@@ -91,7 +99,7 @@ export type ForwardedToTabType =
   | 'HOVER_HIGHLIGHT' | 'HOVER_HIGHLIGHT_CLEAR' | 'API_CAPTURE_START' | 'API_CAPTURE_STOP';
 
 // Content script → side panel, forwarded as they are.
-export type ForwardedToPanelType = 'HOVER_ELEMENT' | 'DOM_TREE' | 'PREVIEW_RESULT' | 'API_CAPTURE_ENTRY' | 'API_CANDIDATES';
+export type ForwardedToPanelType = 'HOVER_ELEMENT' | 'DOM_TREE' | 'PREVIEW_RESULT' | 'API_CAPTURE_ENTRY' | 'API_CANDIDATES' | 'STEP_RECORDED';
 
 export type ServiceWorkerInboundMessage =
   | { type: 'GET_LOGS' }
@@ -99,6 +107,7 @@ export type ServiceWorkerInboundMessage =
   | { type: 'GET_EMBEDDED_JSON'; scriptSelector: string }
   | { type: 'COUNT_PICK_WITH_TEXT'; text: string }
   | { type: 'CHECK_ROBOTS_TXT' }
+  | { type: 'STEP_RECORDING_START' | 'STEP_RECORDING_STOP' }
   | { type: ForwardedToTabType; [key: string]: unknown }
   | { type: ForwardedToPanelType; [key: string]: unknown }
   | ElementSelectedMessage;
@@ -142,6 +151,7 @@ export type ContentScriptInboundMessage =
   | { type: 'PREVIEW_START'; mode: string; fields?: Array<{ name: string; selector: string }>; groups?: SFWire.ContainerNode[] }
   | { type: 'HOVER_HIGHLIGHT'; name: string; steps: HighlightStep[]; framePath?: string[] | null }
   | { type: 'API_CAPTURE_START' | 'API_CAPTURE_STOP' }
+  | { type: 'START_STEP_RECORDING' | 'STOP_STEP_RECORDING' }
   | { type: 'GET_LOGS' | 'GET_API_CAPTURE_ENTRIES' | 'CHECK_ROBOTS_TXT' }
   | { type: 'GET_EMBEDDED_JSON'; scriptSelector: string }
   | { type: 'COUNT_PICK_WITH_TEXT'; text: string };
