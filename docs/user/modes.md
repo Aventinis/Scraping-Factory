@@ -123,6 +123,29 @@ another request** and **Range** — are shown first; **Collect from the page (br
 **token value** are under **Advanced sources**, and a body value's **value type**
 is under its own **Advanced**.
 
+### Range values and `today`
+
+The **Range** value source counts through values for one part of the request address: ISO
+weeks (`2026-W30`), plain numbers or dates. Type the start into **From** and the end into
+**To**; the format line below them shows how a value has to look.
+
+The word **`today`** works as a boundary, and it is resolved when the script *runs*, not
+when it is generated — so a saved configuration always counts up to the current week or
+day:
+
+| Type | `today` in **From** | `today` in **To** |
+| --- | --- | --- |
+| **IsoWeek** | yes: the current ISO week | yes |
+| **Date** | no | yes: the day the script runs |
+| **Number** | no | no |
+
+**Example.** A page loads its weekly figures from `/api/weeks/{week}`. Choose **Range**,
+type `IsoWeek`, **From** `2026-W30` and **To** `today`: every run requests all weeks from
+week 30 up to the current one. With **From** `today` and **To** `today` (IsoWeek) the
+range is exactly one value, the current week — a handy "just the latest data" setup. For
+dates, **To** `today` gives every day up to the day of the run, but the start must be a
+real date.
+
 ### Picking JSON paths
 
 You never have to type a JSON path. Wherever one is asked — a group's path, the
