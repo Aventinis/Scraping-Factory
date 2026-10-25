@@ -29,7 +29,7 @@ describe('recorded-endpoints panel and pool-derived value-list autofill', () => 
         <div id="api-entries-panel" class="hidden">
           <ul id="api-entries-list"></ul>
         </div>
-        <button id="btn-api-search" disabled></button>
+        <button id="btn-api-search"></button>
         <div id="api-candidates-panel" class="hidden">
           <p id="api-candidates-target"></p>
           <ul id="api-candidates-list"></ul>
@@ -252,7 +252,7 @@ describe('API-Mode third mode integration (Issue #53 Phase 6)', () => {
         <div id="api-mode-section" class="hidden">
           <button id="btn-api-capture"></button>
           <p id="api-capture-summary" class="hidden"></p>
-          <button id="btn-api-search" disabled></button>
+          <button id="btn-api-search"></button>
           <div id="api-candidates-panel" class="hidden">
             <p id="api-candidates-target"></p>
             <ul id="api-candidates-list"></ul>
@@ -373,7 +373,7 @@ describe('API-Mode range format presets (bug/api-range-format follow-up)', () =>
         <button id="btn-add-field"></button>
         <button id="btn-api-capture"></button>
         <p id="api-capture-summary" class="hidden"></p>
-        <button id="btn-api-search" disabled></button>
+        <button id="btn-api-search"></button>
         <div id="api-candidates-panel" class="hidden">
           <p id="api-candidates-target"></p>
           <ul id="api-candidates-list"></ul>

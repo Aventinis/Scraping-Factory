@@ -708,6 +708,72 @@ describe('API-mode search selection (START_SELECTION with apiSearch)', () => {
     });
   });
 
+  // Issue #507: the main data-point search asks both sources with one click and gets one merged answer.
+  describe('apiSearch + embeddedJsonSearch together', () => {
+    const embed = (data) => {
+      const script = document.createElement('script');
+      script.type = 'application/json';
+      script.id = 'page-data';
+      script.textContent = JSON.stringify(data);
+      document.body.appendChild(script);
+    };
+    const click = async () => {
+      capturedListener({ type: 'START_SELECTION', apiSearch: true, embeddedJsonSearch: true });
+      document.querySelector('.price').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      await null;
+    };
+    const sent = (type) => chrome.runtime.sendMessage.mock.calls.map(c => c[0]).filter(m => m.type === type);
+
+    test('a value in both sources is offered twice in ONE API_CANDIDATES message, the recorded hit first', async () => {
+      feedEntry({ id: 1, url: 'https://example.com/api', method: 'GET', contentType: 'application/json', body: JSON.stringify({ items: [{ price: '3.50' }] }), bodySkipped: false });
+      embed({ items: [{ price: '3.50' }] });
+      await click();
+
+      const messages = sent('API_CANDIDATES');
+      expect(messages).toHaveLength(1);
+      expect(messages[0].candidates).toHaveLength(2);
+      expect(messages[0].candidates[0]).toMatchObject({ url: 'https://example.com/api' });
+      expect(messages[0].candidates[1]).toMatchObject({ scriptSelector: '#page-data' });
+      expect(sent('EMBEDDED_JSON_CANDIDATES')).toHaveLength(0);
+    });
+
+    test('embedded JSON is found without any recording', async () => {
+      embed({ items: [{ price: '3.50' }] });
+      await click();
+
+      const [message] = sent('API_CANDIDATES');
+      expect(message.candidates).toEqual([expect.objectContaining({ scriptSelector: '#page-data', path: 'items[0].price' })]);
+    });
+
+    test('a recorded hit is found on a page without embedded JSON', async () => {
+      feedEntry({ id: 1, url: 'https://example.com/api', method: 'GET', contentType: 'application/json', body: JSON.stringify({ price: '3.50' }), bodySkipped: false });
+      await click();
+
+      expect(sent('API_CANDIDATES')[0].candidates).toEqual([expect.objectContaining({ url: 'https://example.com/api' })]);
+    });
+
+    test('no hit in either source is an empty list, not silence', async () => {
+      await click();
+      expect(sent('API_CANDIDATES')).toEqual([{ type: 'API_CANDIDATES', target: '3.50', candidates: [] }]);
+    });
+  });
+
+  test('a scoped embedded-JSON search (adding to an embedded tree) still answers with EMBEDDED_JSON_CANDIDATES only', async () => {
+    const script = document.createElement('script');
+    script.type = 'application/json';
+    script.id = 'page-data';
+    script.textContent = JSON.stringify({ items: [{ price: '3.50' }] });
+    document.body.appendChild(script);
+
+    capturedListener({ type: 'START_SELECTION', embeddedJsonSearch: true, embeddedJsonScriptSelector: '#page-data' });
+    document.querySelector('.price').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await null;
+
+    const types = chrome.runtime.sendMessage.mock.calls.map(c => c[0].type);
+    expect(types).toContain('EMBEDDED_JSON_CANDIDATES');
+    expect(types).not.toContain('API_CANDIDATES');
+  });
+
   test('a click without apiSearch never sends API_CANDIDATES, even with entries buffered', async () => {
     feedEntry({ id: 1, url: 'https://example.com/api', contentType: 'application/json', body: JSON.stringify({ price: '3.50' }), bodySkipped: false });
 

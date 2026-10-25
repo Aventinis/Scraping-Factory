@@ -43,7 +43,7 @@ export function renderApiCandidates(
     // An embedded-JSON candidate has no request / method, only the selector of the <script> tag it was found in.
     const sourceLine = candidate.scriptSelector
       ? `<div class="api-candidate-url" title="${escapeHtml(candidate.scriptSelector)}">${escapeHtml(t('apiCandidates.embeddedJsonSourceLabel', { selector: candidate.scriptSelector }))}</div>`
-      : `<div class="api-candidate-url" title="${escapeHtml(candidate.url)}">${escapeHtml(candidate.method)} ${escapeHtml(candidate.url)}</div>`;
+      : `<div class="api-candidate-url" title="${escapeHtml(candidate.url)}">${escapeHtml(t('apiCandidates.recordedRequestLabel', { method: candidate.method, url: candidate.url }))}</div>`;
     li.innerHTML =
       sourceLine +
       `<div class="api-candidate-path">${escapeHtml(candidate.path)}</div>` +
@@ -153,30 +153,15 @@ export function toggleApiCapture(bridge: PopupBridge): void {
 }
 
 // ── Candidate search ──
-// Reuses the click selection (START_SELECTION / ELEMENT_SELECTED) with an apiSearch flag: the content script also correlates
-// the clicked text against the recorded entries and reports API_CANDIDATES.
+// Reuses the click selection (START_SELECTION / ELEMENT_SELECTED) with both search flags: the content script also correlates the
+// clicked text against the recorded entries AND the page's own <script> JSON (no recording needed for the latter) and reports one
+// API_CANDIDATES list. Confirmation is dispatched by candidate shape (candidate.scriptSelector is set only for embedded JSON).
 
 export function startApiFieldSearch(bridge: PopupBridge): void {
   const state = bridge.getState();
-  if (state.apiCaptureCount === 0) return;
-  log('API_SEARCH start → START_SELECTION(apiSearch)');
+  log('API_SEARCH start → START_SELECTION(apiSearch + embeddedJsonSearch)');
   bridge.stopPreviewIfActive();
-  chrome.runtime.sendMessage({ type: 'START_SELECTION', apiSearch: true });
-  bridge.setState(STATES.SELECTING, {
-    apiSearchTarget: 'field', pendingSelector: null, apiCandidates: null,
-    domTree: null, domTreeTruncated: false, domTreeError: null,
-  });
-  if (state.domViewEnabled) bridge.requestDomTree();
-}
-
-// The embedded-JSON analogue of startApiFieldSearch: no recording needed, since the content script scans document.scripts
-// at click time. It reuses the same apiSearchTarget / apiCandidates state and list; EMBEDDED_JSON_CANDIDATES is handled like
-// API_CANDIDATES, and confirmation is dispatched by candidate shape (candidate.scriptSelector).
-export function startEmbeddedJsonFieldSearch(bridge: PopupBridge): void {
-  const state = bridge.getState();
-  log('EMBEDDED_JSON_SEARCH start → START_SELECTION(embeddedJsonSearch)');
-  bridge.stopPreviewIfActive();
-  chrome.runtime.sendMessage({ type: 'START_SELECTION', embeddedJsonSearch: true });
+  chrome.runtime.sendMessage({ type: 'START_SELECTION', apiSearch: true, embeddedJsonSearch: true });
   bridge.setState(STATES.SELECTING, {
     apiSearchTarget: 'field', pendingSelector: null, apiCandidates: null,
     domTree: null, domTreeTruncated: false, domTreeError: null,
@@ -343,17 +328,12 @@ export function wireApiCaptureEvents(bridge: PopupBridge): void {
     startApiFieldSearch(bridge);
   });
 
-  byIdOrNull('btn-embedded-json-search')?.addEventListener('click', () => {
-    log('BTN embedded-json-search');
-    startEmbeddedJsonFieldSearch(bridge);
-  });
-
   byIdOrNull('btn-api-entries-toggle')?.addEventListener('click', () => {
     log('BTN api-entries-toggle');
     toggleApiEntriesPanel(bridge);
   });
 
-  // The same list serves a network and an embedded-JSON search: dispatch by candidate shape (only an embedded-JSON candidate
+  // The one list holds recorded-request and embedded-JSON candidates: dispatch by candidate shape (only an embedded-JSON candidate
   // carries scriptSelector).
   wireApiCandidateListEvents(
     'api-candidates-list', () => bridge.getState().apiCandidates?.candidates, () => [],

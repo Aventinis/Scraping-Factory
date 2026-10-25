@@ -83,10 +83,16 @@ goes.
 Many pages load their data from a JSON request instead of putting it in the
 HTML. API mode finds that request for you:
 
-1. Click **Start network recording**, then use the page (scroll, open a tab) so
-   it makes its requests.
-2. Click **Find data point in recording**, then click a value on the page. The
-   extension searches the recorded responses for it.
+1. If the page loads its data by itself, click **Start network recording**, then use
+   the page (scroll, open a tab) so it makes its requests. Skip this step when the
+   page already contains its data (see below).
+2. Click **Find data point**, then click a value on the page. The extension
+   searches the recorded responses *and* the JSON inside the page itself for it,
+   and lists every hit with where it was found: **Recorded request: …** or
+   **Embedded in the page: …** (recorded ones first).
+
+   ![A hit found in the page itself: Embedded in the page](images/modes-api-find-data-point.png)
+
    Each match is a card with a name field and **Use**. Leave the name empty and
    **Use** takes it from the request itself — the last key of the path, so
    `products[0].title` becomes `title` (the field shows it in grey). A name you
@@ -144,8 +150,9 @@ their own **Advanced** lines, each saying in one sentence when it applies. They 
 by themselves once switched on, and the Link-header one when the recording shows a
 `Link: rel="next"` header.
 
-Some sites put all their data in the page itself (Next.js and similar). For
-those, use **Search page's own JSON data** instead of recording.
+Some sites put all their data in the page itself (Next.js and similar). Those need no
+recording: **Find data point** finds the value in the page's own JSON, and the script
+then fetches the page like any other URL.
 
 API mode produces a script that needs only `requests` — no browser. See
 [Network settings](network-settings.md) for headers and tokens.

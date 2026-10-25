@@ -164,7 +164,7 @@ describe('API-mode candidate search (btn-api-search, Issue #53 Phase 4)', () => 
         <button id="btn-add-field"></button>
         <button id="btn-api-capture"></button>
         <p id="api-capture-summary" class="hidden"></p>
-        <button id="btn-api-search" disabled></button>
+        <button id="btn-api-search"></button>
         <div id="api-candidates-panel" class="hidden">
           <p id="api-candidates-target"></p>
           <ul id="api-candidates-list"></ul>
@@ -211,23 +211,40 @@ describe('API-mode candidate search (btn-api-search, Issue #53 Phase 4)', () => 
     chrome.runtime.sendMessage.mockClear();
   }
 
-  test('stays disabled until something has been recorded', () => {
-    expect(document.getElementById('btn-api-search').disabled).toBe(true);
-  });
-
-  test('is enabled once at least one request has been recorded, even after stopping', () => {
-    recordOneEntry();
+  // Issue #507: one search for recorded requests and the page's own JSON — it needs no recording.
+  test('is enabled without any recording', () => {
     expect(document.getElementById('btn-api-search').disabled).toBe(false);
   });
 
-  test('clicking sends START_SELECTION with apiSearch:true and switches to the selecting screen', () => {
+  test('clicking without a recording still starts the search (the page may embed its data)', () => {
+    document.getElementById('btn-api-search').click();
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'START_SELECTION', apiSearch: true, embeddedJsonSearch: true });
+    expect(document.getElementById('screen-selecting').classList.contains('hidden')).toBe(false);
+  });
+
+  test('clicking after a recording asks the content script for both sources and switches to the selecting screen', () => {
     recordOneEntry();
 
     document.getElementById('btn-api-search').click();
 
-    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'START_SELECTION', apiSearch: true });
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'START_SELECTION', apiSearch: true, embeddedJsonSearch: true });
     expect(document.getElementById('screen-selecting').classList.contains('hidden')).toBe(false);
     expect(document.getElementById('screen-idle').classList.contains('hidden')).toBe(true);
+  });
+
+  test('one merged API_CANDIDATES reply lists recorded and embedded hits, each labelled with its source', () => {
+    document.getElementById('btn-api-search').click();
+    const base = { path: 'items[0].name', value: 'X', siblings: [], itemsPath: 'items', valuePath: 'name', treeSkeleton: [{ path: 'items' }, { path: 'name' }] };
+    capturedListener({
+      type: 'API_CANDIDATES', target: 'X',
+      candidates: [{ ...base, url: 'https://example.com/api', method: 'GET' }, { ...base, scriptSelector: '#__NEXT_DATA__' }],
+    });
+
+    const sources = [...document.querySelectorAll('#api-candidates-list .api-candidate-url')].map(el => el.textContent);
+    expect(sources).toHaveLength(2);
+    expect(sources[0]).toMatch(/^Aufgezeichnete Anfrage: GET https:\/\/example\.com\/api/);
+    expect(sources[1]).toMatch(/^In die Seite eingebettet: #__NEXT_DATA__/);
   });
 
   test('an ELEMENT_SELECTED arriving during an api-search round does not open the flat field-name modal', () => {

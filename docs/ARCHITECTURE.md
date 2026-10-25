@@ -369,7 +369,7 @@ API-mode request (fetch-mechanism-agnostic by design).
 
 - Extension: `content/content-script.ts` (`findEmbeddedJsonCandidates`,
   `scriptTagSelector`), `popup/api-capture-ui.ts`
-  (`startEmbeddedJsonFieldSearch`, `confirmEmbeddedJsonFieldCandidate`,
+  (`startApiFieldSearch` asks for both sources, `confirmEmbeddedJsonFieldCandidate`,
   `renderApiCandidates`'s `candidate.scriptSelector` branch), `popup/api-config.ts`
   (`buildApiConfig`'s `embeddedJsonSource` param)
 - Companion: `IR/ApiConfig.cs` (`ApiConfig.EmbeddedJsonSource`,
@@ -735,6 +735,21 @@ docs/design-notes/extension.md for the details.
   `idle.hardening*`/`help.hardening.*` in `i18n/*.json`
 - Tests: `popup/hardening-presets.test.js`, `popup/hardening-presets-ui.test.js`,
   real-browser check `e2e/examples/issue-399-hardening-plain-language-check.js`
+
+### 2.10q One data-point search for recorded requests and embedded JSON (Issue #507)
+
+The main **Find data point** search clicks once and searches both the recorded responses and the page's own
+`<script>` JSON; the embedded part needs no recording. `startApiFieldSearch` sends `START_SELECTION` with
+`apiSearch` and `embeddedJsonSearch`; the content script answers with ONE `API_CANDIDATES` message
+(`mergeCandidateSources`: recorded hits first), and the card list labels each hit with its source. Scoped
+searches (adding to an existing tree, discovery) still ask one source only. See docs/design-notes/extension.md.
+
+- Extension: `content/content-script.ts` (click handler, `mergeCandidateSources`), `popup/api-capture-ui.ts`
+  (`startApiFieldSearch`, source labels in `renderApiCandidates`), `idle-screen-ui.ts`/`idle.html` (the former
+  `btn-embedded-json-search` is gone, `btn-api-search` is always enabled), `apiCandidates.*` in `i18n/*.json`
+- Tests: `content/content-script.test.js` (both flags together), `popup/api-capture-flow.test.js`, real-browser
+  check `e2e/examples/issue-507-unified-search-check.js` (fixtures `embedded-json-menu` incl. its `/hybrid` page,
+  `api-nested-and-post`)
 
 ### 2.10p Reopening an applied API configuration (Issue #506)
 

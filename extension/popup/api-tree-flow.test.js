@@ -29,7 +29,7 @@ describe('API-tree wiring end-to-end (Issue #54, Phase A5)', () => {
         <button id="btn-add-field"></button>
         <button id="btn-api-capture"></button>
         <p id="api-capture-summary" class="hidden"></p>
-        <button id="btn-api-search" disabled></button>
+        <button id="btn-api-search"></button>
         <div id="api-candidates-panel" class="hidden">
           <p id="api-candidates-target"></p>
           <ul id="api-candidates-list"></ul>
@@ -311,7 +311,7 @@ describe('API-mode field transforms (Issue #84 follow-up)', () => {
         <button id="btn-add-field"></button>
         <button id="btn-api-capture"></button>
         <p id="api-capture-summary" class="hidden"></p>
-        <button id="btn-api-search" disabled></button>
+        <button id="btn-api-search"></button>
         <div id="api-candidates-panel" class="hidden">
           <p id="api-candidates-target"></p>
           <ul id="api-candidates-list"></ul>

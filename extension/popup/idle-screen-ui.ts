@@ -206,9 +206,6 @@ export function renderIdleScreen(bridge: PopupBridge): void {
     }
   }
 
-  const apiSearchBtn = byIdOrNull<HTMLButtonElement>('btn-api-search');
-  if (apiSearchBtn) apiSearchBtn.disabled = state.apiCaptureCount === 0;
-
   const apiEntriesToggleBtn = byIdOrNull<HTMLButtonElement>('btn-api-entries-toggle');
   if (apiEntriesToggleBtn) {
     apiEntriesToggleBtn.disabled = state.apiCaptureCount === 0;

@@ -123,4 +123,19 @@ module.exports = [
       await s.shot('modes-api-edit', '#api-config-panel');
     },
   },
+  {
+    // Issue #507: one search for recorded requests and the page's own JSON — here a page that only embeds its data.
+    id: 'modes-api-find-data-point',
+    fixture: 'embedded-json-menu',
+    async run(s) {
+      const { popupPage, fixturePage } = s;
+      await s.waitForIdle();
+      await popupPage.click('#btn-mode-api');
+      await popupPage.click('#btn-api-search');
+      await fixturePage.waitForTimeout(500);
+      await fixturePage.click('.menu-item >> nth=0 >> .item-name');
+      await popupPage.waitForSelector('.api-candidate-confirm', { state: 'visible' });
+      await s.shot('modes-api-find-data-point', '#api-candidates-panel');
+    },
+  },
 ];

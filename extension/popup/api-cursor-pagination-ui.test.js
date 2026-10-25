@@ -18,7 +18,7 @@ describe('API-Mode cursor pagination section (Issue #224)', () => {
         <button id="btn-add-field"></button>
         <button id="btn-api-capture"></button>
         <p id="api-capture-summary" class="hidden"></p>
-        <button id="btn-api-search" disabled></button>
+        <button id="btn-api-search"></button>
         <div id="api-candidates-panel" class="hidden">
           <p id="api-candidates-target"></p>
           <ul id="api-candidates-list"></ul>

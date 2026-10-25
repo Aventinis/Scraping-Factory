@@ -109,7 +109,7 @@ async function renameLeaf(popup, from, to) {
     // ── 2) embedded-JSON source ──────────────────────────────────────────────────────────────
     await withPage('embedded-json-menu', async ({ popup, fixturePage }) => {
       await popup.click('#btn-mode-api');
-      await popup.click('#btn-embedded-json-search');
+      await popup.click('#btn-api-search');
       await fixturePage.waitForTimeout(500);
       await fixturePage.click('.menu-item >> nth=0 >> .item-name');
       await popup.waitForSelector('#api-candidates-list .api-candidate-confirm', { state: 'visible' });

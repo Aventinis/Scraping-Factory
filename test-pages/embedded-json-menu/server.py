@@ -22,8 +22,11 @@ Usage:
                                           nested categories[*].items[*] (tree shape)
     -> http://127.0.0.1:8700/generic     generic <script type="application/json">,
                                           flat products[*] array (flat shape)
+    -> http://127.0.0.1:8700/hybrid      the same products embedded AND served by
+                                          fetch('/api/products') after "Neu laden" (Issue #507)
 """
 
+import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -49,6 +52,23 @@ class FixtureRequestHandler(BaseHTTPRequestHandler):
             self._send_html(200, (STATIC_DIR / "generic.html").read_bytes())
             return
 
+        if self.path in ("/hybrid", "/hybrid.html"):
+            self._send_html(200, (STATIC_DIR / "hybrid.html").read_bytes())
+            return
+
+        if self.path == "/api/products":
+            payload = json.dumps({"products": [
+                {"sku": "P-100", "title": "Smartphone X"},
+                {"sku": "P-101", "title": "Smartphone Y"},
+                {"sku": "P-200", "title": "Laptop Alpha"},
+            ]}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+
         self._send_html(404, b"<h1>404 Not Found</h1>")
 
     def log_message(self, format, *args):
@@ -60,6 +80,7 @@ def main():
     print(f"embedded-json-menu fixture server running at http://{HOST}:{PORT}/ (Ctrl+C to stop)")
     print(f"  -> http://{HOST}:{PORT}/         Next.js-style, nested (#__NEXT_DATA__)")
     print(f"  -> http://{HOST}:{PORT}/generic  generic application/json, flat")
+    print(f"  -> http://{HOST}:{PORT}/hybrid   embedded JSON and a fetch() of the same data")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

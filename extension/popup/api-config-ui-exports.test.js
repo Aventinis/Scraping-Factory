@@ -26,7 +26,6 @@ const EXPORTED_BY_API_CONFIG_UI = [
   'confirmApiFieldCandidate',
   'loadInitialBodyTreeForCandidate',
   'cancelApiConfig',
-  'startEmbeddedJsonFieldSearch',
   'confirmEmbeddedJsonFieldCandidate',
   'startApiTreeFieldSearch',
   'confirmApiTreeFieldCandidate',
