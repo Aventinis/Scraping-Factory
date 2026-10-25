@@ -304,7 +304,6 @@
     "siblingChip": "+ {name}",
     "selectAllChips": "Seleccionar todo",
     "deselectAllChips": "Deseleccionar todo",
-    "useFieldNamePlaceholder": "Nombre del campo",
     "embeddedJsonSourceLabel": "Encontrado en script de la página: {selector}"
   },
   "apiConfig": {
@@ -419,6 +418,7 @@
     "addSubfieldBtn": "+ Campo de datos",
     "addRootGroupBtn": "+ Nuevo grupo (nivel superior)",
     "defaultGroupName": "Grupo",
+    "defaultFieldName": "Campo",
     "transformsBtn": "Transformar",
     "transformsBtnCount": "Transformar ({count})",
     "combineFieldsBtn": "+ Combinar campos",

@@ -160,6 +160,7 @@ them share):
 | Module | Owns |
 | --- | --- |
 | `api-capture-ui.ts` | recording toggle, the click-based searches (network, embedded JSON), candidate and recorded-request lists, confirming a candidate |
+| `api-field-name.ts` | the name "Use" falls back to on a candidate card: last path key, made unique with a counter (Issue #504) |
 | `api-response-tree-ui.ts` | response-tree rows, the group and leaf-transforms modals, the JSON-scoped tree search |
 | `api-parameters-ui.ts` | URL parts and parameter-source cards (value list, discovery endpoint, range) |
 | `api-browser-discovery-ui.ts` | the BrowserDiscoverySource action editor (its listener branches are called by `api-parameters-ui.ts`) |

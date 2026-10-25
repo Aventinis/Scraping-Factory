@@ -79,4 +79,24 @@ module.exports = [
       await s.shot('modes-api-path-picker', '#modal-api-group-new .modal-inner');
     },
   },
+  {
+    // Issue #504: a candidate card whose "Use" works without a typed name (the placeholder shows the name taken from the path).
+    id: 'modes-api-use-name',
+    fixture: 'api-nested-and-post',
+    async run(s) {
+      const { popupPage, fixturePage } = s;
+      await s.waitForIdle();
+      await popupPage.click('#btn-mode-api');
+      await popupPage.click('#btn-api-capture');
+      await fixturePage.click('#btn-reload-search');
+      await fixturePage.waitForSelector('#result-search .product-title');
+      await popupPage.click('#btn-api-capture');
+      await fixturePage.bringToFront();
+      await fixturePage.waitForTimeout(150);
+      await popupPage.click('#btn-api-search');
+      await fixturePage.click('#result-search .product-title >> nth=0');
+      await popupPage.waitForSelector('.api-candidate-field-name', { state: 'visible' });
+      await s.shot('modes-api-use-name', '#api-candidates-list .api-candidate >> nth=0');
+    },
+  },
 ];
