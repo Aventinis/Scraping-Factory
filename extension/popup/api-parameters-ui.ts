@@ -13,7 +13,6 @@ import type { ApiConfigDraft, ApiParameterSourceDraft, ParameterPart, SourceOf, 
 // source, and a captured header can be built from it ("Bearer {token}").
 import { BOOTSTRAP_SOURCE_KIND } from './api-bootstrap';
 import { helpHostHtml } from './help-popover';
-import { createAdvancedDisclosure } from './advanced-disclosure-ui';
 import { renderParameterPlaceholderPicker, patchApiConfigDraft, patchApiConfigSource, insertParameterPlaceholder } from './api-config-shared-ui';
 import { fetchApiCaptureEntries } from './api-capture-ui';
 import { renderBrowserDiscoverySourceFields, handleBrowserDiscoveryChange, handleBrowserDiscoveryClick } from './api-browser-discovery-ui';
@@ -101,12 +100,9 @@ export function renderApiConfigParameters(
     // body-only parameter — the body references the bootstrap by name
     // directly on the wire) and only while a bootstrap is configured.
     const isUrlPart = part.id.startsWith('path:') || part.id.startsWith('query:');
-    // Issue #404: the three everyday sources are shown; browser discovery and
-    // the bootstrap token value are rarely needed and sit under "Advanced",
-    // which opens by itself while one of them is the chosen source.
-    const basicKinds: SourceKind[] = ['staticList', 'discovery', 'range'];
-    const advancedKinds: SourceKind[] = ['browserDiscovery'];
-    if (isUrlPart && (draft.bootstrap || source?.kind === BOOTSTRAP_SOURCE_KIND)) advancedKinds.push(BOOTSTRAP_SOURCE_KIND);
+    // All sources are plain options; the token value only while a bootstrap exists (or is the chosen source).
+    const kinds: SourceKind[] = ['staticList', 'discovery', 'range', 'browserDiscovery'];
+    if (isUrlPart && (draft.bootstrap || source?.kind === BOOTSTRAP_SOURCE_KIND)) kinds.push(BOOTSTRAP_SOURCE_KIND);
     const radioHtml = (kind: SourceKind) => `
         <label>
           <input type="radio" name="source-kind-${safePartId}" class="api-config-source-kind-radio"
@@ -116,11 +112,7 @@ export function renderApiConfigParameters(
         </label>
       `;
     kindRow.setAttribute('data-help-anchor', '');
-    kindRow.innerHTML = basicKinds.map(radioHtml).join('');
-    const advancedSources = createAdvancedDisclosure('api-source-advanced', 'apiConfig.sourceAdvancedSummary');
-    (advancedSources.querySelector('.advanced-disclosure-body') as HTMLElement).innerHTML = advancedKinds.map(radioHtml).join('');
-    if (source && advancedKinds.includes(source.kind)) advancedSources.open = true;
-    kindRow.appendChild(advancedSources);
+    kindRow.innerHTML = kinds.map(radioHtml).join('');
     card.appendChild(kindRow);
 
     const fieldsEl = document.createElement('div');

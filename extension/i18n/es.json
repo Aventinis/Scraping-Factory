@@ -349,7 +349,6 @@
     "bodyPickParameterPlaceholder": "-- elegir un parámetro --",
     "bodyNewParameterOption": "+ Nuevo parámetro…",
     "bodyCoerceToTitle": "Tipo de valor para usar en el cuerpo (por defecto: texto)",
-    "sourceAdvancedSummary": "Fuentes avanzadas",
     "bodyValueTypeAdvanced": "Avanzado: tipo de valor",
     "bodyValueTypeLabel": "Tipo de valor"
   },

@@ -514,7 +514,7 @@ body {
 .api-config-part-name { width: 90px; font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
 .api-config-param-card { padding: 8px; background: var(--color-surface-subtle); border-radius: var(--radius-md); margin-bottom: 6px; }
 .api-config-param-card .row-label { margin-bottom: 4px; }
-.api-config-source-kind { display: flex; gap: 10px; font-size: 11px; margin-bottom: 6px; }
+.api-config-source-kind { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; margin-bottom: 6px; }
 .api-config-source-fields textarea { width: 100%; font-size: 11px; padding: 4px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-family: monospace; }
 .api-config-source-fields .api-config-autofill-pool { margin-top: 4px; }
 .api-config-source-fields input[type="text"] { font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }

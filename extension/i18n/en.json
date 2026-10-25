@@ -349,7 +349,6 @@
     "bodyPickParameterPlaceholder": "-- choose a parameter --",
     "bodyNewParameterOption": "+ New parameter…",
     "bodyCoerceToTitle": "Value type to use in the body (default: text)",
-    "sourceAdvancedSummary": "Advanced sources",
     "bodyValueTypeAdvanced": "Advanced: value type",
     "bodyValueTypeLabel": "Value type"
   },

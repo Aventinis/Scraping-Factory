@@ -349,7 +349,6 @@
     "bodyPickParameterPlaceholder": "-- Parameter wählen --",
     "bodyNewParameterOption": "+ Neuer Parameter…",
     "bodyCoerceToTitle": "Werttyp für die Übernahme in den Body (Standard: Text)",
-    "sourceAdvancedSummary": "Erweiterte Quellen",
     "bodyValueTypeAdvanced": "Erweitert: Werttyp",
     "bodyValueTypeLabel": "Werttyp"
   },
