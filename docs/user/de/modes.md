@@ -1,4 +1,4 @@
-<!-- source: f2902344119d -->
+<!-- source: 8e9a764f69b2 -->
 # Scraping-Modi
 
 Die Schaltflächen oben auf dem Startbildschirm legen fest, *wie* die Daten
@@ -92,10 +92,16 @@ Seite geht.
 Viele Seiten laden ihre Daten über eine JSON-Anfrage, statt sie ins HTML zu
 schreiben. Der API-Modus findet diese Anfrage für dich:
 
-1. Klicke auf **Netzwerk-Aufzeichnung starten** und benutze dann die Seite (scrollen,
-   einen Tab öffnen), damit sie ihre Anfragen stellt.
-2. Klicke auf **Datenpunkt in Aufzeichnung suchen** und klicke dann einen Wert auf
-   der Seite an. Die Erweiterung sucht ihn in den aufgezeichneten Antworten.
+1. Lädt die Seite ihre Daten selbst nach, klicke auf **Netzwerk-Aufzeichnung starten**
+   und benutze dann die Seite (scrollen, einen Tab öffnen), damit sie ihre Anfragen
+   stellt. Überspringe den Schritt, wenn die Seite ihre Daten schon enthält (siehe unten).
+2. Klicke auf **Datenpunkt suchen** und klicke dann einen Wert auf der Seite an. Die
+   Erweiterung sucht ihn in den aufgezeichneten Antworten *und* im JSON der Seite selbst
+   und listet jeden Treffer mit seiner Herkunft: **Aufgezeichnete Anfrage: …** oder
+   **In die Seite eingebettet: …** (aufgezeichnete zuerst).
+
+   ![Ein Treffer aus der Seite selbst: In die Seite eingebettet](images/modes-api-find-data-point.png)
+
    Jeder Treffer ist eine Karte mit Namensfeld und **Verwenden**. Lässt du den Namen
    leer, übernimmt **Verwenden** ihn aus der Anfrage selbst — der letzte Schlüssel des
    Pfads, aus `products[0].title` wird also `title` (das Feld zeigt ihn grau an). Ein
@@ -158,8 +164,9 @@ stehen unter eigenen **Erweitert**-Zeilen, die jeweils in einem Satz sagen, wann
 gelten. Sie öffnen sich von selbst, sobald sie eingeschaltet sind, und die
 Link-Header-Option auch, wenn die Aufzeichnung einen Header `Link: rel="next"` zeigt.
 
-Manche Seiten legen alle ihre Daten in die Seite selbst (Next.js und Ähnliches). Nutze
-dafür **In eingebetteten JSON-Daten der Seite suchen** statt der Aufzeichnung.
+Manche Seiten legen alle ihre Daten in die Seite selbst (Next.js und Ähnliches). Sie
+brauchen keine Aufzeichnung: **Datenpunkt suchen** findet den Wert im JSON der Seite,
+und das Skript lädt die Seite dann wie jede andere URL.
 
 Der API-Modus erzeugt ein Skript, das nur `requests` braucht — keinen Browser. Siehe
 [Netzwerk-Einstellungen](network-settings.md) für Header und Tokens.
