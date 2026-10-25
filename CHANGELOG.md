@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.21.7](https://github.com/Aventinis/Scraping-Factory/compare/v1.21.6...v1.21.7) (2026-10-25)
+
+
+### Features
+
+* **extension:** script and output name defaults as placeholders instead of prefilled text ([a67d5a7](https://github.com/Aventinis/Scraping-Factory/commit/a67d5a762ebe7a9d23e035c8d72384b4b4f550aa))
+* **extension:** script and output name defaults as placeholders instead of prefilled text ([#510](https://github.com/Aventinis/Scraping-Factory/issues/510)) ([49df663](https://github.com/Aventinis/Scraping-Factory/commit/49df66346829a6ec2433fc7cf7a3b6a2bcd0d408))
+
 ## [1.21.6](https://github.com/Aventinis/Scraping-Factory/compare/v1.21.5...v1.21.6) (2026-10-25)
 
 
