@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.21.9](https://github.com/Aventinis/Scraping-Factory/compare/v1.21.8...v1.21.9) (2026-10-25)
+
+
+### Features
+
+* **extension:** explain today as a Range boundary in the Range help, with a Learn more link ([#517](https://github.com/Aventinis/Scraping-Factory/issues/517)) ([097f2d0](https://github.com/Aventinis/Scraping-Factory/commit/097f2d0cebdd4aaa8e7d209ebf0de10ee60520ec))
+
 ## [1.21.8](https://github.com/Aventinis/Scraping-Factory/compare/v1.21.7...v1.21.8) (2026-10-25)
 
 
