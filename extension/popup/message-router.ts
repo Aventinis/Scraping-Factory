@@ -13,6 +13,7 @@ import { getGlobalSettings } from '../shared/global-settings';
 import { resolveLinkHref } from './pagination-template';
 import { showToast, showMatchCountToast, setLastError } from './toast';
 import { markPickHandled, withDiscoveryActionPatch } from './session-restore';
+import { addRecordedStep, finishStepRecording } from './step-recording-ui';
 import { cancelPendingDomTreeRequest, renderDomTree, highlightHover, highlightSelected } from './dom-tree-ui';
 
 const log = createLogger('SF:Popup');
@@ -170,6 +171,8 @@ export function wireMessageListener(bridge: PopupBridge): void {
       bridge.patchState({ previewActive: false, previewSummary: null });
       showToast(t('toast.previewUnavailable'), 'Preview');
     }
+    if (message.type === 'STEP_RECORDED') addRecordedStep(bridge, message.step);
+    if (message.type === 'STEP_RECORDING_ENDED') finishStepRecording(bridge, message.reason);
     if (message.type === 'API_CAPTURE_ENTRY' && state.apiCaptureActive) {
       log('API_CAPTURE_ENTRY received', message.entry?.url);
       bridge.patchState({ apiCaptureCount: state.apiCaptureCount + 1 });

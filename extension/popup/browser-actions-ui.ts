@@ -11,6 +11,7 @@ import { autoOpenAdvanced, createAdvancedDisclosure } from './advanced-disclosur
 import { helpHostHtml } from './help-popover';
 import { addLoginFlow, msToSecondsText, secondsTextToMs } from './login-flow';
 import { addBrowserAction, removeBrowserAction, updateBrowserAction, frameBadgeHtml } from './scraping-config-builder';
+import { renderStepRecording, wireStepRecordingEvents } from './step-recording-ui';
 import { byIdOrNull, escapeHtml } from './dom';
 
 const log = createLogger('SF:Popup');
@@ -174,7 +175,10 @@ export function renderBrowserActionsSection(bridge: PopupBridge): void {
   byIdOrNull('btn-engine-static')?.classList.toggle('active', state.engine === 'Static');
   byIdOrNull('btn-engine-browser')?.classList.toggle('active', state.engine === 'Browser');
   byIdOrNull('browser-actions-section')?.classList.toggle('hidden', state.engine !== 'Browser');
-  if (state.engine === 'Browser') renderBrowserActions(state.browserActions, state.fillTestValues);
+  if (state.engine === 'Browser') {
+    renderBrowserActions(state.browserActions, state.fillTestValues);
+    renderStepRecording(bridge);
+  }
   // Issue #403: while a starter action still has no element, say what to do next.
   byIdOrNull('login-flow-hint')?.classList.toggle(
     'hidden', !state.browserActions.some((a) => a.role && !a.selector),
@@ -186,6 +190,7 @@ export function renderBrowserActionsSection(bridge: PopupBridge): void {
 }
 
 export function wireBrowserActionsEvents(bridge: PopupBridge): void {
+  wireStepRecordingEvents(bridge);
   byIdOrNull('btn-engine-static')?.addEventListener('click', () => {
     log('BTN engine-static');
     bridge.setState(bridge.getState().current, { engine: 'Static' });

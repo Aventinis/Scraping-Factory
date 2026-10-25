@@ -78,6 +78,40 @@ Rarely needed options — which match a click uses, the scroll step, a scroll's 
 and "Load more" button — are under a collapsed **Advanced** that remembers whether you
 opened it.
 
+### Record my steps
+
+You know what *you* do on the page to get to the data, not which selectors to
+enter. Click **Record my steps** and do it by hand:
+
+1. The page reloads, so the recording starts from the state the script starts from.
+2. Click, type and scroll as you normally would. The panel lists each step as it is
+   recorded.
+3. Click **Stop recording**. The steps become the actions above, each one still
+   editable or removable. If the list already has actions, you choose **Add to the
+   list**, **Replace the list** or **Discard**.
+
+![The steps listed while recording a login](images/browser-engine-record-steps.png)
+
+What is recorded, and what not:
+
+- A **click** becomes **Click** (several clicks on the same element in a row become
+  one). Clicking into a text field only focuses it and is no step.
+- Typing becomes **Fill**, but **what you type is never recorded**: the action only
+  names the field, and the editor asks for the name of the environment variable that
+  will hold the value, as for any Fill. A password never reaches a script, a saved
+  configuration or a log.
+- A **scroll** becomes **Scroll** only if it made the page load more content; a plain
+  reading scroll is ignored.
+- An element that was not on the page right after loading (a menu that opens, a
+  field that appears) gets a **Wait** in front of it.
+- Not recorded: pressing Enter to submit (click the button instead), drop-down lists,
+  dragging and keyboard shortcuts. Add those by hand. A CAPTCHA is never solved or
+  recorded; if one appears the script fails honestly.
+- If the page navigates while you record, the recording continues on the new page.
+  It stops, and says so, when the tab is closed or the page cannot be recorded.
+
+Choosing the data you want to extract works as always: pick the fields afterwards.
+
 ### Click: first, last or all
 
 If a selector matches several elements (say, one "Show more" toggle per entry),

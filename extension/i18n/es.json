@@ -754,6 +754,21 @@
   },
   "browserActions": {
     "title": "Acciones del navegador",
+    "record": {
+      "startBtn": "Grabar mis pasos",
+      "stopBtn": "Detener grabación",
+      "title": "Recarga la página y graba tus clics, tu escritura y tu desplazamiento como acciones del navegador. Lo que escribes nunca se graba.",
+      "waiting": "Ahora haz los pasos en la página …",
+      "stepClick": "Clic: {selector}",
+      "stepFill": "Escribir en: {selector}",
+      "stepScroll": "Desplazar: {container}",
+      "stepScrollPage": "la página",
+      "nothingRecorded": "No se grabó nada.",
+      "choiceLabel": "Pasos grabados. ¿Qué hacer con la lista existente?",
+      "appendBtn": "Añadir a la lista",
+      "replaceBtn": "Reemplazar la lista",
+      "discardBtn": "Descartar"
+    },
     "addWaitBtn": "+ Esperar",
     "addFillBtn": "+ Rellenar",
     "addClickBtn": "+ Clic",

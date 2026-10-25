@@ -1,4 +1,6 @@
 let capturedListener;
+let tabUpdatedListener;
+let tabRemovedListener;
 
 global.chrome = {
   runtime: {
@@ -10,10 +12,14 @@ global.chrome = {
   tabs: {
     query: jest.fn(),
     sendMessage: jest.fn(),
+    reload: jest.fn().mockResolvedValue(undefined),
+    onUpdated: { addListener: jest.fn((fn) => { tabUpdatedListener = fn; }) },
+    onRemoved: { addListener: jest.fn((fn) => { tabRemovedListener = fn; }) },
   },
   storage: {
     session: {
       set:    jest.fn().mockResolvedValue(undefined),
+      get:    jest.fn().mockResolvedValue({}),
       remove: jest.fn().mockResolvedValue(undefined),
     },
   },
@@ -25,6 +31,9 @@ beforeEach(() => {
   jest.clearAllMocks();
   chrome.runtime.sendMessage.mockResolvedValue(undefined);
   chrome.tabs.sendMessage.mockResolvedValue(undefined);
+  chrome.tabs.reload.mockResolvedValue(undefined);
+  chrome.storage.session.set.mockResolvedValue(undefined);
+  chrome.storage.session.get.mockResolvedValue({});
 });
 
 test('START_SELECTION is forwarded to active tab content script', () => {
@@ -583,3 +592,74 @@ test('ELEMENT_SELECTED stores the pick id alongside the selector (and null for a
   await Promise.resolve();
   expect(chrome.storage.session.set).toHaveBeenCalledWith(expect.objectContaining({ pendingPickId: null }));
 });
+
+// ── "Record my steps" (Issue #508) ──────────────────────────────────────────
+
+describe('step recording', () => {
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  test('STEP_RECORDING_START remembers the tab and reloads it, so the recording starts from the page\'s start state', async () => {
+    chrome.tabs.query.mockImplementation((_, cb) => cb([{ id: 7 }]));
+
+    capturedListener({ type: 'STEP_RECORDING_START' }, {});
+    await flush();
+
+    expect(chrome.storage.session.set).toHaveBeenCalledWith({ stepRecordingTabId: 7 });
+    expect(chrome.tabs.reload).toHaveBeenCalledWith(7);
+  });
+
+  test('once the recorded tab has loaded, recording is armed — after every navigation, not only the first', async () => {
+    chrome.storage.session.get.mockResolvedValue({ stepRecordingTabId: 7 });
+
+    tabUpdatedListener(7, { status: 'complete' });
+    await flush();
+    tabUpdatedListener(7, { status: 'complete' });
+    await flush();
+
+    expect(chrome.tabs.sendMessage.mock.calls.filter(c => c[1].type === 'START_STEP_RECORDING')).toHaveLength(2);
+  });
+
+  test('a tab that is not the recorded one, or a load that is not complete, arms nothing', async () => {
+    chrome.storage.session.get.mockResolvedValue({ stepRecordingTabId: 7 });
+
+    tabUpdatedListener(8, { status: 'complete' });
+    tabUpdatedListener(7, { status: 'loading' });
+    await flush();
+
+    expect(chrome.tabs.sendMessage).not.toHaveBeenCalled();
+  });
+
+  test('a page whose content script never answers ends the recording and tells the panel', async () => {
+    jest.useFakeTimers();
+    chrome.storage.session.get.mockResolvedValue({ stepRecordingTabId: 7 });
+    chrome.tabs.sendMessage.mockRejectedValue(new Error('Could not establish connection'));
+
+    tabUpdatedListener(7, { status: 'complete' });
+    for (let i = 0; i < 6; i++) { await Promise.resolve(); jest.advanceTimersByTime(400); await Promise.resolve(); }
+    jest.useRealTimers();
+    await flush();
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({ type: 'STEP_RECORDING_ENDED', reason: 'Could not establish connection' });
+    expect(chrome.storage.session.remove).toHaveBeenCalledWith('stepRecordingTabId');
+  });
+
+  test('STEP_RECORDING_STOP stops the recorder in the tab and forgets it', async () => {
+    chrome.storage.session.get.mockResolvedValue({ stepRecordingTabId: 7 });
+
+    capturedListener({ type: 'STEP_RECORDING_STOP' }, {});
+    await flush();
+
+    expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(7, { type: 'STOP_STEP_RECORDING' });
+    expect(chrome.storage.session.remove).toHaveBeenCalledWith('stepRecordingTabId');
+  });
+
+  test('closing the recorded tab ends the recording', async () => {
+    chrome.storage.session.get.mockResolvedValue({ stepRecordingTabId: 7 });
+
+    tabRemovedListener(7);
+    await flush();
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'STEP_RECORDING_ENDED' }));
+  });
+});
+

@@ -10,6 +10,7 @@ import type {
 import type { HighlightStep } from '../popup/hover-highlight';
 import { createLogger, getLogBuffer } from '../shared/logger';
 import { splitTextFilter, appendTextFilter as appendTextFilterToSelector } from '../popup/selector-text-filter';
+import { createStepRecorder } from './step-recorder';
 
 const log = createLogger('SF:Content');
 
@@ -1540,6 +1541,30 @@ function isTopFrame(): boolean {
   return window === window.top;
 }
 
+// Issue #508: "Record my steps". A replay-friendly selector: the picker's own, narrowed with a :contains() text filter when several
+// elements match it and the text tells this one apart.
+function recordedSelectorFor(element: Element): string {
+  const base = buildSelector(element);
+  if (querySelectorAllWithText(document, base).length <= 1) return base;
+  const text = (element.textContent || '').trim().replace(/\s+/g, ' ');
+  if (!text || text.length > 40 || text.includes('"')) return base;
+  const narrowed = appendTextFilterToSelector(base, text);
+  return querySelectorAllWithText(document, narrowed).length === 1 ? narrowed : base;
+}
+
+function recordedTargetFor(element: Element, selector: string): 'first' | 'last' {
+  const matches = querySelectorAllWithText(document, selector);
+  return matches.length > 1 && matches[0] !== element && matches[matches.length - 1] === element ? 'last' : 'first';
+}
+
+const stepRecorder = createStepRecorder({
+  selectorFor: recordedSelectorFor,
+  targetFor: recordedTargetFor,
+  resolveFramePath,
+  send: (step) => sendToPanel({ type: 'STEP_RECORDED', step }),
+  log,
+});
+
 if (typeof chrome !== 'undefined' && chrome.runtime) {
   chrome.runtime.onMessage.addListener((message: ContentScriptInboundMessage, sender: chrome.runtime.MessageSender, sendResponse: (response: unknown) => void) => {
     log('MSG_IN', message.type);
@@ -1550,6 +1575,8 @@ if (typeof chrome !== 'undefined' && chrome.runtime) {
       );
     }
     if (message.type === 'STOP_SELECTION')  stopSelection();
+    if (message.type === 'START_STEP_RECORDING') stepRecorder.start();
+    if (message.type === 'STOP_STEP_RECORDING') stepRecorder.stop();
     if (message.type === 'ENABLE_DOM_VIEW' && isTopFrame()) enableDomView();
     if (message.type === 'DISABLE_DOM_VIEW' && isTopFrame()) disableDomView();
     if (message.type === 'PREVIEW_START' && isTopFrame()) startPreview(message.mode, message.fields, message.groups);

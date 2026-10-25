@@ -54,6 +54,20 @@
         <div class="actions">
           <button id="btn-add-login-flow" class="btn-secondary" type="button" data-i18n="browserActions.addLoginFlowBtn"></button>
         </div>
+        <!-- Issue #508: record what the user does on the page and turn it into the actions below. -->
+        <div class="actions">
+          <button id="btn-record-steps" class="btn-secondary" type="button" data-i18n="browserActions.record.startBtn" data-i18n-title="browserActions.record.title"></button>
+        </div>
+        <ul id="record-steps-list" class="record-steps-list hidden"></ul>
+        <p id="record-steps-note" class="record-steps-hint hidden"></p>
+        <div id="record-steps-choice" class="hidden">
+          <p class="record-steps-hint" data-i18n="browserActions.record.choiceLabel"></p>
+          <div class="actions">
+            <button id="btn-record-steps-append" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.record.appendBtn"></button>
+            <button id="btn-record-steps-replace" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.record.replaceBtn"></button>
+            <button id="btn-record-steps-discard" class="btn-secondary btn-tiny" type="button" data-i18n="browserActions.record.discardBtn"></button>
+          </div>
+        </div>
         <p id="login-flow-hint" class="browser-actions-hint hidden"><span data-i18n="browserActions.loginFlowHint"></span> <a class="learn-more" data-doc="loginFlow" href="#" data-i18n="common.learnMore"></a></p>
         <div id="browser-actions-list"></div>
         <div class="actions">

@@ -20,4 +20,25 @@ module.exports = [
       await s.shot('browser-engine-login-starter', '#browser-actions-section');
     },
   },
+  {
+    // Issue #508: "Record my steps" — the live list while the user works on the page.
+    id: 'browser-engine-record-steps',
+    fixture: 'login-flow',
+    async run(s) {
+      const { popupPage, fixturePage } = s;
+      await s.waitForIdle();
+      await popupPage.click('#btn-engine-browser');
+      await popupPage.click('#btn-record-steps');
+      await fixturePage.waitForLoadState('load');
+      await fixturePage.bringToFront();
+      await fixturePage.waitForTimeout(1500);
+      await fixturePage.click('#username');
+      await fixturePage.keyboard.type('demo');
+      await fixturePage.click('#password');
+      await fixturePage.keyboard.type('demo');
+      await fixturePage.click('#login-submit');
+      await popupPage.waitForFunction(() => document.querySelectorAll('#record-steps-list li').length >= 3);
+      await s.shot('browser-engine-record-steps', '#browser-actions-section');
+    },
+  },
 ];
