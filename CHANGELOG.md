@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.21.6](https://github.com/Aventinis/Scraping-Factory/compare/v1.21.5...v1.21.6) (2026-10-25)
+
+
+### Features
+
+* **extension:** setting for the default output file name ([#509](https://github.com/Aventinis/Scraping-Factory/issues/509)) ([81379df](https://github.com/Aventinis/Scraping-Factory/commit/81379df6e06a7b04fc96477c7bbba90645de8ed4))
+* **extension:** setting for the default output file name (same as script, or custom) ([97e5ba6](https://github.com/Aventinis/Scraping-Factory/commit/97e5ba636c98f0ed72210efd2e25864050399986))
+
 ## [1.21.5](https://github.com/Aventinis/Scraping-Factory/compare/v1.21.4...v1.21.5) (2026-10-25)
 
 
