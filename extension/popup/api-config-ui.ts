@@ -16,11 +16,11 @@ import type * as SFWire from '../types/wire';
 import type { PopupBridge, State } from '../types/popup';
 import { createLogger } from '../shared/logger';
 import { t } from '../i18n/i18n';
-import {
-  STATES, buildStaticListSource, buildRangeSource, buildBrowserDiscoverySource, buildApiConfig, allParameterParts, apiConfigDraftHasAllSourcesChosen,
-} from './api-config';
+import { STATES, allParameterParts, apiConfigDraftHasAllSourcesChosen } from './api-config';
 import type { ApiConfigDraft, ApiNodeDraft } from './api-config';
-import { BOOTSTRAP_SOURCE_KIND, resolveBootstrapUrlParts } from './api-bootstrap';
+import { BOOTSTRAP_SOURCE_KIND } from './api-bootstrap';
+import { buildApiConfigFromDraft } from './api-config-reopen';
+import { wireApiConfigReopenEvents } from './api-config-reopen-ui';
 import { renderTransformList, renderTransformPreview } from './field-transforms-ui';
 import { serializeBrowserActions } from './scraping-config-builder';
 import { renderGroupPathPicker } from './json-path-picker-ui';
@@ -138,50 +138,12 @@ export function cancelApiConfig(bridge: PopupBridge): void {
 // top-level array in the same response is as valid a root as the first); the candidate is inserted via insertApiTreeNode. A
 // *sub-group* has no single clicked value to derive from, so modal-api-group-new collects name and path directly, no click.
 
-// Final assembly on "Apply": staticList / range sources are raw UI state in apiConfigDraft and built here from whatever is current;
-// discovery sources are already wire objects. Iterates allParameterParts (URL + body-only parameters) so a body-only parameter's
-// source resolves like a URL one; idToName is what serializeBodyTree needs to turn a variable leaf's draft-only parameterId into the
-// declared name.
 export function confirmApiConfig(bridge: PopupBridge): void {
   const draft = bridge.getState().apiConfigDraft as ApiConfigDraft; // only reachable from the API_CONFIG screen
-  const parameterSources: Record<string, SFWire.ApiParameterSource> = {};
-  const idToName: Record<string, string> = {};
-  allParameterParts(draft).forEach((part) => {
-    const source = draft.parameterSources[part.id];
-    // Issue #220: a bootstrap-sourced URL part is a placeholder for the
-    // bootstrap value, never a declared parameter (resolveBootstrapUrlParts
-    // below names it after the bootstrap instead).
-    if (source.kind === BOOTSTRAP_SOURCE_KIND) return;
-    parameterSources[part.name] = source.kind === 'staticList'
-      ? buildStaticListSource(source.valuesText)
-      : source.kind === 'range'
-        ? buildRangeSource(source.type, source.from, source.to, source.format)
-        : source.kind === 'browserDiscovery'
-          ? buildBrowserDiscoverySource(source.discoveryUrl, serializeBrowserActions(source.actions || []))
-          : source as SFWire.DiscoverySource; // a discovery source is already complete once the user could press Apply
-    idToName[part.id] = part.name;
-  });
-
-  const apiConfig = buildApiConfig({
-    urlParts: draft.bootstrap
-      ? resolveBootstrapUrlParts(draft.urlParts, draft.parameterSources, draft.bootstrap.name.trim())
-      : draft.urlParts,
-    groups: draft.groups,
-    parameterSources,
-    capturedHeaders: draft.capturedHeaders,
-    headerDecisions: draft.headerDecisions,
-    method: draft.method,
-    bodyTree: draft.bodyTree,
-    bodyParameterNames: (draft.bodyParameters || []).map(p => p.name),
-    parameterIdToName: idToName,
-    embeddedJsonSource: draft.embeddedJsonSource,
-    bootstrap: draft.bootstrap,
-    cursorPagination: draft.cursorPagination,
-    linkHeaderPagination: draft.linkHeaderPagination,
-  });
+  const apiConfig = buildApiConfigFromDraft(draft);
 
   log('API_CONFIG confirm', apiConfig);
-  bridge.setState(STATES.IDLE, { apiConfig, apiConfigDraft: null, apiDiscoveryCandidates: null, apiTreeSearchResult: null, apiPathPicker: null });
+  bridge.setState(STATES.IDLE, { apiConfig, apiConfigApplied: draft, apiConfigDraft: null, apiDiscoveryCandidates: null, apiTreeSearchResult: null, apiPathPicker: null });
 }
 
 // Called from popup.ts's render() only while _state.current === STATES.API_CONFIG
@@ -241,6 +203,7 @@ export function renderApiConfigModals(bridge: PopupBridge): void {
 
 export function wireApiConfigEvents(bridge: PopupBridge): void {
   wireApiCaptureEvents(bridge);
+  wireApiConfigReopenEvents(bridge);
   wireApiCandidateListEvents(
     'api-tree-search-list', () => bridge.getState().apiTreeSearchResult?.candidates,
     () => collectApiTreeNames(bridge.getState().apiConfigDraft?.groups ?? []),
@@ -262,7 +225,7 @@ export function wireApiConfigEvents(bridge: PopupBridge): void {
 
   byIdOrNull('btn-api-config-discard')?.addEventListener('click', () => {
     log('BTN api-config-discard');
-    bridge.setState(STATES.IDLE, { apiConfig: null });
+    bridge.setState(STATES.IDLE, { apiConfig: null, apiConfigApplied: null });
   });
 }
 

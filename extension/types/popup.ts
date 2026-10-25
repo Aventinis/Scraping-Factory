@@ -236,6 +236,8 @@ export interface State {
   /** The existing combine / split field the open dialog edits (Issue #505), or null while it creates one. */
   pendingDerivedFieldEdit: FieldEditTarget | null;
   apiConfigDraft: ApiConfigDraft | null;
+  /** The draft the confirmed `apiConfig` was built from, kept so Edit can reopen it (Issue #506); see api-config-reopen.ts. */
+  apiConfigApplied: ApiConfigDraft | null;
   apiConfig: SFWire.ApiConfig | null;
 
   robotsTxtChecking: boolean;

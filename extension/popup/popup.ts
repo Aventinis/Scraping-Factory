@@ -497,6 +497,7 @@ let _state: State = {
   pendingDerivedFieldScope: null,
   pendingDerivedFieldEdit: null,
   apiConfigDraft:     null, // set once a candidate is confirmed as the primary field — the in-progress ApiConfig being built, see buildApiConfig/confirmApiFieldCandidate
+  apiConfigApplied:   null, // the draft apiConfig was built from, for "Edit" (api-config-reopen.ts); persisted with it
   apiConfig:          null, // the "Apply"-confirmed ApiConfig wire object — Phase 6 will read this; persisted like fields/groups
   robotsTxtChecking: false, // not persisted, always off on popup reopen (like previewActive/apiCaptureActive)
   robotsTxtResult:   null,  // {ok, robotsUrl, path, notFound, allowed, matchedRule} | {ok:false, error} from the content script's CHECK_ROBOTS_TXT response, or null before the first check
@@ -690,6 +691,7 @@ function persistState(): void {
       pendingApiDiscoveryActionField: _state.pendingApiDiscoveryActionField,
       apiSearchTarget: _state.apiSearchTarget,
       apiConfigDraft: _state.apiConfigDraft,
+      apiConfigApplied: _state.apiConfigApplied,
       apiConfig: _state.apiConfig,
       combinedComponents: _state.combinedComponents,
       blocks: _state.blocks,
@@ -1265,8 +1267,8 @@ function wireEvents(): void {
     // over instead of "New scraper" giving 'fixed' mode's own default a
     // fresh chance to apply, the same "start over" behavior every other
     // field here already gets.
-    chrome.storage.session.set({ fields: [], url: '', groups: [], apiConfig: null, scriptFileName: '', outputFileName: '' });
-    setState(STATES.CHECKING_COMPANION, { fields: [], groups: [], apiConfig: null, scriptText: '', url: '', scriptFileName: '', outputFileName: '' });
+    chrome.storage.session.set({ fields: [], url: '', groups: [], apiConfig: null, apiConfigApplied: null, scriptFileName: '', outputFileName: '' });
+    setState(STATES.CHECKING_COMPANION, { fields: [], groups: [], apiConfig: null, apiConfigApplied: null, scriptText: '', url: '', scriptFileName: '', outputFileName: '' });
     checkCompanion(bridge);
   });
 
@@ -1353,7 +1355,7 @@ async function init(): Promise<void> {
     'engine', 'browserActions', 'additionalStartUrls', 'changeDetection', 'proxy', 'requestDelay', 'retry', 'deduplication', 'requestHeaders', 'hardening', 'pagination', 'persistentSession', 'preflight', 'respectRobotsDelay', 'robotsDisallow', 'appendOutput', 'pendingBrowserActionIndex', 'pendingBrowserActionField',
     'pendingApiDiscoveryPartId', 'pendingApiDiscoveryActionIndex', 'pendingApiDiscoveryActionField',
     'selectionKind', 'pendingParentPath', 'pendingNewContainer',
-    'apiSearchTarget', 'apiConfigDraft', 'apiConfig',
+    'apiSearchTarget', 'apiConfigDraft', 'apiConfigApplied', 'apiConfig',
     'scriptFileName', 'outputFileName',
   ]);
   log('INIT restored', stored);

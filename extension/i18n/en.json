@@ -86,6 +86,7 @@
     "apiEntriesEmpty": "No requests recorded yet.",
     "apiEntriesBodyNotCaptured": "[not captured]",
     "apiConfigSummary": "API configuration ready: {fields} field(s), {parameters} parameter(s){headers}.",
+    "apiConfigNotEditable": "This configuration was loaded, so it can't be reopened here. Discard it and pick again to change it.",
     "apiConfigSummaryHeaders": ", {count} header(s)",
     "previewShowBtn": "Show preview",
     "previewHideBtn": "Stop preview",
