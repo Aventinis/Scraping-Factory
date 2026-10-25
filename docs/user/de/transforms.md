@@ -1,4 +1,4 @@
-<!-- source: 006399b75a13 -->
+<!-- source: 2ad3a27ff097 -->
 # Transformationen und Vorlagen
 
 Ausgelesener Text ist selten sauber: `"  Preis: 12,99 €  "` ist keine Zahl. Eine
@@ -20,6 +20,28 @@ entfernen)** und **Preis/Währung in Zahl umwandeln** mit dem Format
 
 Die Zeile **Vorschau: 6.90** zeigt live, während du bearbeitest, was die Kette für das
 angeklickte Element ergibt. Das Ergebnis in der Ausgabe ist `6.90`.
+
+## Ein Feld nachträglich ändern
+
+Jede Feldzeile hat eine Schaltfläche **Bearbeiten** (im Container-Modus an der
+Feldzeile im Baum). Sie öffnet den Dialog des Felds mit Name und Kette vorbelegt, sodass
+du Schritte hinzufügen, entfernen, umsortieren oder ändern kannst, ohne das Element neu
+anzuklicken. **Speichern** ändert das Feld an Ort und Stelle, **Abbrechen** lässt es
+unverändert.
+
+![Die Kette eines Felds nachträglich bearbeiten](images/transforms-edit-field.png)
+
+- Die **Vorschau** funktioniert wie beim Anlegen des Felds, weil die Erweiterung den Wert
+  des angeklickten Elements behält. Eine aus **Gespeicherten Konfigurationen** geladene
+  oder importierte Konfiguration hat diesen Wert nicht und zeigt keine Vorschau.
+- Nur Name und Kette sind änderbar. Das Element, sein Typ (Text oder Attribut), Downloads
+  und der Filter „enthält Text“ gehören zur Auswahl: Um sie zu ändern, entferne das Feld
+  und klicke das Element neu an.
+- Ein **kombiniertes** oder **aufgeteiltes** Feld öffnet seinen eigenen, vorbelegten
+  Dialog. Es kann nur Felder lesen, die über ihm stehen, daher werden nur diese als Quellen
+  angeboten.
+- Ein Feld, das ein kombiniertes oder aufgeteiltes Feld liest, behält seinen Namen (der
+  Dialog sagt es), weil eine Umbenennung dieses Feld kaputt machen würde.
 
 ## Die Schritte
 
