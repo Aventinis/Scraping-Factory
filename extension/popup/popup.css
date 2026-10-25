@@ -518,10 +518,20 @@ body {
 .api-config-source-fields textarea { width: 100%; font-size: 11px; padding: 4px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-family: monospace; }
 .api-config-source-fields .api-config-autofill-pool { margin-top: 4px; }
 .api-config-source-fields input[type="text"] { font-size: 11px; padding: 3px 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
-.api-config-range-row { display: flex; gap: 6px; margin-top: 4px; }
-.api-config-range-row input, .api-config-range-row select { flex: 1; }
+/* The value-source dropdowns (Range type and format, discovery click target, placeholder picker) were still native selects next to the
+   styled inputs; they now look like the other selects of the panel (theme-aware, same focus ring). */
+.api-config-source-fields select {
+  font-size: 11px; padding: 3px 6px; font-family: inherit; color: var(--color-text); background: var(--color-surface);
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm); outline: none;
+}
+.api-config-source-fields select:focus { border-color: var(--color-primary); box-shadow: var(--focus-ring); }
+/* Issue #516: inputs and selects have an intrinsic width, so flex items without min-width: 0 never shrink below it and pushed the "To" box out
+   of the card in a narrow panel. The boxes now shrink, and wrap onto a second row before they get too narrow to type in. */
+.api-config-range-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.api-config-range-row select { flex: 0 1 auto; min-width: 0; max-width: 100%; }
+.api-config-range-row input { flex: 1 1 90px; min-width: 0; }
 .api-config-range-format-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
-.api-config-range-format-row select, .api-config-range-format-row input[type="text"] { flex: 1; }
+.api-config-range-format-row select, .api-config-range-format-row input[type="text"] { flex: 1 1 120px; min-width: 0; max-width: 100%; }
 .api-config-range-format-example { flex-basis: 100%; margin: 2px 0 0; font-size: 11px; color: var(--color-text-muted); }
 /* Issue #216: BrowserDiscoverySource's own fields — reuses browser-action-card/
    browser-action-selector-row/field-selector verbatim (see renderBrowserDiscoverySourceFields's
