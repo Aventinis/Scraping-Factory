@@ -46,7 +46,6 @@ import {
   renderApiTree, renderApiCandidates, renderApiEntriesList,
   renderApiConfigScreen, renderBodyTree,
   startApiFieldSearch, confirmApiFieldCandidate, loadInitialBodyTreeForCandidate,
-  startEmbeddedJsonFieldSearch,
   startApiTreeFieldSearch,
   toggleBodyLeafToVariable, toggleBodyLeafToFixed, setBodyLeafParameter, setBodyLeafCoerceTo,
   openBodyParameterModal, confirmBodyParameterModal, confirmApiConfig,

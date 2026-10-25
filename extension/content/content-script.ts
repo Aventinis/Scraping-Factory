@@ -1314,26 +1314,26 @@ function onClick(e: MouseEvent): void {
     };
     sendToPanel(selected);
 
-    // API-mode search: additionally correlate the clicked element's text
-    // against Phase 3's recorded responses (see capturedApiEntries below)
-    // and report candidate JSON matches — on top of, not instead of, the CSS
-    // selector above.
-    if (wasApiSearch) {
-      const candidates = findApiCandidates(capturedApiEntries, clickedText, apiScopePathForSearch);
-      log('MSG_OUT API_CANDIDATES', { target: clickedText, count: candidates.length });
-      chrome.runtime.sendMessage({ type: 'API_CANDIDATES', target: clickedText, candidates });
-    }
-
-    // Issue #136: embedded-JSON search — same idea as the API-mode search
-    // above, just against the page's own <script> tags instead of recorded
-    // network entries. Mutually exclusive with wasApiSearch in practice (see
-    // startSelection), but not asserted as such — no harm in both running.
-    if (wasEmbeddedJsonSearch) {
-      const candidates = findEmbeddedJsonCandidates(clickedText, embeddedJsonScopePathForSearch, embeddedJsonScriptSelectorForSearch);
-      log('MSG_OUT EMBEDDED_JSON_CANDIDATES', { target: clickedText, count: candidates.length });
-      chrome.runtime.sendMessage({ type: 'EMBEDDED_JSON_CANDIDATES', target: clickedText, candidates });
+    // API-mode search: additionally correlate the clicked element's text against the recorded responses (capturedApiEntries) and the
+    // page's own <script> JSON, and report the candidate matches — on top of, not instead of, the CSS selector above. A click that
+    // searched both sources (the main "Find data point" search) answers with ONE merged API_CANDIDATES message: the popup consumes
+    // its search target with the first reply. A scoped search (adding to an existing tree) asks one source only.
+    if (wasApiSearch || wasEmbeddedJsonSearch) {
+      const network = wasApiSearch ? findApiCandidates(capturedApiEntries, clickedText, apiScopePathForSearch) : [];
+      const embedded = wasEmbeddedJsonSearch
+        ? findEmbeddedJsonCandidates(clickedText, embeddedJsonScopePathForSearch, embeddedJsonScriptSelectorForSearch)
+        : [];
+      const candidates = mergeCandidateSources(network, embedded);
+      const type = wasApiSearch ? 'API_CANDIDATES' : 'EMBEDDED_JSON_CANDIDATES';
+      log(`MSG_OUT ${type}`, { target: clickedText, network: network.length, embedded: embedded.length });
+      chrome.runtime.sendMessage({ type, target: clickedText, candidates });
     }
   });
+}
+
+// Recorded requests first, then the ones found in the page's own JSON; each list keeps its own ranking.
+export function mergeCandidateSources<N, E>(network: N[], embedded: E[]): Array<N | E> {
+  return [...network, ...embedded];
 }
 
 // scopeSelector (optional): Container-Mode passes the immediate parent
@@ -1354,8 +1354,7 @@ function onClick(e: MouseEvent): void {
 // an already-confirmed tree's ApiConfig.EmbeddedJsonSource commits to (see
 // findEmbeddedJsonCandidates' own doc comment); absent for the initial,
 // whole-page search. Only meaningful alongside embeddedJsonSearch; ignored
-// otherwise. Mutually exclusive with apiSearch in practice (the popup only
-// ever starts one kind of search at a time), but nothing here enforces that.
+// otherwise. Both flags together are the main data-point search (see the click handler).
 function startSelection(
   scopeSelector?: string | null, avoidId?: boolean, apiSearch?: boolean, apiScopePath?: string | null,
   embeddedJsonSearch?: boolean, embeddedJsonScopePath?: string | null, embeddedJsonScriptSelector?: string | null,
